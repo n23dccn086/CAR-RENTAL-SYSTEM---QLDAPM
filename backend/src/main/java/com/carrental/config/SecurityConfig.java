@@ -2,46 +2,52 @@ package com.carrental.config;
 
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.core.annotation.Order;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
+import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
 import org.springframework.security.config.http.SessionCreationPolicy;
+import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
 
 @Configuration
 @EnableWebSecurity
 public class SecurityConfig {
 
-    // Các endpoint PUBLIC — không cần đăng nhập
-    private static final String[] PUBLIC_ENDPOINTS = {
-            "/health",
-            "/api/v1/health",
-            "/api/v1/auth/**",           // Register, login, refresh token
-            "/api/v1/cars/**",           // Xem danh sách xe (public)
-            "/api/v1/reviews/**"         // Xem đánh giá (public)
-    };
+    @Bean
+    @Order(1)
+    public SecurityFilterChain publicFilterChain(HttpSecurity http) throws Exception {
+        http
+                .securityMatcher("/api/v1/auth/**", "/api/v1/health", "/health")
+                .csrf(AbstractHttpConfigurer::disable)
+                .cors(AbstractHttpConfigurer::disable)
+                .formLogin(AbstractHttpConfigurer::disable)
+                .httpBasic(AbstractHttpConfigurer::disable)
+                .authorizeHttpRequests(auth -> auth
+                        .anyRequest().permitAll()
+                );
+        return http.build();
+    }
 
     @Bean
-    public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
+    @Order(2)
+    public SecurityFilterChain apiFilterChain(HttpSecurity http) throws Exception {
         http
-                // Tắt CSRF (vì dùng JWT, không dùng session)
-                .csrf(csrf -> csrf.disable())
-
-                // Không dùng session (stateless - JWT)
+                .csrf(AbstractHttpConfigurer::disable)
+                .cors(AbstractHttpConfigurer::disable)
+                .formLogin(AbstractHttpConfigurer::disable)
+                .httpBasic(AbstractHttpConfigurer::disable)
                 .sessionManagement(session ->
                         session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
-
-                // Cấu hình quyền truy cập endpoint
                 .authorizeHttpRequests(auth -> auth
-                        .requestMatchers(PUBLIC_ENDPOINTS).permitAll()   // Public endpoints
-                        .anyRequest().authenticated()                     // Còn lại phải đăng nhập
-                )
-
-                // Tắt form login mặc định (không dùng trang login của Spring)
-                .formLogin(form -> form.disable())
-
-                // Tắt HTTP Basic auth
-                .httpBasic(basic -> basic.disable());
-
+                        .anyRequest().permitAll()      // ⚠️ TẠM THỜI MỞ HẾT ĐỂ TEST
+                );
         return http.build();
+    }
+
+    @Bean
+    public PasswordEncoder passwordEncoder() {
+        return new BCryptPasswordEncoder();
     }
 }
