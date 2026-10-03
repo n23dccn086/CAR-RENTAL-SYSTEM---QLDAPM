@@ -1,0 +1,85 @@
+package com.carrental.handover.entity;
+
+import jakarta.persistence.*;
+import lombok.*;
+import lombok.experimental.FieldDefaults;
+import org.hibernate.annotations.CreationTimestamp;
+import org.hibernate.annotations.UpdateTimestamp;
+
+import java.math.BigDecimal;
+import java.time.LocalDateTime;
+
+/**
+ * Entity: Biên bản giao/nhận xe.
+ */
+@Entity
+@Table(name = "handover_records", indexes = {
+        @Index(name = "idx_handover_booking", columnList = "booking_id"),
+        @Index(name = "idx_handover_type", columnList = "handover_type")
+})
+@Getter
+@Setter
+@NoArgsConstructor
+@AllArgsConstructor
+@Builder
+@FieldDefaults(level = AccessLevel.PRIVATE)
+public class HandoverRecord {
+
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    Long id;
+
+    @Column(name = "booking_id", nullable = false)
+    Long bookingId;
+
+    @Column(name = "handover_type", nullable = false, length = 20)
+    String handoverType;         // PICKUP, RETURN
+
+    @Column(name = "km_reading")
+    Integer kmReading;
+
+    @Column(name = "fuel_level")
+    Short fuelLevel;
+
+    @Column(name = "exterior_note", columnDefinition = "TEXT")
+    String exteriorNote;
+
+    @Column(name = "interior_note", columnDefinition = "TEXT")
+    String interiorNote;
+
+    @Column(columnDefinition = "JSONB")
+    String damages;
+
+    @Column(name = "extra_fees", precision = 12, scale = 0)
+    @Builder.Default
+    BigDecimal extraFees = BigDecimal.ZERO;
+
+    @Column(name = "extra_fees_note", columnDefinition = "TEXT")
+    String extraFeesNote;
+
+    @Column(name = "owner_signature", length = 500)
+    String ownerSignature;
+
+    @Column(name = "customer_signature", length = 500)
+    String customerSignature;
+
+    @Column(name = "owner_signed_at")
+    LocalDateTime ownerSignedAt;
+
+    @Column(name = "customer_signed_at")
+    LocalDateTime customerSignedAt;
+
+    @Column(name = "record_hash", length = 64)
+    String recordHash;
+
+    @CreationTimestamp
+    @Column(name = "created_at", updatable = false)
+    LocalDateTime createdAt;
+
+    @UpdateTimestamp
+    @Column(name = "updated_at")
+    LocalDateTime updatedAt;
+
+    @Column(name = "deleted_at")
+    LocalDateTime deletedAt;
+}
