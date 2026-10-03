@@ -79,7 +79,27 @@ public enum ErrorCode {
     // ===== EXCEL (12xxx) =====
     EXCEL_INVALID_FORMAT(12001, "File Excel không đúng định dạng"),
     EXCEL_EMPTY(12002, "File Excel rỗng"),
-    EXCEL_ROW_ERROR(12003, "Có lỗi trong file Excel");
+    EXCEL_ROW_ERROR(12003, "Có lỗi trong file Excel"),
+
+    // ===== ADMIN / DISPUTE (13xxx) =====
+    DISPUTE_NOT_FOUND(13001, "Không tìm thấy tranh chấp"),
+    DISPUTE_ALREADY_RESOLVED(13002, "Tranh chấp đã được giải quyết"),
+    DISPUTE_NOT_OWNED(13003, "Bạn không có quyền xử lý tranh chấp này"),
+
+    // ===== WITHDRAWAL (14xxx) =====
+    WITHDRAWAL_NOT_FOUND(14001, "Không tìm thấy yêu cầu rút tiền"),
+    WITHDRAWAL_INSUFFICIENT_BALANCE(14002, "Số dư không đủ"),
+    WITHDRAWAL_ALREADY_PROCESSED(14003, "Yêu cầu rút tiền đã được xử lý"),
+    WITHDRAWAL_MIN_AMOUNT(14004, "Số tiền rút dưới mức tối thiểu"),
+
+    // ===== APPROVAL (15xxx) =====
+    APPROVAL_NOT_FOUND(15001, "Không tìm thấy hồ sơ cần duyệt"),
+    APPROVAL_ALREADY_PROCESSED(15002, "Hồ sơ đã được duyệt"),
+    APPROVAL_INVALID_TYPE(15003, "Loại hồ sơ không hợp lệ"),
+
+    // ===== CONFIG (16xxx) =====
+    CONFIG_NOT_FOUND(16001, "Không tìm thấy cấu hình"),
+    CONFIG_INVALID_VALUE(16002, "Giá trị cấu hình không hợp lệ");
 
     private final int code;
     private final String message;

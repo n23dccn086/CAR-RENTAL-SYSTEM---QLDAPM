@@ -74,6 +74,7 @@ public class SecurityConfig {
 
     /**
      * Protected — tất cả cần JWT.
+     * /admin/** chỉ ADMIN mới truy cập được.
      */
     @Bean
     @Order(3)
@@ -86,6 +87,7 @@ public class SecurityConfig {
                 .sessionManagement(session ->
                         session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
+                        .requestMatchers("/api/v1/admin/**", "/admin/**").hasRole("ADMIN")
                         .anyRequest().authenticated()
                 )
                 .addFilterBefore(jwtAuthFilter, UsernamePasswordAuthenticationFilter.class);
