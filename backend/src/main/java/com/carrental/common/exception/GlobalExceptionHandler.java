@@ -6,6 +6,7 @@ import jakarta.servlet.http.HttpServletRequest;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
@@ -67,6 +68,26 @@ public class GlobalExceptionHandler {
                 .build();
 
         return ResponseEntity.badRequest().body(response);
+    }
+
+    // ===== Xử lý AccessDeniedException (Spring Security @PreAuthorize) =====
+    @ExceptionHandler(AccessDeniedException.class)
+    public ResponseEntity<ApiResponse<Object>> handleAccessDeniedException(
+            AccessDeniedException ex, HttpServletRequest request) {
+
+        String traceId = UUID.randomUUID().toString();
+
+        log.warn("[{}] Access denied at {} - Message: {}",
+                traceId, request.getRequestURI(), ex.getMessage());
+
+        ApiResponse<Object> response = ApiResponse.error(
+                ErrorCode.PERMISSION_DENIED.getCode(),
+                ErrorCode.PERMISSION_DENIED.getMessage(),
+                request.getRequestURI(),
+                traceId
+        );
+
+        return ResponseEntity.status(HttpStatus.FORBIDDEN).body(response);
     }
 
     // ===== Xử lý tất cả exception còn lại =====

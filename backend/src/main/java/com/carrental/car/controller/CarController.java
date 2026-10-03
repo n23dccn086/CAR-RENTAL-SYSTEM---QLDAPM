@@ -15,6 +15,7 @@ import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -59,9 +60,16 @@ public class CarController {
         return ApiResponse.success(carService.searchCars(status, type));
     }
 
-    // ===== PROTECTED ENDPOINTS =====
+    @GetMapping("/{id}/images")
+    public ApiResponse<List<String>> getCarImages(@PathVariable Long id) {
+        log.info("REST request to get images for car {}", id);
+        return ApiResponse.success(carService.getCarImages(id));
+    }
+
+    // ===== PROTECTED ENDPOINTS (cần OWNER hoặc ADMIN) =====
 
     @PostMapping
+    @PreAuthorize("hasAnyRole('OWNER', 'ADMIN')")
     public ApiResponse<CarResponse> createCar(
             @Valid @RequestBody CarRequest request,
             HttpServletRequest httpRequest) {
@@ -74,6 +82,7 @@ public class CarController {
     }
 
     @PutMapping("/{id}")
+    @PreAuthorize("hasAnyRole('OWNER', 'ADMIN')")
     public ApiResponse<CarResponse> updateCar(
             @PathVariable Long id,
             @Valid @RequestBody CarRequest request,
@@ -87,6 +96,7 @@ public class CarController {
     }
 
     @DeleteMapping("/{id}")
+    @PreAuthorize("hasAnyRole('OWNER', 'ADMIN')")
     public ApiResponse<Void> deleteCar(
             @PathVariable Long id,
             HttpServletRequest httpRequest) {
@@ -99,6 +109,7 @@ public class CarController {
     }
 
     @GetMapping("/my")
+    @PreAuthorize("hasAnyRole('OWNER', 'ADMIN')")
     public ApiResponse<List<CarResponse>> getMyCars(HttpServletRequest httpRequest) {
         Long ownerId = extractUserId(httpRequest);
         log.info("REST request to get my cars: ownerId={}", ownerId);
@@ -106,13 +117,10 @@ public class CarController {
         return ApiResponse.success(carService.getCarsByOwner(ownerId));
     }
 
-    // ===== ẢNH XE — UPLOAD + GET =====
+    // ===== ẢNH XE — UPLOAD + DELETE (cần OWNER hoặc ADMIN) =====
 
-    /**
-     * Upload ảnh cho xe
-     * POST /api/v1/cars/{id}/images
-     */
     @PostMapping("/{id}/images")
+    @PreAuthorize("hasAnyRole('OWNER', 'ADMIN')")
     public ApiResponse<List<String>> uploadImages(
             @PathVariable Long id,
             @RequestParam("images") MultipartFile[] files,
@@ -125,21 +133,8 @@ public class CarController {
         return ApiResponse.success("Upload ảnh thành công", urls);
     }
 
-    /**
-     * Lấy danh sách ảnh của xe
-     * GET /api/v1/cars/{id}/images
-     */
-    @GetMapping("/{id}/images")
-    public ApiResponse<List<String>> getCarImages(@PathVariable Long id) {
-        log.info("REST request to get images for car {}", id);
-        return ApiResponse.success(carService.getCarImages(id));
-    }
-
-    /**
-     * Xóa 1 ảnh của xe
-     * DELETE /api/v1/cars/{id}/images
-     */
     @DeleteMapping("/{id}/images")
+    @PreAuthorize("hasAnyRole('OWNER', 'ADMIN')")
     public ApiResponse<Void> deleteImage(
             @PathVariable Long id,
             @RequestParam("imageUrl") String imageUrl,
@@ -155,12 +150,14 @@ public class CarController {
     // ===== ADMIN ENDPOINTS =====
 
     @PutMapping("/{id}/approve")
+    @PreAuthorize("hasRole('ADMIN')")
     public ApiResponse<CarResponse> approveCar(@PathVariable Long id) {
         log.info("REST request to approve car: {}", id);
         return ApiResponse.success("Duyệt xe thành công", carService.approveCar(id));
     }
 
     @PutMapping("/{id}/reject")
+    @PreAuthorize("hasRole('ADMIN')")
     public ApiResponse<CarResponse> rejectCar(
             @PathVariable Long id,
             @RequestParam(required = false) String reason) {

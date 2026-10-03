@@ -5,6 +5,7 @@ import Footer from './components/Footer'
 import Ticker from './components/Ticker'
 import Concierge from './components/Concierge'
 import CarDecor from './components/CarDecor'
+import ProtectedRoute from './components/ProtectedRoute'
 
 import HomePage from './pages/HomePage'
 import LoginPage from './pages/LoginPage'
@@ -28,18 +29,59 @@ function App() {
       <Header />
       <main style={{ minHeight: '60vh', position: 'relative', zIndex: 2 }}>
         <Routes>
+          {/* ===== PUBLIC ===== */}
           <Route path="/" element={<HomePage />} />
           <Route path="/login" element={<LoginPage />} />
           <Route path="/register" element={<RegisterPage />} />
           <Route path="/search" element={<SearchPage />} />
           <Route path="/cars/:id" element={<CarDetailPage />} />
-          <Route path="/cars/create" element={<CreateCarPage />} />
-          <Route path="/booking/:carId" element={<BookingPage />} />
-          <Route path="/payment/:bookingId" element={<PaymentPage />} />
-          <Route path="/my-bookings" element={<MyBookingsPage />} />
-          <Route path="/owner/dashboard" element={<OwnerDashboard />} />
-          <Route path="/admin/dashboard" element={<AdminDashboard />} />
-          <Route path="/profile" element={<ProfilePage />} />
+
+          {/* ===== CẦN ĐĂNG NHẬP ===== */}
+          <Route path="/profile" element={
+            <ProtectedRoute allowedRoles={['CUSTOMER', 'OWNER', 'DRIVER', 'ADMIN']}>
+              <ProfilePage />
+            </ProtectedRoute>
+          } />
+
+          <Route path="/my-bookings" element={
+            <ProtectedRoute allowedRoles={['CUSTOMER', 'ADMIN']}>
+              <MyBookingsPage />
+            </ProtectedRoute>
+          } />
+
+          <Route path="/booking/:carId" element={
+            <ProtectedRoute allowedRoles={['CUSTOMER', 'ADMIN']}>
+              <BookingPage />
+            </ProtectedRoute>
+          } />
+
+          <Route path="/payment/:bookingId" element={
+            <ProtectedRoute allowedRoles={['CUSTOMER', 'ADMIN']}>
+              <PaymentPage />
+            </ProtectedRoute>
+          } />
+
+          {/* ===== OWNER ===== */}
+          <Route path="/cars/create" element={
+            <ProtectedRoute allowedRoles={['OWNER', 'ADMIN']}>
+              <CreateCarPage />
+            </ProtectedRoute>
+          } />
+
+          <Route path="/owner/dashboard" element={
+            <ProtectedRoute allowedRoles={['OWNER', 'ADMIN']}>
+              <OwnerDashboard />
+            </ProtectedRoute>
+          } />
+
+          {/* ===== ADMIN ===== */}
+          <Route path="/admin/dashboard" element={
+            <ProtectedRoute allowedRoles={['ADMIN']}>
+              <AdminDashboard />
+            </ProtectedRoute>
+          } />
+
+          {/* ===== 404 ===== */}
           <Route path="*" element={
             <div style={{ textAlign: 'center', padding: '120px 48px' }}>
               <h1 style={{ fontFamily: 'var(--serif)', fontSize: '96px', fontWeight: 900, color: 'var(--do)' }}>404</h1>

@@ -6,6 +6,7 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.annotation.Order;
 import org.springframework.http.HttpMethod;
+import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
@@ -22,6 +23,7 @@ import java.util.List;
 
 @Configuration
 @EnableWebSecurity
+@EnableMethodSecurity          // ← MỚI — bật @PreAuthorize
 @RequiredArgsConstructor
 public class SecurityConfig {
 
@@ -39,7 +41,7 @@ public class SecurityConfig {
                         "/api/v1/auth/**", "/auth/**",
                         "/api/v1/health", "/health",
                         "/error",
-                        "/uploads/**"          // ← THÊM
+                        "/uploads/**"
                 )
                 .csrf(AbstractHttpConfigurer::disable)
                 .cors(cors -> cors.configurationSource(corsConfigurationSource()))
@@ -62,7 +64,7 @@ public class SecurityConfig {
                         "/api/v1/cars/**", "/cars/**",
                         "/api/v1/reviews/cars/**", "/reviews/cars/**",
                         "/api/v1/reviews/owner/**", "/reviews/owner/**",
-                        "/uploads/**"          // ← THÊM
+                        "/uploads/**"
                 )
                 .csrf(AbstractHttpConfigurer::disable)
                 .cors(cors -> cors.configurationSource(corsConfigurationSource()))
