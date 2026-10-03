@@ -19,6 +19,7 @@ import OwnerDashboard from './pages/OwnerDashboard'
 import AdminDashboard from './pages/AdminDashboard'
 import ProfilePage from './pages/ProfilePage'
 import CreateCarPage from './pages/CreateCarPage'
+import AdminUsersPage from './pages/AdminUsersPage'
 
 function App() {
   return (
@@ -78,6 +79,13 @@ function App() {
           <Route path="/admin/dashboard" element={
             <ProtectedRoute allowedRoles={['ADMIN']}>
               <AdminDashboard />
+            </ProtectedRoute>
+          } />
+
+          {/* ===== ADMIN USERS — MỚI ===== */}
+          <Route path="/admin/users" element={
+            <ProtectedRoute allowedRoles={['ADMIN']}>
+              <AdminUsersPage />
             </ProtectedRoute>
           } />
 

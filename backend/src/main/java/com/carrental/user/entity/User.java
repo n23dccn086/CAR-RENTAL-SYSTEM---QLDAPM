@@ -49,15 +49,28 @@ public class User {
     @Builder.Default
     VerificationStatus verificationStatus = VerificationStatus.UNVERIFIED;
 
-    // ===== MỚI THÊM =====
-
     @Column(length = 255)
     String address;
 
     @Column(name = "date_of_birth")
     LocalDate dateOfBirth;
 
-    // ====================
+    // ===== MỚI THÊM — Cho Admin quản lý user =====
+
+    @Column(name = "avatar_url", length = 500)
+    String avatarUrl;
+
+    @Column(name = "rejection_reason", columnDefinition = "TEXT")
+    String rejectionReason;
+
+    @Column(name = "last_login_at")
+    LocalDateTime lastLoginAt;
+
+    @Column(name = "is_active")
+    @Builder.Default
+    Boolean isActive = true;
+
+    // ============================================
 
     @CreationTimestamp
     @Column(name = "created_at", updatable = false)
