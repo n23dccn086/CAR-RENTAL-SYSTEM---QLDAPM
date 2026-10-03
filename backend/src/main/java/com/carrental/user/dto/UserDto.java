@@ -6,6 +6,7 @@ import com.fasterxml.jackson.annotation.JsonInclude;
 import lombok.*;
 import lombok.experimental.FieldDefaults;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 
 @Data
@@ -22,6 +23,12 @@ public class UserDto {
     String email;
     Role role;
     VerificationStatus verificationStatus;
+
+    // ===== MỚI THÊM =====
+    String address;
+    LocalDate dateOfBirth;
+    // ====================
+
     LocalDateTime createdAt;
     LocalDateTime updatedAt;
 }

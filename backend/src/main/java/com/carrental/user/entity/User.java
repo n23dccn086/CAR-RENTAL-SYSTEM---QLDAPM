@@ -6,6 +6,7 @@ import lombok.experimental.FieldDefaults;
 import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.UpdateTimestamp;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 
 @Entity
@@ -47,6 +48,16 @@ public class User {
     @Column(name = "verification_status", length = 20)
     @Builder.Default
     VerificationStatus verificationStatus = VerificationStatus.UNVERIFIED;
+
+    // ===== MỚI THÊM =====
+
+    @Column(length = 255)
+    String address;
+
+    @Column(name = "date_of_birth")
+    LocalDate dateOfBirth;
+
+    // ====================
 
     @CreationTimestamp
     @Column(name = "created_at", updatable = false)

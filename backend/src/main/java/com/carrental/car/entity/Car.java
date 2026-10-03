@@ -118,13 +118,15 @@ public class Car {
     @Column(name = "deleted_at")
     LocalDateTime deletedAt;
 
-    // ===== Quan hệ =====
+    // ===== Quan hệ — 1 chiều, dùng @JoinColumn =====
 
-    @OneToMany(mappedBy = "car", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
+    @OneToMany(cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
+    @JoinColumn(name = "car_id", referencedColumnName = "id", insertable = false, updatable = false)
     @Builder.Default
     List<CarImage> images = new ArrayList<>();
 
-    @OneToMany(mappedBy = "car", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
+    @OneToMany(cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
+    @JoinColumn(name = "car_id", referencedColumnName = "id", insertable = false, updatable = false)
     @Builder.Default
     List<CarDocument> documents = new ArrayList<>();
 }

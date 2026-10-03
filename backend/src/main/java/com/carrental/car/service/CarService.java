@@ -5,12 +5,12 @@ import com.carrental.car.dto.CarResponse;
 import com.carrental.car.entity.Car;
 import com.carrental.car.entity.CarStatus;
 import com.carrental.car.entity.CarType;
+import org.springframework.web.multipart.MultipartFile;
 
+import java.io.IOException;
 import java.util.List;
 
 public interface CarService {
-
-    // ===== CRUD =====
 
     CarResponse createCar(Long ownerId, CarRequest request);
 
@@ -26,15 +26,18 @@ public interface CarService {
 
     void deleteCar(Long id, Long ownerId);
 
-    // ===== SEARCH/FILTER =====
-
     List<CarResponse> searchCars(CarStatus status, CarType carType);
 
     List<CarResponse> getAvailableCars();
 
-    // ===== ADMIN =====
-
     CarResponse approveCar(Long id);
 
     CarResponse rejectCar(Long id, String reason);
+
+    // ===== ẢNH XE =====
+    List<String> uploadImages(Long carId, Long ownerId, MultipartFile[] files) throws IOException;
+
+    List<String> getCarImages(Long carId);
+
+    void deleteImage(Long carId, Long ownerId, String imageUrl);
 }

@@ -14,6 +14,11 @@ import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
+import org.springframework.web.cors.CorsConfiguration;
+import org.springframework.web.cors.CorsConfigurationSource;
+import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
+
+import java.util.List;
 
 @Configuration
 @EnableWebSecurity
@@ -24,7 +29,7 @@ public class SecurityConfig {
 
     /**
      * Public endpoints — KHÔNG cần JWT.
-     * Bao gồm cả path có /api/v1 và không có (để tránh nhầm context path).
+     * Bao gồm: auth, health, uploads (ảnh xe).
      */
     @Bean
     @Order(1)
@@ -33,10 +38,11 @@ public class SecurityConfig {
                 .securityMatcher(
                         "/api/v1/auth/**", "/auth/**",
                         "/api/v1/health", "/health",
-                        "/error"
+                        "/error",
+                        "/uploads/**"          // ← THÊM
                 )
                 .csrf(AbstractHttpConfigurer::disable)
-                .cors(AbstractHttpConfigurer::disable)
+                .cors(cors -> cors.configurationSource(corsConfigurationSource()))
                 .formLogin(AbstractHttpConfigurer::disable)
                 .httpBasic(AbstractHttpConfigurer::disable)
                 .authorizeHttpRequests(auth -> auth
@@ -47,7 +53,6 @@ public class SecurityConfig {
 
     /**
      * Public GET — không cần JWT.
-     * POST/PUT/DELETE cần JWT.
      */
     @Bean
     @Order(2)
@@ -56,10 +61,11 @@ public class SecurityConfig {
                 .securityMatcher(
                         "/api/v1/cars/**", "/cars/**",
                         "/api/v1/reviews/cars/**", "/reviews/cars/**",
-                        "/api/v1/reviews/owner/**", "/reviews/owner/**"
+                        "/api/v1/reviews/owner/**", "/reviews/owner/**",
+                        "/uploads/**"          // ← THÊM
                 )
                 .csrf(AbstractHttpConfigurer::disable)
-                .cors(AbstractHttpConfigurer::disable)
+                .cors(cors -> cors.configurationSource(corsConfigurationSource()))
                 .formLogin(AbstractHttpConfigurer::disable)
                 .httpBasic(AbstractHttpConfigurer::disable)
                 .sessionManagement(session ->
@@ -74,14 +80,13 @@ public class SecurityConfig {
 
     /**
      * Protected — tất cả cần JWT.
-     * /admin/** chỉ ADMIN mới truy cập được.
      */
     @Bean
     @Order(3)
     public SecurityFilterChain apiFilterChain(HttpSecurity http) throws Exception {
         http
                 .csrf(AbstractHttpConfigurer::disable)
-                .cors(AbstractHttpConfigurer::disable)
+                .cors(cors -> cors.configurationSource(corsConfigurationSource()))
                 .formLogin(AbstractHttpConfigurer::disable)
                 .httpBasic(AbstractHttpConfigurer::disable)
                 .sessionManagement(session ->
@@ -97,5 +102,27 @@ public class SecurityConfig {
     @Bean
     public PasswordEncoder passwordEncoder() {
         return new BCryptPasswordEncoder();
+    }
+
+    /**
+     * CORS Configuration — cho phép Frontend gọi API.
+     */
+    @Bean
+    public CorsConfigurationSource corsConfigurationSource() {
+        CorsConfiguration config = new CorsConfiguration();
+        config.setAllowedOrigins(List.of(
+                "http://localhost:5173",
+                "http://localhost:3000",
+                "http://127.0.0.1:5173"
+        ));
+        config.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"));
+        config.setAllowedHeaders(List.of("*"));
+        config.setExposedHeaders(List.of("Authorization"));
+        config.setAllowCredentials(true);
+        config.setMaxAge(3600L);
+
+        UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
+        source.registerCorsConfiguration("/**", config);
+        return source;
     }
 }

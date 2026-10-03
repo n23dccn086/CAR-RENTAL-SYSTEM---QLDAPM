@@ -22,6 +22,8 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDate;
+
 @Service
 @RequiredArgsConstructor
 @FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
@@ -38,18 +40,15 @@ public class AuthServiceImpl implements AuthService {
     public UserDto register(RegisterRequest request) {
         log.info("Register request for phone: {}", request.getPhone());
 
-        // Check phone trùng
         if (userRepository.existsByPhone(request.getPhone())) {
             throw new BadRequestException(ErrorCode.PHONE_EXISTED);
         }
 
-        // Check email trùng (nếu có)
         if (request.getEmail() != null && !request.getEmail().isBlank()
                 && userRepository.existsByEmail(request.getEmail())) {
             throw new BadRequestException(ErrorCode.EMAIL_EXISTED);
         }
 
-        // Tạo user mới
         User user = User.builder()
                 .name(request.getName())
                 .phone(request.getPhone())
@@ -69,21 +68,17 @@ public class AuthServiceImpl implements AuthService {
     public AuthResponse login(LoginRequest request) {
         log.info("Login request for phone: {}", request.getPhone());
 
-        // Tìm user theo phone
         User user = userRepository.findByPhone(request.getPhone())
                 .orElseThrow(() -> new UnauthorizedException(ErrorCode.INVALID_CREDENTIALS));
 
-        // Check password
         if (!passwordEncoder.matches(request.getPassword(), user.getPasswordHash())) {
             throw new UnauthorizedException(ErrorCode.INVALID_CREDENTIALS);
         }
 
-        // Check tài khoản bị khóa
         if (user.getDeletedAt() != null) {
             throw new UnauthorizedException(ErrorCode.ACCOUNT_DISABLED);
         }
 
-        // Sinh token
         String accessToken = jwtService.generateAccessToken(
                 user.getId(), user.getPhone(), user.getRole().name());
         String refreshToken = jwtService.generateRefreshToken(user.getId(), user.getPhone());
@@ -94,7 +89,7 @@ public class AuthServiceImpl implements AuthService {
                 .accessToken(accessToken)
                 .refreshToken(refreshToken)
                 .tokenType("Bearer")
-                .expiresIn(3600L)          // 1 giờ
+                .expiresIn(3600L)
                 .user(userMapper.toDto(user))
                 .build();
     }
@@ -103,12 +98,10 @@ public class AuthServiceImpl implements AuthService {
     public AuthResponse refreshToken(String refreshToken) {
         log.info("Refresh token request");
 
-        // Verify refresh token
         if (!jwtService.isTokenValid(refreshToken, jwtService.extractPhone(refreshToken))) {
             throw new UnauthorizedException(ErrorCode.REFRESH_TOKEN_INVALID);
         }
 
-        // Check type
         String type = jwtService.extractTokenType(refreshToken);
         if (!"REFRESH".equals(type)) {
             throw new UnauthorizedException(ErrorCode.REFRESH_TOKEN_INVALID);
@@ -118,7 +111,6 @@ public class AuthServiceImpl implements AuthService {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.USER_NOT_FOUND));
 
-        // Sinh access token mới
         String newAccessToken = jwtService.generateAccessToken(
                 user.getId(), user.getPhone(), user.getRole().name());
 
@@ -136,5 +128,59 @@ public class AuthServiceImpl implements AuthService {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.USER_NOT_FOUND));
         return userMapper.toDto(user);
+    }
+
+    // ============================================================
+    // MỚI THÊM — 2 METHOD CHO PROFILE
+    // ============================================================
+
+    @Override
+    @Transactional
+    public UserDto updateProfile(Long userId, String name, String email, String address, LocalDate dateOfBirth) {
+        log.info("Update profile for user: {}", userId);
+
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.USER_NOT_FOUND));
+
+        // Check email trùng (nếu đổi email)
+        if (email != null && !email.isBlank() && !email.equals(user.getEmail())) {
+            if (userRepository.existsByEmail(email)) {
+                throw new BadRequestException(ErrorCode.EMAIL_EXISTED);
+            }
+            user.setEmail(email);
+        }
+
+        if (name != null && !name.isBlank()) {
+            user.setName(name);
+        }
+        if (address != null) {
+            user.setAddress(address);
+        }
+        if (dateOfBirth != null) {
+            user.setDateOfBirth(dateOfBirth);
+        }
+
+        User updated = userRepository.save(user);
+        log.info("Profile updated for user: {}", userId);
+
+        return userMapper.toDto(updated);
+    }
+
+    @Override
+    @Transactional
+    public void changePassword(Long userId, String currentPassword, String newPassword) {
+        log.info("Change password for user: {}", userId);
+
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.USER_NOT_FOUND));
+
+        if (!passwordEncoder.matches(currentPassword, user.getPasswordHash())) {
+            throw new UnauthorizedException(ErrorCode.INVALID_CREDENTIALS);
+        }
+
+        user.setPasswordHash(passwordEncoder.encode(newPassword));
+        userRepository.save(user);
+
+        log.info("Password changed for user: {}", userId);
     }
 }

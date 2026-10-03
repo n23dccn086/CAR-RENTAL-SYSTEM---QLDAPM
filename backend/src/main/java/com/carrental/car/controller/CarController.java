@@ -16,7 +16,9 @@ import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
 
+import java.io.IOException;
 import java.util.List;
 
 @RestController
@@ -31,40 +33,24 @@ public class CarController {
 
     // ===== PUBLIC ENDPOINTS =====
 
-    /**
-     * Lấy danh sách tất cả xe (public)
-     * GET /api/v1/cars
-     */
     @GetMapping
     public ApiResponse<List<CarResponse>> getAllCars() {
         log.info("REST request to get all cars");
         return ApiResponse.success(carService.getAllCars());
     }
 
-    /**
-     * Lấy chi tiết xe theo ID (public)
-     * GET /api/v1/cars/{id}
-     */
     @GetMapping("/{id}")
     public ApiResponse<CarResponse> getCarById(@PathVariable Long id) {
         log.info("REST request to get car: {}", id);
         return ApiResponse.success(carService.getCarById(id));
     }
 
-    /**
-     * Lấy xe available (public)
-     * GET /api/v1/cars/available
-     */
     @GetMapping("/available")
     public ApiResponse<List<CarResponse>> getAvailableCars() {
         log.info("REST request to get available cars");
         return ApiResponse.success(carService.getAvailableCars());
     }
 
-    /**
-     * Tìm kiếm xe theo status + type (public)
-     * GET /api/v1/cars/search?status=AVAILABLE&type=SUV
-     */
     @GetMapping("/search")
     public ApiResponse<List<CarResponse>> searchCars(
             @RequestParam(required = false) CarStatus status,
@@ -73,12 +59,8 @@ public class CarController {
         return ApiResponse.success(carService.searchCars(status, type));
     }
 
-    // ===== PROTECTED ENDPOINTS (cần JWT) =====
+    // ===== PROTECTED ENDPOINTS =====
 
-    /**
-     * Tạo xe mới (cần JWT - chủ xe)
-     * POST /api/v1/cars
-     */
     @PostMapping
     public ApiResponse<CarResponse> createCar(
             @Valid @RequestBody CarRequest request,
@@ -91,10 +73,6 @@ public class CarController {
         return ApiResponse.success("Tạo xe thành công. Vui lòng chờ Admin duyệt.", response);
     }
 
-    /**
-     * Cập nhật xe (cần JWT - chủ xe)
-     * PUT /api/v1/cars/{id}
-     */
     @PutMapping("/{id}")
     public ApiResponse<CarResponse> updateCar(
             @PathVariable Long id,
@@ -108,10 +86,6 @@ public class CarController {
         return ApiResponse.success("Cập nhật xe thành công", response);
     }
 
-    /**
-     * Xóa xe - soft delete (cần JWT - chủ xe)
-     * DELETE /api/v1/cars/{id}
-     */
     @DeleteMapping("/{id}")
     public ApiResponse<Void> deleteCar(
             @PathVariable Long id,
@@ -124,10 +98,6 @@ public class CarController {
         return ApiResponse.success("Xóa xe thành công", null);
     }
 
-    /**
-     * Lấy xe của tôi (cần JWT)
-     * GET /api/v1/cars/my
-     */
     @GetMapping("/my")
     public ApiResponse<List<CarResponse>> getMyCars(HttpServletRequest httpRequest) {
         Long ownerId = extractUserId(httpRequest);
@@ -136,22 +106,60 @@ public class CarController {
         return ApiResponse.success(carService.getCarsByOwner(ownerId));
     }
 
-    // ===== ADMIN ENDPOINTS =====
+    // ===== ẢNH XE — UPLOAD + GET =====
 
     /**
-     * Admin duyệt xe
-     * PUT /api/v1/cars/{id}/approve
+     * Upload ảnh cho xe
+     * POST /api/v1/cars/{id}/images
      */
+    @PostMapping("/{id}/images")
+    public ApiResponse<List<String>> uploadImages(
+            @PathVariable Long id,
+            @RequestParam("images") MultipartFile[] files,
+            HttpServletRequest httpRequest) throws IOException {
+
+        Long ownerId = extractUserId(httpRequest);
+        log.info("REST request to upload {} images for car {} by owner {}", files.length, id, ownerId);
+
+        List<String> urls = carService.uploadImages(id, ownerId, files);
+        return ApiResponse.success("Upload ảnh thành công", urls);
+    }
+
+    /**
+     * Lấy danh sách ảnh của xe
+     * GET /api/v1/cars/{id}/images
+     */
+    @GetMapping("/{id}/images")
+    public ApiResponse<List<String>> getCarImages(@PathVariable Long id) {
+        log.info("REST request to get images for car {}", id);
+        return ApiResponse.success(carService.getCarImages(id));
+    }
+
+    /**
+     * Xóa 1 ảnh của xe
+     * DELETE /api/v1/cars/{id}/images
+     */
+    @DeleteMapping("/{id}/images")
+    public ApiResponse<Void> deleteImage(
+            @PathVariable Long id,
+            @RequestParam("imageUrl") String imageUrl,
+            HttpServletRequest httpRequest) {
+
+        Long ownerId = extractUserId(httpRequest);
+        log.info("REST request to delete image for car {} by owner {}", id, ownerId);
+
+        carService.deleteImage(id, ownerId, imageUrl);
+        return ApiResponse.success("Xóa ảnh thành công", null);
+    }
+
+    // ===== ADMIN ENDPOINTS =====
+
     @PutMapping("/{id}/approve")
     public ApiResponse<CarResponse> approveCar(@PathVariable Long id) {
         log.info("REST request to approve car: {}", id);
         return ApiResponse.success("Duyệt xe thành công", carService.approveCar(id));
     }
 
-    /**
-     * Admin từ chối xe
-     * PUT /api/v1/cars/{id}/reject?reason=...
-     */
     @PutMapping("/{id}/reject")
     public ApiResponse<CarResponse> rejectCar(
             @PathVariable Long id,

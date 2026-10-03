@@ -1,0 +1,407 @@
+/* ============================================================
+   KEYFRAMES — Tất cả animation
+   ============================================================ */
+@keyframes fadeUp {
+  from {
+    opacity: 0;
+    transform: translateY(40px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+@keyframes drawLine {
+  from {
+    transform: scaleX(0);
+  }
+  to {
+    transform: scaleX(1);
+  }
+}
+@keyframes compassSpin {
+  0% {
+    transform: rotate(-15deg);
+  }
+  50% {
+    transform: rotate(15deg);
+  }
+  100% {
+    transform: rotate(-15deg);
+  }
+}
+@keyframes hourglassFlip {
+  0%,
+  45% {
+    transform: rotate(0deg);
+  }
+  50%,
+  95% {
+    transform: rotate(180deg);
+  }
+  100% {
+    transform: rotate(0deg);
+  }
+}
+@keyframes sealRotate {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+@keyframes flagWave {
+  0%,
+  100% {
+    transform: rotate(-3deg) skewY(-1deg);
+  }
+  50% {
+    transform: rotate(3deg) skewY(1deg);
+  }
+}
+@keyframes keyTurn {
+  0%,
+  40% {
+    transform: rotate(0deg);
+  }
+  50%,
+  90% {
+    transform: rotate(45deg);
+  }
+  100% {
+    transform: rotate(0deg);
+  }
+}
+@keyframes lampFlicker {
+  0%,
+  100% {
+    opacity: 1;
+    filter: drop-shadow(0 0 8px var(--dong));
+  }
+  20% {
+    opacity: 0.85;
+  }
+  40% {
+    opacity: 1;
+    filter: drop-shadow(0 0 16px var(--dong));
+  }
+  60% {
+    opacity: 0.9;
+  }
+  80% {
+    opacity: 1;
+    filter: drop-shadow(0 0 12px var(--dong));
+  }
+}
+@keyframes starTwinkle {
+  0%,
+  100% {
+    opacity: 0.3;
+    transform: scale(0.9);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.1);
+  }
+}
+@keyframes moonGlow {
+  0%,
+  100% {
+    filter: drop-shadow(0 0 6px rgba(201, 169, 97, 0.4));
+  }
+  50% {
+    filter: drop-shadow(0 0 20px rgba(201, 169, 97, 0.8));
+  }
+}
+@keyframes birdFly {
+  0% {
+    transform: translate(0, 0) rotate(0deg);
+  }
+  50% {
+    transform: translate(20px, -10px) rotate(-5deg);
+  }
+  100% {
+    transform: translate(0, 0) rotate(0deg);
+  }
+}
+@keyframes pendulum {
+  0%,
+  100% {
+    transform: rotate(-20deg);
+  }
+  50% {
+    transform: rotate(20deg);
+  }
+}
+@keyframes stampPress {
+  0%,
+  60%,
+  100% {
+    transform: scale(1) rotate(-3deg);
+    opacity: 1;
+  }
+  30% {
+    transform: scale(0.9) rotate(-3deg);
+    opacity: 0.7;
+  }
+}
+@keyframes carDrive {
+  0% {
+    transform: translateX(-200px);
+    opacity: 0;
+  }
+  10% {
+    opacity: 1;
+  }
+  90% {
+    opacity: 1;
+  }
+  100% {
+    transform: translateX(calc(100vw + 200px));
+    opacity: 0;
+  }
+}
+@keyframes needleSweep {
+  0% {
+    transform: rotate(-75deg);
+  }
+  100% {
+    transform: rotate(75deg);
+  }
+}
+@keyframes wheelSpin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@keyframes glowPulse {
+  0%,
+  100% {
+    opacity: 0.3;
+  }
+  50% {
+    opacity: 0.9;
+  }
+}
+@keyframes ticker {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(-50%);
+  }
+}
+@keyframes scrollDot {
+  0%,
+  100% {
+    transform: translateY(0);
+    opacity: 1;
+  }
+  50% {
+    transform: translateY(20px);
+    opacity: 0.3;
+  }
+}
+@keyframes marqueeBig {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(-50%);
+  }
+}
+@keyframes heartbeat {
+  0%,
+  100% {
+    transform: scale(1);
+  }
+  15% {
+    transform: scale(1.15);
+  }
+  30% {
+    transform: scale(1);
+  }
+  45% {
+    transform: scale(1.1);
+  }
+}
+@keyframes float {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-12px);
+  }
+}
+@keyframes rotateSlow {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@keyframes gradientShift {
+  0%,
+  100% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+}
+@keyframes lightSweep {
+  from {
+    transform: translateX(-100%) skewX(-20deg);
+  }
+  to {
+    transform: translateX(200%) skewX(-20deg);
+  }
+}
+@keyframes letterReveal {
+  from {
+    opacity: 0;
+    transform: translateY(40px) rotateX(-90deg);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) rotateX(0);
+  }
+}
+@keyframes butterfly {
+  0%,
+  100% {
+    transform: translate(0, 0) rotate(0deg);
+  }
+  25% {
+    transform: translate(-8px, -6px) rotate(-8deg);
+  }
+  50% {
+    transform: translate(6px, -10px) rotate(5deg);
+  }
+  75% {
+    transform: translate(-4px, 4px) rotate(-3deg);
+  }
+}
+@keyframes ripple {
+  to {
+    transform: scale(4);
+    opacity: 0;
+  }
+}
+@keyframes dotBounce {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-8px);
+  }
+}
+
+/* ============================================================
+   WHEEL NAV + DECOR ANIMATIONS
+   ============================================================ */
+@keyframes wheelSpin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes wheelMenuOpen {
+  from {
+    opacity: 0;
+    transform: translateY(-12px) scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes wheelItemIn {
+  from {
+    opacity: 0;
+    transform: translateX(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes smokeRise {
+  0% {
+    transform: translateY(0) scale(1);
+    opacity: 0.4;
+  }
+  100% {
+    transform: translateY(-60px) scale(1.8);
+    opacity: 0;
+  }
+}
+
+@keyframes headlight {
+  0%,
+  100% {
+    opacity: 0.3;
+    filter: blur(2px);
+  }
+  50% {
+    opacity: 0.8;
+    filter: blur(4px);
+  }
+}
+
+@keyframes smokeRise {
+  0% {
+    transform: translateY(0) scale(1);
+    opacity: 0.5;
+  }
+  100% {
+    transform: translateY(-40px) scale(1.8);
+    opacity: 0;
+  }
+}
+
+@keyframes lightSweep {
+  from {
+    transform: translateX(-100%) skewX(-20deg);
+  }
+  to {
+    transform: translateX(300%) skewX(-20deg);
+  }
+}
+
+@keyframes roadMove {
+  from {
+    stroke-dashoffset: 0;
+  }
+  to {
+    stroke-dashoffset: -35;
+  }
+}
+
+@keyframes particleFloat {
+  0% {
+    transform: translate(0, 0);
+    opacity: 0.2;
+  }
+  50% {
+    opacity: 0.6;
+  }
+  100% {
+    transform: translate(8px, -15px);
+    opacity: 0.3;
+  }
+}

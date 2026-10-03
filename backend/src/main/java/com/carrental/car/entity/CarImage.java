@@ -23,15 +23,15 @@ public class CarImage {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     Long id;
 
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "car_id", nullable = false)
-    Car car;
+    @Column(name = "car_id", nullable = false)
+    Long carId;
 
     @Column(name = "image_url", nullable = false, length = 500)
     String imageUrl;
 
-    @Column(name = "image_type", length = 30)
-    String imageType;
+    @Column(name = "image_type", length = 20)
+    @Builder.Default
+    String imageType = "OTHER";
 
     @Column(name = "display_order")
     @Builder.Default

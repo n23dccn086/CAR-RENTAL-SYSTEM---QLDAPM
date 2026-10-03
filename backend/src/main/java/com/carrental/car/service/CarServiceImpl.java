@@ -4,6 +4,7 @@ import com.carrental.car.dto.CarMapper;
 import com.carrental.car.dto.CarRequest;
 import com.carrental.car.dto.CarResponse;
 import com.carrental.car.entity.Car;
+import com.carrental.car.entity.CarImage;
 import com.carrental.car.entity.CarStatus;
 import com.carrental.car.entity.CarType;
 import com.carrental.car.repository.CarImageRepository;
@@ -12,6 +13,7 @@ import com.carrental.common.constant.ErrorCode;
 import com.carrental.common.exception.BadRequestException;
 import com.carrental.common.exception.ResourceNotFoundException;
 import com.carrental.common.exception.UnauthorizedException;
+import com.carrental.common.service.FileStorageService;
 import com.carrental.user.repository.UserRepository;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
@@ -19,8 +21,11 @@ import lombok.experimental.FieldDefaults;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.multipart.MultipartFile;
 
+import java.io.IOException;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.List;
 
 @Service
@@ -33,6 +38,7 @@ public class CarServiceImpl implements CarService {
     CarImageRepository carImageRepository;
     UserRepository userRepository;
     CarMapper carMapper;
+    FileStorageService fileStorageService;
 
     // ===== CREATE =====
 
@@ -41,22 +47,18 @@ public class CarServiceImpl implements CarService {
     public CarResponse createCar(Long ownerId, CarRequest request) {
         log.info("Create car for owner: {}, plate: {}", ownerId, request.getPlate());
 
-        // Check owner tồn tại
         if (!userRepository.existsById(ownerId)) {
             throw new ResourceNotFoundException(ErrorCode.USER_NOT_FOUND);
         }
 
-        // Check plate trùng
         if (carRepository.existsByPlate(request.getPlate())) {
             throw new BadRequestException(ErrorCode.CAR_PLATE_EXISTED);
         }
 
-        // Tạo Car entity
         Car car = carMapper.toEntity(request);
         car.setOwnerId(ownerId);
         car.setStatus(CarStatus.PENDING);
 
-        // Set default values nếu null
         if (car.getCurrentKm() == null) car.setCurrentKm(0);
         if (car.getExtraKmPrice() == null) car.setExtraKmPrice(5000L);
         if (car.getDeliveryFee() == null) car.setDeliveryFee(100000L);
@@ -104,18 +106,15 @@ public class CarServiceImpl implements CarService {
 
         Car car = getCarEntityById(id);
 
-        // Check owner sở hữu
         if (!car.getOwnerId().equals(ownerId)) {
             throw new UnauthorizedException(ErrorCode.CAR_NOT_OWNED);
         }
 
-        // Check plate trùng (nếu đổi plate)
         if (!car.getPlate().equals(request.getPlate())
                 && carRepository.existsByPlate(request.getPlate())) {
             throw new BadRequestException(ErrorCode.CAR_PLATE_EXISTED);
         }
 
-        // Update fields
         car.setPlate(request.getPlate());
         car.setBrand(request.getBrand());
         car.setModel(request.getModel());
@@ -214,5 +213,75 @@ public class CarServiceImpl implements CarService {
         Car updated = carRepository.save(car);
 
         return carMapper.toResponse(updated);
+    }
+
+    // ============================================================
+    // ===== ẢNH XE — UPLOAD / GET / DELETE =====
+    // ============================================================
+
+    @Override
+    @Transactional
+    public List<String> uploadImages(Long carId, Long ownerId, MultipartFile[] files) throws IOException {
+        log.info("Upload {} images for car {} by owner {}", files.length, carId, ownerId);
+
+        Car car = getCarEntityById(carId);
+
+        if (!car.getOwnerId().equals(ownerId)) {
+            throw new UnauthorizedException(ErrorCode.CAR_NOT_OWNED);
+        }
+
+        List<String> urls = new ArrayList<>();
+        long existing = carImageRepository.countByCarId(carId);
+
+        for (MultipartFile file : files) {
+            if (file.isEmpty()) continue;
+            if (existing + urls.size() >= 10) {
+                log.warn("Vượt quá 10 ảnh cho car {}", carId);
+                break;
+            }
+
+            String url = fileStorageService.storeFile(file, "cars/" + carId);
+            urls.add(url);
+
+            CarImage image = CarImage.builder()
+                    .carId(carId)
+                    .imageUrl(url)
+                    .imageType("OTHER")
+                    .build();
+            carImageRepository.save(image);
+        }
+
+        log.info("Uploaded {} images for car {}", urls.size(), carId);
+        return urls;
+    }
+
+    @Override
+    public List<String> getCarImages(Long carId) {
+        getCarEntityById(carId);
+        return carImageRepository.findByCarIdOrderByDisplayOrderAsc(carId).stream()
+                .map(CarImage::getImageUrl)
+                .toList();
+    }
+
+    @Override
+    @Transactional
+    public void deleteImage(Long carId, Long ownerId, String imageUrl) {
+        log.info("Delete image for car {} by owner {}", carId, ownerId);
+
+        Car car = getCarEntityById(carId);
+
+        if (!car.getOwnerId().equals(ownerId)) {
+            throw new UnauthorizedException(ErrorCode.CAR_NOT_OWNED);
+        }
+
+        CarImage image = carImageRepository.findByCarIdOrderByDisplayOrderAsc(carId).stream()
+                .filter(img -> img.getImageUrl().equals(imageUrl))
+                .findFirst()
+                .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.CAR_NOT_FOUND));
+
+        fileStorageService.deleteFile(image.getImageUrl());
+        carImageRepository.delete(image);
+
+        log.info("Deleted image for car {}", carId);
     }
 }

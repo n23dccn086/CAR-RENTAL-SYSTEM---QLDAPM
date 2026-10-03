@@ -5,6 +5,8 @@ import com.carrental.auth.dto.LoginRequest;
 import com.carrental.auth.dto.RegisterRequest;
 import com.carrental.user.dto.UserDto;
 
+import java.time.LocalDate;
+
 public interface AuthService {
 
     UserDto register(RegisterRequest request);
@@ -14,4 +16,10 @@ public interface AuthService {
     AuthResponse refreshToken(String refreshToken);
 
     UserDto getCurrentUser(Long userId);
+
+    // ===== MỚI THÊM =====
+
+    UserDto updateProfile(Long userId, String name, String email, String address, LocalDate dateOfBirth);
+
+    void changePassword(Long userId, String currentPassword, String newPassword);
 }
