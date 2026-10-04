@@ -127,19 +127,25 @@ public class BookingServiceImpl implements BookingService {
     @Override
     public List<BookingResponse> getMyBookings(Long customerId) {
         List<Booking> bookings = bookingRepository.findByCustomerIdOrderByCreatedAtDesc(customerId);
-        return bookingMapper.toResponseList(bookings);
+        return bookings.stream()
+                .map(b -> buildResponse(b, null))
+                .toList();
     }
 
     @Override
     public List<BookingResponse> getOwnerBookings(Long ownerId) {
         List<Booking> bookings = bookingRepository.findByOwnerIdOrderByCreatedAtDesc(ownerId);
-        return bookingMapper.toResponseList(bookings);
+        return bookings.stream()
+                .map(b -> buildResponse(b, null))
+                .toList();
     }
 
     @Override
     public List<BookingResponse> getBookingsByStatus(BookingStatus status) {
         List<Booking> bookings = bookingRepository.findByStatus(status);
-        return bookingMapper.toResponseList(bookings);
+        return bookings.stream()
+                .map(b -> buildResponse(b, null))
+                .toList();
     }
 
     // ===== ACTIONS =====

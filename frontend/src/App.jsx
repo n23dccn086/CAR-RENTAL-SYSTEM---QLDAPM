@@ -20,7 +20,9 @@ import AdminDashboard from './pages/AdminDashboard'
 import ProfilePage from './pages/ProfilePage'
 import CreateCarPage from './pages/CreateCarPage'
 import AdminUsersPage from './pages/AdminUsersPage'
-import AdminRefundsPage from './pages/AdminRefundsPage'   // ← THÊM MỚI
+import AdminRefundsPage from './pages/AdminRefundsPage'
+import DriverAssignmentPage from './pages/DriverAssignmentPage'      // ← MỚI
+import OwnerBookingsPage from './pages/OwnerBookingsPage'            // ← MỚI
 
 function App() {
   return (
@@ -37,6 +39,9 @@ function App() {
           <Route path="/register" element={<RegisterPage />} />
           <Route path="/search" element={<SearchPage />} />
           <Route path="/cars/:id" element={<CarDetailPage />} />
+
+          {/* ===== DRIVER MAGIC LINK — PUBLIC ===== */}
+          <Route path="/driver/assignment/:id" element={<DriverAssignmentPage />} />
 
           {/* ===== CẦN ĐĂNG NHẬP ===== */}
           <Route path="/profile" element={
@@ -76,6 +81,13 @@ function App() {
             </ProtectedRoute>
           } />
 
+          {/* ===== OWNER BOOKINGS — MỚI ===== */}
+          <Route path="/owner/bookings" element={
+            <ProtectedRoute allowedRoles={['OWNER', 'ADMIN']}>
+              <OwnerBookingsPage />
+            </ProtectedRoute>
+          } />
+
           {/* ===== ADMIN ===== */}
           <Route path="/admin/dashboard" element={
             <ProtectedRoute allowedRoles={['ADMIN']}>
@@ -89,7 +101,6 @@ function App() {
             </ProtectedRoute>
           } />
 
-          {/* ===== ADMIN REFUNDS — MỚI ===== */}
           <Route path="/admin/refunds" element={
             <ProtectedRoute allowedRoles={['ADMIN']}>
               <AdminRefundsPage />
