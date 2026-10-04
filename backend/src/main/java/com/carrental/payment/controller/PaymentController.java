@@ -29,10 +29,6 @@ public class PaymentController {
 
     // ===== CREATE =====
 
-    /**
-     * Tạo giao dịch thanh toán (cần JWT - khách thuê)
-     * POST /api/v1/payments
-     */
     @PostMapping
     public ApiResponse<PaymentResponse> createPayment(
             @Valid @RequestBody PaymentRequest request,
@@ -48,30 +44,18 @@ public class PaymentController {
 
     // ===== READ =====
 
-    /**
-     * Lấy chi tiết giao dịch
-     * GET /api/v1/payments/{id}
-     */
     @GetMapping("/{id}")
     public ApiResponse<PaymentResponse> getPaymentById(@PathVariable Long id) {
         log.info("REST request to get payment: {}", id);
         return ApiResponse.success(paymentService.getPaymentById(id));
     }
 
-    /**
-     * Giao dịch theo booking
-     * GET /api/v1/payments/booking/{bookingId}
-     */
     @GetMapping("/booking/{bookingId}")
     public ApiResponse<List<PaymentResponse>> getPaymentsByBooking(@PathVariable Long bookingId) {
         log.info("REST request to get payments by booking: {}", bookingId);
         return ApiResponse.success(paymentService.getPaymentsByBooking(bookingId));
     }
 
-    /**
-     * Giao dịch của tôi (cần JWT)
-     * GET /api/v1/payments/my
-     */
     @GetMapping("/my")
     public ApiResponse<List<PaymentResponse>> getMyPayments(HttpServletRequest httpRequest) {
         Long customerId = extractUserId(httpRequest);
@@ -81,10 +65,6 @@ public class PaymentController {
 
     // ===== CALLBACK =====
 
-    /**
-     * Callback từ Momo (public - Momo gọi)
-     * POST /api/v1/payments/callback/momo
-     */
     @PostMapping("/callback/momo")
     public ApiResponse<PaymentResponse> momoCallback(@RequestBody String callbackData) {
         log.info("Momo callback received: {}", callbackData);
@@ -92,12 +72,21 @@ public class PaymentController {
                 paymentService.handleMomoCallback(callbackData));
     }
 
+    /**
+     * MOCK callback — dùng khi demo để chuyển trạng thái thanh toán.
+     * POST /api/v1/payments/{id}/mock-success?method=MOMO
+     */
+    @PostMapping("/{id}/mock-success")
+    public ApiResponse<PaymentResponse> mockSuccess(
+            @PathVariable Long id,
+            @RequestParam(defaultValue = "MOMO") String method) {
+        log.info("MOCK: Simulating payment success for payment: {}, method: {}", id, method);
+        return ApiResponse.success("Thanh toán thành công (demo)",
+                paymentService.handleMockCallback(id, method));
+    }
+
     // ===== REFUND =====
 
-    /**
-     * Hoàn tiền giao dịch
-     * POST /api/v1/payments/{id}/refund?reason=...
-     */
     @PostMapping("/{id}/refund")
     public ApiResponse<PaymentResponse> refundPayment(
             @PathVariable Long id,

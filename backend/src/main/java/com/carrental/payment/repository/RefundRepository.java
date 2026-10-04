@@ -15,4 +15,8 @@ public interface RefundRepository extends JpaRepository<Refund, Long> {
     List<Refund> findByBookingId(Long bookingId);
 
     List<Refund> findByStatus(PaymentStatus status);
+
+    List<Refund> findByStatusOrderByCreatedAtDesc(PaymentStatus status);
+
+    long countByStatus(PaymentStatus status);
 }

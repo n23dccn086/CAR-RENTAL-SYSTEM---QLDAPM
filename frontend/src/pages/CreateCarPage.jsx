@@ -7,18 +7,32 @@ import api from '../services/api'
 export default function CreateCarPage() {
   const navigate = useNavigate()
   const [form, setForm] = useState({
-    plateNumber: '', brand: '', model: '', year: 2024,
-    color: '', seats: 5, transmission: 'AUTOMATIC',
-    fuelType: 'GASOLINE', currentKm: 0,
-    pricePerDay: 1000000, carType: 'SEDAN',
-    rentalMode: 'BOTH', location: '', description: ''
+    plate: '',            // ← SỬA: plateNumber → plate
+    brand: '',
+    model: '',
+    year: 2024,
+    color: '',
+    seats: 5,
+    transmission: 'AUTOMATIC',
+    fuelType: 'GASOLINE',
+    currentKm: 0,
+    pricePerDay: 1000000,
+    carType: 'SEDAN',
+    rentalMode: 'BOTH',
+    address: '',          // ← SỬA: location → address
+    description: ''
   })
-  const [images, setImages] = useState([])  // File[]
-  const [previews, setPreviews] = useState([])  // URL preview
+  const [images, setImages] = useState([])
+  const [previews, setPreviews] = useState([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
 
-  const handleChange = (e) => setForm({ ...form, [e.target.name]: e.target.value })
+  const handleChange = (e) => {
+    const { name, value } = e.target
+    // Convert number fields
+    const numberFields = ['year', 'seats', 'currentKm', 'pricePerDay']
+    setForm({ ...form, [name]: numberFields.includes(name) ? (value === '' ? '' : Number(value)) : value })
+  }
 
   const handleImageChange = (e) => {
     const files = Array.from(e.target.files)
@@ -36,27 +50,86 @@ export default function CreateCarPage() {
     setPreviews(previews.filter((_, idx) => idx !== i))
   }
 
+  // ===== VALIDATE =====
+  const validate = () => {
+    const errors = []
+
+    // Required strings
+    if (!form.plate?.trim()) errors.push('Biển số không được để trống')
+    else if (form.plate.length > 20) errors.push('Biển số không quá 20 ký tự')
+
+    if (!form.brand?.trim()) errors.push('Hãng xe không được để trống')
+    else if (form.brand.length > 50) errors.push('Hãng xe không quá 50 ký tự')
+
+    if (!form.model?.trim()) errors.push('Dòng xe không được để trống')
+    else if (form.model.length > 100) errors.push('Dòng xe không quá 100 ký tự')
+
+    // Year
+    const year = Number(form.year)
+    if (!form.year && form.year !== 0) errors.push('Năm SX không được để trống')
+    else if (isNaN(year)) errors.push('Năm SX phải là số')
+    else if (year < 1990 || year > 2100) errors.push('Năm SX phải từ 1990 đến 2100')
+
+    // Seats
+    const seats = Number(form.seats)
+    if (!form.seats && form.seats !== 0) errors.push('Số chỗ không được để trống')
+    else if (isNaN(seats)) errors.push('Số chỗ phải là số')
+    else if (seats < 2 || seats > 30) errors.push('Số chỗ phải từ 2 đến 30')
+
+    // Price
+    const price = Number(form.pricePerDay)
+    if (!form.pricePerDay && form.pricePerDay !== 0) errors.push('Giá thuê không được để trống')
+    else if (isNaN(price)) errors.push('Giá thuê phải là số')
+    else if (price < 0) errors.push('Giá thuê không được âm')
+
+    // Current km (optional)
+    if (form.currentKm !== '' && form.currentKm !== undefined) {
+      const km = Number(form.currentKm)
+      if (isNaN(km)) errors.push('Số km phải là số')
+      else if (km < 0) errors.push('Số km không được âm')
+    }
+
+    // Color
+    if (form.color && form.color.length > 30) errors.push('Màu sắc không quá 30 ký tự')
+
+    // Address
+    if (form.address && form.address.length > 255) errors.push('Địa chỉ không quá 255 ký tự')
+
+    return errors.length > 0 ? errors.join('. ') : null
+  }
+
   const handleSubmit = async (e) => {
     e.preventDefault()
     setError('')
 
-    if (!form.plateNumber || !form.brand || !form.model) {
-      return setError('Vui lòng điền biển số, hãng, dòng xe')
+    const validationError = validate()
+    if (validationError) {
+      setError(validationError)
+      return
     }
 
     setLoading(true)
     try {
-      // 1. Tạo xe
+      // ===== GỬI ĐÚNG FIELD NAME BACKEND MONG ĐỢI =====
       const res = await createCar({
-        ...form,
-        year: parseInt(form.year),
-        seats: parseInt(form.seats),
-        currentKm: parseInt(form.currentKm),
-        pricePerDay: parseInt(form.pricePerDay),
+        plate: form.plate.trim(),                    // ← SỬA
+        brand: form.brand.trim(),
+        model: form.model.trim(),
+        year: Number(form.year),
+        seats: Number(form.seats),
+        transmission: form.transmission,
+        fuelType: form.fuelType,
+        color: form.color?.trim() || null,
+        currentKm: form.currentKm ? Number(form.currentKm) : 0,
+        pricePerDay: Number(form.pricePerDay),
+        carType: form.carType,
+        rentalMode: form.rentalMode,
+        address: form.address?.trim() || null,       // ← SỬA
+        description: form.description?.trim() || null,
       })
       const carId = res.data?.id
 
-      // 2. Upload ảnh (nếu có)
+      // Upload ảnh
       if (images.length > 0 && carId) {
         const formData = new FormData()
         images.forEach(img => formData.append('images', img))
@@ -71,7 +144,13 @@ export default function CreateCarPage() {
 
       navigate('/owner/dashboard')
     } catch (err) {
-      setError(err.response?.data?.message || 'Tạo xe thất bại')
+      const msg = err.response?.data?.message || 'Tạo xe thất bại'
+      const details = err.response?.data?.data
+      if (details && typeof details === 'object') {
+        setError(Object.values(details).join('. '))
+      } else {
+        setError(msg)
+      }
     } finally {
       setLoading(false)
     }
@@ -97,7 +176,6 @@ export default function CreateCarPage() {
             Ảnh xe (tối đa 10 ảnh) — không bắt buộc
           </label>
 
-          {/* Previews */}
           {previews.length > 0 && (
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: '12px', marginBottom: '16px' }}>
               {previews.map((url, i) => (
@@ -119,7 +197,6 @@ export default function CreateCarPage() {
             </div>
           )}
 
-          {/* Upload button */}
           <label style={{
             display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '12px',
             padding: '32px',
@@ -149,29 +226,30 @@ export default function CreateCarPage() {
 
         {/* THÔNG TIN XE */}
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' }}>
-          <FormInput label="Biển số" name="plateNumber" value={form.plateNumber} onChange={handleChange} required />
+          <FormInput label="Biển số" name="plate" value={form.plate} onChange={handleChange} required />
           <FormInput label="Hãng xe" name="brand" value={form.brand} onChange={handleChange} required />
           <FormInput label="Dòng xe" name="model" value={form.model} onChange={handleChange} required />
           <FormInput label="Năm SX" name="year" type="number" value={form.year} onChange={handleChange} required />
           <FormInput label="Màu sắc" name="color" value={form.color} onChange={handleChange} />
 
           <div>
-            <label style={{ display: 'block', fontFamily: 'var(--mono)', fontSize: '10px', letterSpacing: '3px', textTransform: 'uppercase', color: 'var(--muc-mo)', marginBottom: '8px' }}>Loại xe</label>
+            <label style={{ display: 'block', fontFamily: 'var(--mono)', fontSize: '10px', letterSpacing: '3px', textTransform: 'uppercase', color: 'var(--muc-mo)', marginBottom: '8px' }}>Loại xe *</label>
             <select name="carType" value={form.carType} onChange={handleChange} style={{ width: '100%', padding: '14px 16px', background: 'var(--kem-dam)', border: '1px solid rgba(15,14,12,0.2)', fontFamily: 'var(--serif-2)', fontSize: '16px' }}>
               <option value="SEDAN">Sedan</option>
               <option value="SUV">SUV</option>
               <option value="MPV">MPV</option>
               <option value="HATCHBACK">Hatchback</option>
+              <option value="PICKUP">Bán tải</option>
             </select>
           </div>
 
           <FormInput label="Số chỗ" name="seats" type="number" value={form.seats} onChange={handleChange} required />
           <FormInput label="Số km hiện tại" name="currentKm" type="number" value={form.currentKm} onChange={handleChange} />
           <FormInput label="Giá thuê / ngày (VNĐ)" name="pricePerDay" type="number" value={form.pricePerDay} onChange={handleChange} required />
-          <FormInput label="Địa điểm" name="location" value={form.location} onChange={handleChange} placeholder="TP.HCM" />
+          <FormInput label="Địa chỉ" name="address" value={form.address} onChange={handleChange} placeholder="123 Nguyễn Huệ, Q1, TP.HCM" />
 
           <div>
-            <label style={{ display: 'block', fontFamily: 'var(--mono)', fontSize: '10px', letterSpacing: '3px', textTransform: 'uppercase', color: 'var(--muc-mo)', marginBottom: '8px' }}>Hộp số</label>
+            <label style={{ display: 'block', fontFamily: 'var(--mono)', fontSize: '10px', letterSpacing: '3px', textTransform: 'uppercase', color: 'var(--muc-mo)', marginBottom: '8px' }}>Hộp số *</label>
             <select name="transmission" value={form.transmission} onChange={handleChange} style={{ width: '100%', padding: '14px 16px', background: 'var(--kem-dam)', border: '1px solid rgba(15,14,12,0.2)', fontFamily: 'var(--serif-2)', fontSize: '16px' }}>
               <option value="AUTOMATIC">Tự động</option>
               <option value="MANUAL">Số sàn</option>
@@ -179,7 +257,7 @@ export default function CreateCarPage() {
           </div>
 
           <div>
-            <label style={{ display: 'block', fontFamily: 'var(--mono)', fontSize: '10px', letterSpacing: '3px', textTransform: 'uppercase', color: 'var(--muc-mo)', marginBottom: '8px' }}>Nhiên liệu</label>
+            <label style={{ display: 'block', fontFamily: 'var(--mono)', fontSize: '10px', letterSpacing: '3px', textTransform: 'uppercase', color: 'var(--muc-mo)', marginBottom: '8px' }}>Nhiên liệu *</label>
             <select name="fuelType" value={form.fuelType} onChange={handleChange} style={{ width: '100%', padding: '14px 16px', background: 'var(--kem-dam)', border: '1px solid rgba(15,14,12,0.2)', fontFamily: 'var(--serif-2)', fontSize: '16px' }}>
               <option value="GASOLINE">Xăng</option>
               <option value="DIESEL">Dầu</option>
@@ -189,7 +267,7 @@ export default function CreateCarPage() {
           </div>
 
           <div>
-            <label style={{ display: 'block', fontFamily: 'var(--mono)', fontSize: '10px', letterSpacing: '3px', textTransform: 'uppercase', color: 'var(--muc-mo)', marginBottom: '8px' }}>Hình thức thuê</label>
+            <label style={{ display: 'block', fontFamily: 'var(--mono)', fontSize: '10px', letterSpacing: '3px', textTransform: 'uppercase', color: 'var(--muc-mo)', marginBottom: '8px' }}>Hình thức thuê *</label>
             <select name="rentalMode" value={form.rentalMode} onChange={handleChange} style={{ width: '100%', padding: '14px 16px', background: 'var(--kem-dam)', border: '1px solid rgba(15,14,12,0.2)', fontFamily: 'var(--serif-2)', fontSize: '16px' }}>
               <option value="BOTH">Cả hai</option>
               <option value="SELF_DRIVE">Tự lái</option>

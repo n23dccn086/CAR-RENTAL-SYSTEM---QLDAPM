@@ -7,6 +7,8 @@ import com.carrental.common.constant.ErrorCode;
 import com.carrental.common.exception.BadRequestException;
 import com.carrental.common.exception.ResourceNotFoundException;
 import com.carrental.common.exception.UnauthorizedException;
+import com.carrental.notification.entity.NotificationType;
+import com.carrental.notification.service.NotificationService;
 import com.carrental.payment.dto.PaymentMapper;
 import com.carrental.payment.dto.PaymentRequest;
 import com.carrental.payment.dto.PaymentResponse;
@@ -39,6 +41,7 @@ public class PaymentServiceImpl implements PaymentService {
     UserRepository userRepository;
     PaymentMapper paymentMapper;
     MomoGateway momoGateway;
+    NotificationService notificationService;
 
     // ===== CREATE =====
 
@@ -47,24 +50,19 @@ public class PaymentServiceImpl implements PaymentService {
     public PaymentResponse createPayment(Long customerId, PaymentRequest request) {
         log.info("Create payment: customerId={}, bookingId={}", customerId, request.getBookingId());
 
-        // Check booking tồn tại
         Booking booking = bookingRepository.findById(request.getBookingId())
                 .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.BOOKING_NOT_FOUND));
 
-        // Check customer sở hữu booking
         if (!booking.getCustomerId().equals(customerId)) {
             throw new UnauthorizedException(ErrorCode.BOOKING_NOT_OWNED);
         }
 
-        // Check booking status
         if (booking.getStatus() != BookingStatus.PENDING) {
             throw new BadRequestException(ErrorCode.BOOKING_STATUS_INVALID);
         }
 
-        // Tạo transaction ID
         String transactionId = "TXN_" + UUID.randomUUID().toString().substring(0, 8).toUpperCase();
 
-        // Tạo Payment entity
         Payment payment = Payment.builder()
                 .bookingId(request.getBookingId())
                 .customerId(customerId)
@@ -77,7 +75,6 @@ public class PaymentServiceImpl implements PaymentService {
 
         Payment saved = paymentRepository.save(payment);
 
-        // Tạo payment URL dựa trên method
         String paymentUrl = switch (request.getPaymentMethod()) {
             case MOMO -> momoGateway.createPaymentUrl(saved);
             case VNPAY, ZALOPAY, BANKING -> "https://demo-payment-gateway.com/pay?txn=" + transactionId;
@@ -117,23 +114,19 @@ public class PaymentServiceImpl implements PaymentService {
         return payments.stream().map(this::buildResponse).toList();
     }
 
-    // ===== CALLBACK =====
+    // ===== CALLBACK (Momo thật — giữ nguyên) =====
 
     @Override
     @Transactional
     public PaymentResponse handleMomoCallback(String callbackData) {
         log.info("Handle Momo callback: {}", callbackData);
 
-        // Verify signature
         if (!momoGateway.verifySignature(callbackData)) {
             throw new BadRequestException(ErrorCode.PAYMENT_INVALID_SIGNATURE);
         }
 
-        // Check success
         boolean isSuccess = momoGateway.isPaymentSuccess(callbackData);
 
-        // TODO: Extract transactionId từ callbackData để tìm payment
-        // Demo: lấy payment gần nhất đang PENDING
         Payment payment = paymentRepository.findByStatus(PaymentStatus.PENDING)
                 .stream().findFirst()
                 .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.PAYMENT_NOT_FOUND));
@@ -143,7 +136,6 @@ public class PaymentServiceImpl implements PaymentService {
             payment.setPaidAt(LocalDateTime.now());
             payment.setGatewayTransactionId(momoGateway.extractGatewayTransactionId(callbackData));
 
-            // Update booking status
             Booking booking = bookingRepository.findById(payment.getBookingId()).orElse(null);
             if (booking != null && booking.getStatus() == BookingStatus.PENDING) {
                 booking.setStatus(BookingStatus.PAID);
@@ -161,6 +153,53 @@ public class PaymentServiceImpl implements PaymentService {
         return buildResponse(updated);
     }
 
+    // ===== MOCK CALLBACK (dùng khi demo) =====
+
+    @Override
+    @Transactional
+    public PaymentResponse handleMockCallback(Long paymentId, String method) {
+        log.info("MOCK callback: paymentId={}, method={}", paymentId, method);
+
+        Payment payment = paymentRepository.findById(paymentId)
+                .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.PAYMENT_NOT_FOUND));
+
+        if (payment.getStatus() == PaymentStatus.SUCCESS) {
+            log.warn("Payment already SUCCESS: {}", paymentId);
+            return buildResponse(payment);
+        }
+
+        // 1. Update payment
+        payment.setStatus(PaymentStatus.SUCCESS);
+        payment.setPaidAt(LocalDateTime.now());
+        payment.setGatewayTransactionId("MOCK_" + method + "_" + System.currentTimeMillis());
+        payment.setGatewayResponse("{\"mock\": true, \"method\": \"" + method + "\"}");
+        Payment savedPayment = paymentRepository.save(payment);
+
+        // 2. Update booking → PAID
+        Booking booking = bookingRepository.findById(payment.getBookingId()).orElse(null);
+        if (booking != null && booking.getStatus() == BookingStatus.PENDING) {
+            booking.setStatus(BookingStatus.PAID);
+            bookingRepository.save(booking);
+            log.info("Booking {} updated to PAID", booking.getId());
+
+            // 3. Thông báo cho owner
+            try {
+                notificationService.createNotification(
+                    booking.getOwnerId(),
+                    NotificationType.BOOKING_NEW,
+                    "Có đơn đặt xe mới",
+                    String.format("Đơn #%d đã được thanh toán cọc. Vui lòng xác nhận.", booking.getId()),
+                    booking.getId()
+                );
+            } catch (Exception e) {
+                log.warn("Failed to send notification: {}", e.getMessage());
+            }
+        }
+
+        log.info("Mock callback processed: paymentId={}, status=SUCCESS", paymentId);
+        return buildResponse(savedPayment);
+    }
+
     // ===== REFUND =====
 
     @Override
@@ -174,7 +213,6 @@ public class PaymentServiceImpl implements PaymentService {
             throw new BadRequestException(ErrorCode.PAYMENT_FAILED);
         }
 
-        // Tạo Refund entity
         Refund refund = Refund.builder()
                 .paymentId(paymentId)
                 .bookingId(payment.getBookingId())
@@ -187,7 +225,6 @@ public class PaymentServiceImpl implements PaymentService {
 
         refundRepository.save(refund);
 
-        // Update payment status
         payment.setStatus(PaymentStatus.REFUNDED);
         Payment updated = paymentRepository.save(payment);
 
@@ -200,13 +237,11 @@ public class PaymentServiceImpl implements PaymentService {
     private PaymentResponse buildResponse(Payment payment) {
         PaymentResponse response = paymentMapper.toResponse(payment);
 
-        // Set customer name
         User customer = userRepository.findById(payment.getCustomerId()).orElse(null);
         if (customer != null) {
             response.setCustomerName(customer.getName());
         }
 
-        // Set booking code
         response.setBookingCode("BK-" + payment.getBookingId());
 
         return response;

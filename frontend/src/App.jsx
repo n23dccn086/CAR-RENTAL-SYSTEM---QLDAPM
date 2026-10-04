@@ -20,6 +20,7 @@ import AdminDashboard from './pages/AdminDashboard'
 import ProfilePage from './pages/ProfilePage'
 import CreateCarPage from './pages/CreateCarPage'
 import AdminUsersPage from './pages/AdminUsersPage'
+import AdminRefundsPage from './pages/AdminRefundsPage'   // ← THÊM MỚI
 
 function App() {
   return (
@@ -82,10 +83,16 @@ function App() {
             </ProtectedRoute>
           } />
 
-          {/* ===== ADMIN USERS — MỚI ===== */}
           <Route path="/admin/users" element={
             <ProtectedRoute allowedRoles={['ADMIN']}>
               <AdminUsersPage />
+            </ProtectedRoute>
+          } />
+
+          {/* ===== ADMIN REFUNDS — MỚI ===== */}
+          <Route path="/admin/refunds" element={
+            <ProtectedRoute allowedRoles={['ADMIN']}>
+              <AdminRefundsPage />
             </ProtectedRoute>
           } />
 

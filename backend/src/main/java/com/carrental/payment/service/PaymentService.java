@@ -26,6 +26,9 @@ public interface PaymentService {
 
     PaymentResponse handleMomoCallback(String callbackData);
 
+    /** MOCK callback để chuyển trạng thái khi demo (thay Momo callback thật) */
+    PaymentResponse handleMockCallback(Long paymentId, String method);
+
     // ===== REFUND =====
 
     PaymentResponse refundPayment(Long paymentId, String reason);

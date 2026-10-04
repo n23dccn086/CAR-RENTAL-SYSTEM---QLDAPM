@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { getBookingById } from '../services/bookingService'
-import { createPayment } from '../services/bookingService'
+import { getBookingById, createPayment } from '../services/bookingService'
+import api from '../services/api'
 
 export default function PaymentPage() {
   const { bookingId } = useParams()
@@ -26,13 +26,22 @@ export default function PaymentPage() {
   const handlePayment = async () => {
     setLoading(true)
     try {
-      await createPayment({
+      // 1. Tạo payment
+      const res = await createPayment({
         bookingId: parseInt(bookingId),
         paymentType: 'DEPOSIT',
-        paymentMethod: method, 
+        paymentMethod: method,
         amount: booking?.depositAmount,
       })
-      alert('Thanh toán thành công! (demo)')
+
+      const paymentId = res.data?.id
+
+      // 2. Gọi MOCK callback để chuyển trạng thái
+      if (paymentId) {
+        await api.post(`/payments/${paymentId}/mock-success?method=${method}`)
+      }
+
+      alert('Thanh toán thành công!')
       navigate('/my-bookings')
     } catch (err) {
       alert('Thanh toán thất bại: ' + (err.response?.data?.message || err.message))
