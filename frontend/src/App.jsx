@@ -21,8 +21,11 @@ import ProfilePage from './pages/ProfilePage'
 import CreateCarPage from './pages/CreateCarPage'
 import AdminUsersPage from './pages/AdminUsersPage'
 import AdminRefundsPage from './pages/AdminRefundsPage'
-import DriverAssignmentPage from './pages/DriverAssignmentPage'      // ← MỚI
-import OwnerBookingsPage from './pages/OwnerBookingsPage'            // ← MỚI
+import DriverAssignmentPage from './pages/DriverAssignmentPage'
+import OwnerBookingsPage from './pages/OwnerBookingsPage'
+import OwnerDriversPage from './pages/OwnerDriversPage'
+import NotificationsPage from './pages/NotificationsPage'
+import ReviewPage from './pages/ReviewPage'                          // ← THÊM MỚI
 
 function App() {
   return (
@@ -56,6 +59,12 @@ function App() {
             </ProtectedRoute>
           } />
 
+          <Route path="/notifications" element={
+            <ProtectedRoute allowedRoles={['CUSTOMER', 'OWNER', 'DRIVER', 'ADMIN']}>
+              <NotificationsPage />
+            </ProtectedRoute>
+          } />
+
           <Route path="/booking/:carId" element={
             <ProtectedRoute allowedRoles={['CUSTOMER', 'ADMIN']}>
               <BookingPage />
@@ -65,6 +74,13 @@ function App() {
           <Route path="/payment/:bookingId" element={
             <ProtectedRoute allowedRoles={['CUSTOMER', 'ADMIN']}>
               <PaymentPage />
+            </ProtectedRoute>
+          } />
+
+          {/* ===== REVIEW — MỚI ===== */}
+          <Route path="/review/:bookingId" element={
+            <ProtectedRoute allowedRoles={['CUSTOMER', 'ADMIN']}>
+              <ReviewPage />
             </ProtectedRoute>
           } />
 
@@ -81,10 +97,15 @@ function App() {
             </ProtectedRoute>
           } />
 
-          {/* ===== OWNER BOOKINGS — MỚI ===== */}
           <Route path="/owner/bookings" element={
             <ProtectedRoute allowedRoles={['OWNER', 'ADMIN']}>
               <OwnerBookingsPage />
+            </ProtectedRoute>
+          } />
+
+          <Route path="/owner/drivers" element={
+            <ProtectedRoute allowedRoles={['OWNER', 'ADMIN']}>
+              <OwnerDriversPage />
             </ProtectedRoute>
           } />
 

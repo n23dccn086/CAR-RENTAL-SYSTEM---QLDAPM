@@ -1,9 +1,10 @@
 import { useState, useEffect } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { getMyBookings } from "../services/bookingService";
 import api from "../services/api";
 
 export default function MyBookingsPage() {
+  const navigate = useNavigate();
   const [bookings, setBookings] = useState([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState("ALL");
@@ -191,6 +192,7 @@ export default function MyBookingsPage() {
                 {statusMap[b.status]?.label || b.status}
               </div>
 
+              {/* ===== ACTION: Hủy hoặc Đánh giá ===== */}
               {canCancel(b.status) ? (
                 <button
                   onClick={() => handleCancel(b)}
@@ -207,6 +209,23 @@ export default function MyBookingsPage() {
                   }}
                 >
                   Hủy đơn
+                </button>
+              ) : b.status === "COMPLETED" ? (
+                <button
+                  onClick={() => navigate(`/review/${b.id}`)}
+                  style={{
+                    padding: "8px 16px",
+                    background: "transparent",
+                    border: "1px solid var(--dong)",
+                    color: "var(--dong)",
+                    fontFamily: "var(--mono)",
+                    fontSize: "10px",
+                    letterSpacing: "2px",
+                    textTransform: "uppercase",
+                    cursor: "pointer",
+                  }}
+                >
+                  ★ Đánh giá
                 </button>
               ) : (
                 <div style={{ width: "90px" }} />
