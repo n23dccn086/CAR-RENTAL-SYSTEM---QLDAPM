@@ -39,20 +39,52 @@ Nếu không biết, nói: "Tôi chưa có thông tin về vấn đề này, vui
 """
 
 
-def generate_reply(user_message: str, history: list = None) -> dict:
-    """Gọi Gemini để sinh câu trả lời."""
+def generate_reply(user_message: str, history: list = None, context: dict = None) -> dict:
+    """Gọi Gemini để sinh câu trả lời, có inject context từ backend."""
     if not settings.gemini_api_key:
         return {
             "reply": "AI service chưa được cấu hình. Vui lòng liên hệ admin.",
             "intent": "error"
         }
-    
+
+    # ===== Build backend context string =====
+    backend_context = ""
+
+    if context:
+        # Inject bookings
+        if "bookings" in context:
+            bookings = context["bookings"]
+            if isinstance(bookings, list) and len(bookings) > 0:
+                backend_context += "\n\n### ĐƠN HÀNG CỦA KHÁCH:\n"
+                for b in bookings[:5]:
+                    backend_context += (
+                        f"- Đơn #{b.get('id')}: {b.get('carName', 'N/A')} "
+                        f"({b.get('carPlate', '')}), "
+                        f"từ {str(b.get('startDate', ''))[:10]} đến {str(b.get('endDate', ''))[:10]}, "
+                        f"trạng thái: {b.get('status')}, "
+                        f"tổng: {b.get('totalPrice', 0):,}đ\n"
+                    )
+            else:
+                backend_context += "\n\n### KHÁCH CHƯA CÓ ĐƠN HÀNG NÀO.\n"
+
+        # Inject cars
+        if "cars" in context:
+            cars = context["cars"]
+            if isinstance(cars, list) and len(cars) > 0:
+                backend_context += "\n\n### DANH SÁCH XE CÓ SẴN:\n"
+                for c in cars[:10]:
+                    backend_context += (
+                        f"- {c.get('brand')} {c.get('model')} "
+                        f"({c.get('seats')} chỗ, {c.get('transmission')}), "
+                        f"giá: {c.get('pricePerDay', 0):,}đ/ngày\n"
+                    )
+
     try:
         model = genai.GenerativeModel(
             model_name=settings.gemini_model,
             system_instruction=SYSTEM_PROMPT
         )
-        
+
         chat_history = []
         if history:
             for msg in history:
@@ -61,17 +93,31 @@ def generate_reply(user_message: str, history: list = None) -> dict:
                     "role": role,
                     "parts": [msg.get("content", "")]
                 })
-        
+
         chat = model.start_chat(history=chat_history)
-        response = chat.send_message(user_message)
-        
+
+        # ===== Inject context vào message =====
+        full_message = user_message
+        if backend_context:
+            full_message = (
+                f"{backend_context}\n\n"
+                f"Dựa vào thông tin trên, hãy trả lời câu hỏi sau của khách "
+                f"một cách chính xác và tự nhiên: {user_message}"
+            )
+
+        response = chat.send_message(full_message)
+
         return {
             "reply": response.text,
             "intent": "general"
         }
     except Exception as e:
+        # Log chi tiết lỗi ra console (chỉ dev thấy)
+        print(f"[LLM] Error: {str(e)[:300]}")
+
+        # Trả lời user gọn gàng, KHÔNG hiển thị chi tiết lỗi
         return {
-            "reply": f"Xin lỗi, AI đang bận. Vui lòng thử lại sau. (Lỗi: {str(e)})",
+            "reply": "Xin lỗi, AI đang bận. Vui lòng thử lại sau ạ.",
             "intent": "error"
         }
 
@@ -79,14 +125,32 @@ def generate_reply(user_message: str, history: list = None) -> dict:
 def detect_intent(message: str) -> str:
     """Phát hiện intent đơn giản bằng keyword."""
     msg = message.lower()
-    
-    if any(kw in msg for kw in ["tìm xe", "thuê xe", "gợi ý xe", "xe 7 chỗ", "xe 4 chỗ"]):
-        return "search_car"
-    if any(kw in msg for kw in ["chính sách", "hủy cọc", "hoàn tiền", "vượt km", "vượt thời gian"]):
-        return "policy_inquiry"
-    if any(kw in msg for kw in ["đơn", "booking", "cr-", "trạng thái"]):
+
+    # ===== BOOKING =====
+    if any(kw in msg for kw in [
+        "đơn hàng", "đơn của tôi", "chuyến đi của tôi",
+        "booking", "đơn #", "kiểm tra đơn", "trạng thái đơn"
+    ]):
         return "check_booking"
-    if any(kw in msg for kw in ["sự cố", "tai nạn", "hỏng xe", "va chạm", "khẩn cấp"]):
+
+    # ===== SEARCH CAR =====
+    if any(kw in msg for kw in [
+        "tìm xe", "thuê xe", "gợi ý xe", "xe 7 chỗ",
+        "xe 4 chỗ", "danh sách xe", "có xe nào"
+    ]):
+        return "search_car"
+
+    # ===== POLICY =====
+    if any(kw in msg for kw in [
+        "chính sách", "hủy cọc", "hoàn tiền",
+        "vượt km", "vượt thời gian", "quy định"
+    ]):
+        return "policy_inquiry"
+
+    # ===== EMERGENCY =====
+    if any(kw in msg for kw in [
+        "sự cố", "tai nạn", "hỏng xe", "va chạm", "khẩn cấp"
+    ]):
         return "emergency"
-    
+
     return "general"

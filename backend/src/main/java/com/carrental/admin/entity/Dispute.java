@@ -4,7 +4,9 @@ import jakarta.persistence.*;
 import lombok.*;
 import lombok.experimental.FieldDefaults;
 import org.hibernate.annotations.CreationTimestamp;
+import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.annotations.UpdateTimestamp;
+import org.hibernate.type.SqlTypes;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
@@ -43,20 +45,21 @@ public class Dispute {
     Long againstUser;
 
     @Column(nullable = false, length = 30)
-    String category;         // damage, late_return, overage_km, no_show, payment, behavior, other
+    String category; // damage, late_return, overage_km, no_show, payment, behavior, other
 
     @Column(nullable = false, columnDefinition = "TEXT")
     String description;
 
-    @Column(columnDefinition = "JSONB")
-    String evidence;         // JSON string: [{url, note}, ...]
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(columnDefinition = "jsonb")
+    String evidence; 
 
     @Column(name = "claimed_amount", precision = 12, scale = 0)
     BigDecimal claimedAmount;
 
     @Column(nullable = false, length = 20)
     @Builder.Default
-    String status = "PENDING";  // PENDING, INVESTIGATING, WAITING_EVIDENCE, RESOLVED, ESCALATED, CLOSED
+    String status = "PENDING"; // PENDING, INVESTIGATING, WAITING_EVIDENCE, RESOLVED, ESCALATED, CLOSED
 
     @Column(columnDefinition = "TEXT")
     String resolution;

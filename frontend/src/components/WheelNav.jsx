@@ -38,6 +38,9 @@ export default function WheelNav() {
     ...(isLoggedIn
       ? [{ path: "/notifications", label: "Thông báo", icon: "◎" }]
       : []),
+    ...(isLoggedIn
+      ? [{ path: "/disputes", label: "Tranh chấp", icon: "⚖" }] // ← MỚI
+      : []),
     ...(isLoggedIn ? [{ path: "/profile", label: "Hồ sơ", icon: "❦" }] : []),
     ...(isLoggedIn && user?.role === "OWNER"
       ? [{ path: "/owner/dashboard", label: "Quản lý xe", icon: "⚙" }]
@@ -53,6 +56,15 @@ export default function WheelNav() {
       : []),
     ...(isLoggedIn && user?.role === "ADMIN"
       ? [{ path: "/admin/dashboard", label: "Quản trị", icon: "⚙" }]
+      : []),
+    ...(isLoggedIn && user?.role === "ADMIN"
+      ? [{ path: "/admin/approvals", label: "Duyệt xe", icon: "☑" }]
+      : []),
+    ...(isLoggedIn && user?.role === "ADMIN"
+      ? [{ path: "/admin/disputes", label: "Tranh chấp", icon: "⚖" }]
+      : []),
+    ...(isLoggedIn && user?.role === "ADMIN"
+      ? [{ path: "/admin/users", label: "Người dùng", icon: "◔" }]
       : []),
     ...(isLoggedIn && user?.role === "ADMIN"
       ? [{ path: "/admin/refunds", label: "Hoàn tiền", icon: "❖" }]
@@ -109,10 +121,38 @@ export default function WheelNav() {
           </defs>
 
           <circle cx="50" cy="50" r="48" fill="url(#tireGrad)" />
-          <circle cx="50" cy="50" r="46" fill="none" stroke="#3a3835" strokeWidth="1" />
-          <circle cx="50" cy="50" r="44" fill="none" stroke="#3a3835" strokeWidth="0.5" />
-          <circle cx="50" cy="50" r="42" fill="none" stroke="#3a3835" strokeWidth="1" />
-          <circle cx="50" cy="50" r="40" fill="none" stroke="#3a3835" strokeWidth="0.5" />
+          <circle
+            cx="50"
+            cy="50"
+            r="46"
+            fill="none"
+            stroke="#3a3835"
+            strokeWidth="1"
+          />
+          <circle
+            cx="50"
+            cy="50"
+            r="44"
+            fill="none"
+            stroke="#3a3835"
+            strokeWidth="0.5"
+          />
+          <circle
+            cx="50"
+            cy="50"
+            r="42"
+            fill="none"
+            stroke="#3a3835"
+            strokeWidth="1"
+          />
+          <circle
+            cx="50"
+            cy="50"
+            r="40"
+            fill="none"
+            stroke="#3a3835"
+            strokeWidth="0.5"
+          />
 
           {Array.from({ length: 24 }).map((_, i) => {
             const angle = (i * 15 * Math.PI) / 180;
@@ -120,12 +160,37 @@ export default function WheelNav() {
             const y1 = 50 + 42 * Math.sin(angle);
             const x2 = 50 + 47 * Math.cos(angle);
             const y2 = 50 + 47 * Math.sin(angle);
-            return <line key={i} x1={x1} y1={y1} x2={x2} y2={y2} stroke="#3a3835" strokeWidth="0.8" />;
+            return (
+              <line
+                key={i}
+                x1={x1}
+                y1={y1}
+                x2={x2}
+                y2={y2}
+                stroke="#3a3835"
+                strokeWidth="0.8"
+              />
+            );
           })}
 
           <circle cx="50" cy="50" r="36" fill="url(#rimGrad)" />
-          <circle cx="50" cy="50" r="36" fill="none" stroke="#0f0e0c" strokeWidth="1.5" />
-          <circle cx="50" cy="50" r="33" fill="none" stroke="#0f0e0c" strokeWidth="0.5" strokeDasharray="2 3" />
+          <circle
+            cx="50"
+            cy="50"
+            r="36"
+            fill="none"
+            stroke="#0f0e0c"
+            strokeWidth="1.5"
+          />
+          <circle
+            cx="50"
+            cy="50"
+            r="33"
+            fill="none"
+            stroke="#0f0e0c"
+            strokeWidth="0.5"
+            strokeDasharray="2 3"
+          />
 
           {[0, 72, 144, 216, 288].map((deg, i) => {
             const angle = ((deg - 90) * Math.PI) / 180;
@@ -160,72 +225,120 @@ export default function WheelNav() {
           <circle cx="50" cy="50" r="10" fill="#0f0e0c" />
           <circle cx="50" cy="50" r="9" fill="url(#rimGrad)" />
           <circle cx="50" cy="50" r="5" fill="#0f0e0c" />
-          <text x="50" y="54" textAnchor="middle" fontFamily="Playfair Display, serif" fontSize="8" fontStyle="italic" fontWeight="700" fill="#c9a961">M</text>
+          <text
+            x="50"
+            y="54"
+            textAnchor="middle"
+            fontFamily="Playfair Display, serif"
+            fontSize="8"
+            fontStyle="italic"
+            fontWeight="700"
+            fill="#c9a961"
+          >
+            M
+          </text>
         </svg>
 
         {hover && (
-          <div style={{
-            position: "absolute",
-            inset: "-8px",
-            borderRadius: "50%",
-            background: "radial-gradient(circle, rgba(201,169,97,0.3) 0%, transparent 70%)",
-            pointerEvents: "none",
-            animation: "glowPulse 1.5s ease-in-out infinite",
-          }} />
+          <div
+            style={{
+              position: "absolute",
+              inset: "-8px",
+              borderRadius: "50%",
+              background:
+                "radial-gradient(circle, rgba(201,169,97,0.3) 0%, transparent 70%)",
+              pointerEvents: "none",
+              animation: "glowPulse 1.5s ease-in-out infinite",
+            }}
+          />
         )}
 
         {isLoggedIn && (
-          <div style={{
-            position: "absolute",
-            top: "2px",
-            right: "2px",
-            width: "10px",
-            height: "10px",
-            background: "var(--do)",
-            border: "2px solid var(--kem)",
-            borderRadius: "50%",
-            animation: "heartbeat 2s ease-in-out infinite",
-            zIndex: 2,
-          }} />
+          <div
+            style={{
+              position: "absolute",
+              top: "2px",
+              right: "2px",
+              width: "10px",
+              height: "10px",
+              background: "var(--do)",
+              border: "2px solid var(--kem)",
+              borderRadius: "50%",
+              animation: "heartbeat 2s ease-in-out infinite",
+              zIndex: 2,
+            }}
+          />
         )}
       </button>
 
       {/* ============ MENU ============ */}
       {open && (
-        <div style={{
-          position: "absolute",
-          top: "calc(100% + 16px)",
-          right: 0,
-          minWidth: "280px",
-          background: "var(--kem)",
-          border: "1px solid var(--muc)",
-          boxShadow: "0 20px 60px rgba(15,14,12,0.25)",
-          zIndex: 1000,
-          animation: "wheelMenuOpen 0.5s cubic-bezier(0.23, 1, 0.32, 1)",
-          overflow: "hidden",
-        }}>
-          <div style={{
-            padding: "16px 20px",
-            borderBottom: "1px solid rgba(15,14,12,0.1)",
-            display: "flex",
-            alignItems: "center",
-            gap: "12px",
-            position: "relative",
-          }}>
-            <svg width="40" height="40" viewBox="0 0 100 100" style={{ animation: "wheelSpin 15s linear infinite" }}>
+        <div
+          style={{
+            position: "absolute",
+            top: "calc(100% + 16px)",
+            right: 0,
+            minWidth: "280px",
+            background: "var(--kem)",
+            border: "1px solid var(--muc)",
+            boxShadow: "0 20px 60px rgba(15,14,12,0.25)",
+            zIndex: 1000,
+            animation: "wheelMenuOpen 0.5s cubic-bezier(0.23, 1, 0.32, 1)",
+            overflow: "hidden",
+          }}
+        >
+          <div
+            style={{
+              padding: "16px 20px",
+              borderBottom: "1px solid rgba(15,14,12,0.1)",
+              display: "flex",
+              alignItems: "center",
+              gap: "12px",
+              position: "relative",
+            }}
+          >
+            <svg
+              width="40"
+              height="40"
+              viewBox="0 0 100 100"
+              style={{ animation: "wheelSpin 15s linear infinite" }}
+            >
               <circle cx="50" cy="50" r="46" fill="#0f0e0c" />
               <circle cx="50" cy="50" r="36" fill="#c9a961" />
               {[0, 72, 144, 216, 288].map((deg, i) => {
                 const a = ((deg - 90) * Math.PI) / 180;
-                return <line key={i} x1="50" y1="50" x2={50 + 30 * Math.cos(a)} y2={50 + 30 * Math.sin(a)} stroke="#0f0e0c" strokeWidth="3" />;
+                return (
+                  <line
+                    key={i}
+                    x1="50"
+                    y1="50"
+                    x2={50 + 30 * Math.cos(a)}
+                    y2={50 + 30 * Math.sin(a)}
+                    stroke="#0f0e0c"
+                    strokeWidth="3"
+                  />
+                );
               })}
               <circle cx="50" cy="50" r="8" fill="#0f0e0c" />
             </svg>
             <div>
-              <div style={{ fontFamily: "var(--serif)", fontWeight: 700, fontSize: "15px" }}>
+              <div
+                style={{
+                  fontFamily: "var(--serif)",
+                  fontWeight: 700,
+                  fontSize: "15px",
+                }}
+              >
                 {user?.name || "Khách"}
               </div>
-              <div style={{ fontFamily: "var(--mono)", fontSize: "9px", letterSpacing: "1.5px", color: "var(--muc-mo)" }}>
+              <div
+                style={{
+                  fontFamily: "var(--mono)",
+                  fontSize: "9px",
+                  letterSpacing: "1.5px",
+                  color: "var(--muc-mo)",
+                }}
+              >
                 {user?.role || "GUEST"}
               </div>
             </div>
@@ -255,11 +368,19 @@ export default function WheelNav() {
                     e.currentTarget.style.paddingLeft = "26px";
                   }}
                   onMouseLeave={(e) => {
-                    if (!active) e.currentTarget.style.background = "transparent";
+                    if (!active)
+                      e.currentTarget.style.background = "transparent";
                     e.currentTarget.style.paddingLeft = "20px";
                   }}
                 >
-                  <span style={{ fontFamily: "var(--serif)", fontSize: "18px", color: "var(--dong)", width: "20px" }}>
+                  <span
+                    style={{
+                      fontFamily: "var(--serif)",
+                      fontSize: "18px",
+                      color: "var(--dong)",
+                      width: "20px",
+                    }}
+                  >
                     {item.icon}
                   </span>
                   <span>{item.label}</span>
@@ -268,7 +389,12 @@ export default function WheelNav() {
             })}
           </div>
 
-          <div style={{ borderTop: "1px solid rgba(15,14,12,0.1)", padding: "8px 0" }}>
+          <div
+            style={{
+              borderTop: "1px solid rgba(15,14,12,0.1)",
+              padding: "8px 0",
+            }}
+          >
             {isLoggedIn ? (
               <button
                 onClick={handleLogout}
@@ -296,17 +422,63 @@ export default function WheelNav() {
                   e.currentTarget.style.paddingLeft = "20px";
                 }}
               >
-                <span style={{ fontFamily: "var(--serif)", fontSize: "18px", width: "20px" }}>←</span>
+                <span
+                  style={{
+                    fontFamily: "var(--serif)",
+                    fontSize: "18px",
+                    width: "20px",
+                  }}
+                >
+                  ←
+                </span>
                 <span>Đăng xuất</span>
               </button>
             ) : (
               <>
-                <Link to="/login" style={{ display: "flex", alignItems: "center", gap: "14px", padding: "12px 20px", fontFamily: "var(--serif-2)", fontSize: "16px" }}>
-                  <span style={{ fontFamily: "var(--serif)", fontSize: "18px", color: "var(--dong)", width: "20px" }}>→</span>
+                <Link
+                  to="/login"
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "14px",
+                    padding: "12px 20px",
+                    fontFamily: "var(--serif-2)",
+                    fontSize: "16px",
+                  }}
+                >
+                  <span
+                    style={{
+                      fontFamily: "var(--serif)",
+                      fontSize: "18px",
+                      color: "var(--dong)",
+                      width: "20px",
+                    }}
+                  >
+                    →
+                  </span>
                   <span>Đăng nhập</span>
                 </Link>
-                <Link to="/register" style={{ display: "flex", alignItems: "center", gap: "14px", padding: "12px 20px", fontFamily: "var(--serif-2)", fontSize: "16px" }}>
-                  <span style={{ fontFamily: "var(--serif)", fontSize: "18px", color: "var(--dong)", width: "20px" }}>✦</span>
+                <Link
+                  to="/register"
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "14px",
+                    padding: "12px 20px",
+                    fontFamily: "var(--serif-2)",
+                    fontSize: "16px",
+                  }}
+                >
+                  <span
+                    style={{
+                      fontFamily: "var(--serif)",
+                      fontSize: "18px",
+                      color: "var(--dong)",
+                      width: "20px",
+                    }}
+                  >
+                    ✦
+                  </span>
                   <span>Đăng ký</span>
                 </Link>
               </>

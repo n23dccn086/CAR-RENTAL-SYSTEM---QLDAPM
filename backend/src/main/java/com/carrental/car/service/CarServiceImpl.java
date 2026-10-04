@@ -74,24 +74,28 @@ public class CarServiceImpl implements CarService {
     // ===== READ =====
 
     @Override
+    @Transactional(readOnly = true)
     public CarResponse getCarById(Long id) {
         Car car = getCarEntityById(id);
         return carMapper.toResponse(car);
     }
 
     @Override
+    @Transactional(readOnly = true)
     public Car getCarEntityById(Long id) {
         return carRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.CAR_NOT_FOUND));
     }
 
     @Override
+    @Transactional(readOnly = true)
     public List<CarResponse> getAllCars() {
         List<Car> cars = carRepository.findAll();
         return carMapper.toResponseList(cars);
     }
 
     @Override
+    @Transactional(readOnly = true)
     public List<CarResponse> getCarsByOwner(Long ownerId) {
         List<Car> cars = carRepository.findByOwnerIdAndDeletedAtIsNull(ownerId);
         return carMapper.toResponseList(cars);
@@ -164,6 +168,7 @@ public class CarServiceImpl implements CarService {
     // ===== SEARCH =====
 
     @Override
+    @Transactional(readOnly = true)
     public List<CarResponse> searchCars(CarStatus status, CarType carType) {
         List<Car> cars;
 
@@ -181,6 +186,7 @@ public class CarServiceImpl implements CarService {
     }
 
     @Override
+    @Transactional(readOnly = true)
     public List<CarResponse> getAvailableCars() {
         List<Car> cars = carRepository.findByStatusAndDeletedAtIsNull(CarStatus.AVAILABLE);
         return carMapper.toResponseList(cars);
@@ -256,6 +262,7 @@ public class CarServiceImpl implements CarService {
     }
 
     @Override
+    @Transactional(readOnly = true)
     public List<String> getCarImages(Long carId) {
         getCarEntityById(carId);
         return carImageRepository.findByCarIdOrderByDisplayOrderAsc(carId).stream()

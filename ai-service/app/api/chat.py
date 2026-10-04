@@ -1,9 +1,10 @@
-from fastapi import APIRouter
+from fastapi import APIRouter, Header
 from app.models.schemas import (
     ChatRequest, ChatResponse, HistoryResponse,
     HistoryMessage, FeedbackRequest
 )
 from app.services.llm_service import generate_reply, detect_intent
+from app.services.backend_client import get_my_bookings, search_cars
 from datetime import datetime
 from uuid import uuid4
 
@@ -13,14 +14,39 @@ _sessions: dict = {}
 
 
 @router.post("/chat", response_model=ChatResponse)
-async def chat(request: ChatRequest):
-    """Gửi tin nhắn cho chatbot."""
+async def chat(
+    request: ChatRequest,
+    authorization: str = Header(None)
+):
+    """Gửi tin nhắn cho chatbot. Nhận JWT để tra cứu dữ liệu backend."""
     session_id = request.session_id or str(uuid4())
-    
     history = _sessions.get(session_id, [])
     intent = detect_intent(request.message)
-    result = generate_reply(request.message, history)
-    
+
+    # ===== Extract JWT từ header =====
+    token = None
+    if authorization and authorization.startswith("Bearer "):
+        token = authorization[7:]
+
+    # ===== Gọi backend nếu cần =====
+    context = {}
+
+    if intent == "check_booking" and token:
+        # User hỏi về đơn hàng → gọi backend lấy danh sách đơn
+        bookings = await get_my_bookings(token)
+        if bookings and not (isinstance(bookings, dict) and bookings.get("error")):
+            context["bookings"] = bookings
+
+    elif intent == "search_car":
+        # User tìm xe → gọi backend lấy danh sách xe (public)
+        cars = await search_cars()
+        if cars and not (isinstance(cars, dict) and cars.get("error")):
+            context["cars"] = cars
+
+    # ===== Gọi Gemini với context =====
+    result = generate_reply(request.message, history, context)
+
+    # ===== Lưu history =====
     history.append({
         "role": "user",
         "content": request.message,
@@ -32,14 +58,14 @@ async def chat(request: ChatRequest):
         "at": datetime.now().isoformat()
     })
     _sessions[session_id] = history
-    
+
     return ChatResponse(
         reply=result["reply"],
         intent=intent,
         suggestions=[
-            "Tìm xe 7 chỗ đi Đà Lạt",
+            "Đơn hàng của tôi thế nào?",
+            "Tìm xe 7 chỗ",
             "Chính sách hủy cọc",
-            "Kiểm tra đơn hàng"
         ]
     )
 
