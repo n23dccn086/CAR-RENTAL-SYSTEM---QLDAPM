@@ -39,7 +39,7 @@ export default function BookingPage() {
         endDate: form.endDate,
         pickupAddress: form.pickupAddress,
         rentalMode: form.rentalMode,
-        note: form.note,
+        customerNote: form.note,
       })
       const bookingId = res.data?.id
       navigate(`/payment/${bookingId}`)

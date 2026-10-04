@@ -2,9 +2,11 @@ import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import FormInput from '../components/FormInput'
 import { login } from '../services/authService'
+import { useAuthStore } from '../stores/authStore'
 
 export default function LoginPage() {
   const navigate = useNavigate()
+  const setAuth = useAuthStore((s) => s.setAuth)
   const [form, setForm] = useState({ phone: '', password: '' })
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
@@ -39,8 +41,8 @@ export default function LoginPage() {
     setLoading(true)
     try {
       const res = await login(form.phone, form.password)
-      localStorage.setItem('token', res.data.accessToken)
-      localStorage.setItem('user', JSON.stringify(res.data.user))
+      // ← SỬA: dùng setAuth thay vì set localStorage thủ công
+      setAuth(res.data.accessToken, res.data.user)
       navigate('/')
     } catch (err) {
       setError(err.response?.data?.message || 'Số điện thoại hoặc mật khẩu không đúng')

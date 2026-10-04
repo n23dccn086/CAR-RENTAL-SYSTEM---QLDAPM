@@ -20,7 +20,7 @@ export default function PaymentPage() {
     { id: 'MOMO', name: 'Momo', desc: 'Ví điện tử' },
     { id: 'ZALOPAY', name: 'ZaloPay', desc: 'Ví điện tử' },
     { id: 'VNPAY', name: 'VNPAY', desc: 'Cổng ngân hàng' },
-    { id: 'BANK_CARD', name: 'Thẻ ngân hàng', desc: 'Visa / Mastercard' },
+    { id: 'BANKING', name: 'Thẻ ngân hàng', desc: 'Visa / Mastercard' },
   ]
 
   const handlePayment = async () => {
@@ -29,7 +29,7 @@ export default function PaymentPage() {
       await createPayment({
         bookingId: parseInt(bookingId),
         paymentType: 'DEPOSIT',
-        method,
+        paymentMethod: method, 
         amount: booking?.depositAmount,
       })
       alert('Thanh toán thành công! (demo)')

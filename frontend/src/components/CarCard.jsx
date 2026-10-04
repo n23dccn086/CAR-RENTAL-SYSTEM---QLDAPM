@@ -20,9 +20,9 @@ export default function CarCard({ car, index }) {
     setTilt({ x: 0, y: 0 })
   }
 
-  // Ảnh thật (nếu có) hoặc icon xe đỏ fallback
-  const hasImage = car.images && car.images.length > 0
-  const imageUrl = hasImage ? (car.images[0].imageUrl || car.images[0]) : null
+  // Ảnh thật (nếu có) — backend trả về `imageUrls` (array string)
+  const hasImage = car.imageUrls && car.imageUrls.length > 0
+const imageUrl = hasImage ? car.imageUrls[0] : null
 
   // Icon xe theo loại
   const carIcons = { SEDAN: '🚗', SUV: '🚙', MPV: '🚐', HATCHBACK: '🚗' }
