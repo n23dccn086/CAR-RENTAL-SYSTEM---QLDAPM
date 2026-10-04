@@ -25,7 +25,8 @@ import DriverAssignmentPage from './pages/DriverAssignmentPage'
 import OwnerBookingsPage from './pages/OwnerBookingsPage'
 import OwnerDriversPage from './pages/OwnerDriversPage'
 import NotificationsPage from './pages/NotificationsPage'
-import ReviewPage from './pages/ReviewPage'                          // ← THÊM MỚI
+import ReviewPage from './pages/ReviewPage'
+import OwnerReviewsPage from './pages/OwnerReviewsPage'              // ← THÊM MỚI
 
 function App() {
   return (
@@ -77,7 +78,6 @@ function App() {
             </ProtectedRoute>
           } />
 
-          {/* ===== REVIEW — MỚI ===== */}
           <Route path="/review/:bookingId" element={
             <ProtectedRoute allowedRoles={['CUSTOMER', 'ADMIN']}>
               <ReviewPage />
@@ -106,6 +106,13 @@ function App() {
           <Route path="/owner/drivers" element={
             <ProtectedRoute allowedRoles={['OWNER', 'ADMIN']}>
               <OwnerDriversPage />
+            </ProtectedRoute>
+          } />
+
+          {/* ===== OWNER REVIEWS — MỚI ===== */}
+          <Route path="/owner/reviews" element={
+            <ProtectedRoute allowedRoles={['OWNER', 'ADMIN']}>
+              <OwnerReviewsPage />
             </ProtectedRoute>
           } />
 
