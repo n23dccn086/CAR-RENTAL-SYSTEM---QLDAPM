@@ -22,8 +22,8 @@ public interface BookingRepository extends JpaRepository<Booking, Long> {
     List<Booking> findByStatus(BookingStatus status);
 
     /**
-     * Kiểm tra xe đã có booking trong khoảng thời gian chưa
-     * Trạng thái không tính: CANCELLED, COMPLETED
+     * Kiểm tra xe đã có booking trong khoảng thời gian chưa.
+     * Trạng thái không tính: CANCELLED, COMPLETED.
      */
     @Query("""
             SELECT COUNT(b) > 0 FROM Booking b
@@ -39,4 +39,20 @@ public interface BookingRepository extends JpaRepository<Booking, Long> {
     );
 
     long countByCarIdAndStatusIn(Long carId, List<BookingStatus> statuses);
+
+    /**
+     * Kiểm tra tài xế có booking đang active chồng lấn thời gian không.
+     */
+    @Query("""
+            SELECT COUNT(b) > 0 FROM Booking b
+            WHERE b.driverId = :driverId
+            AND b.status NOT IN ('CANCELLED', 'COMPLETED')
+            AND b.startDate < :endDate
+            AND b.endDate > :startDate
+            """)
+    boolean existsByDriverIdAndTimeOverlap(
+            @Param("driverId") Long driverId,
+            @Param("startDate") LocalDateTime startDate,
+            @Param("endDate") LocalDateTime endDate
+    );
 }

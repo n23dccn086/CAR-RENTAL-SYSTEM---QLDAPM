@@ -23,7 +23,7 @@ import java.util.List;
 
 @Configuration
 @EnableWebSecurity
-@EnableMethodSecurity          // ← MỚI — bật @PreAuthorize
+@EnableMethodSecurity
 @RequiredArgsConstructor
 public class SecurityConfig {
 
@@ -31,7 +31,7 @@ public class SecurityConfig {
 
     /**
      * Public endpoints — KHÔNG cần JWT.
-     * Bao gồm: auth, health, uploads (ảnh xe).
+     * Bao gồm: auth, health, uploads, driver magic link.
      */
     @Bean
     @Order(1)
@@ -41,7 +41,9 @@ public class SecurityConfig {
                         "/api/v1/auth/**", "/auth/**",
                         "/api/v1/health", "/health",
                         "/error",
-                        "/uploads/**"
+                        "/uploads/**",
+                        "/api/v1/driver/assignments/**",   // ← THÊM: magic link cho tài xế
+                        "/driver/assignments/**"           // ← THÊM: fallback
                 )
                 .csrf(AbstractHttpConfigurer::disable)
                 .cors(cors -> cors.configurationSource(corsConfigurationSource()))
@@ -106,9 +108,6 @@ public class SecurityConfig {
         return new BCryptPasswordEncoder();
     }
 
-    /**
-     * CORS Configuration — cho phép Frontend gọi API.
-     */
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration config = new CorsConfiguration();
