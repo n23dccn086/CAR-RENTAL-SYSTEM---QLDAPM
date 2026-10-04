@@ -11,11 +11,11 @@ spring:
   jpa:
     hibernate:
       ddl-auto: validate
-    show-sql: true
+    show-sql: false
+    open-in-view: false
     properties:
       hibernate:
-        dialect: org.hibernate.dialect.PostgreSQLDialect
-        format_sql: true
+        format_sql: false
 
   flyway:
     enabled: true
@@ -26,8 +26,9 @@ spring:
     redis:
       host: localhost
       port: 6379
+      repositories:
+        enabled: false
 
-  # ← THÊM MỚI — Config upload ảnh
   servlet:
     multipart:
       enabled: true
@@ -46,4 +47,11 @@ jwt:
 
 logging:
   level:
-    com.carrental: DEBUG
+    root: WARN
+    com.carrental: INFO
+    com.carrental.notification.service.MockNotificationSender: INFO
+    org.hibernate: WARN
+    org.springframework: WARN
+    com.zaxxer.hikari: WARN
+  pattern:
+    console: "%d{HH:mm:ss} %-5level %logger{0} - %msg%n"
