@@ -26,9 +26,12 @@ public class AdminUserServiceImpl implements AdminUserService {
 
     UserRepository userRepository;
 
+    // ===== READ — CHỈ LẤY USER CHƯA XÓA MỀM =====
+
     @Override
     public List<AdminUserResponse> getAllUsers() {
         return userRepository.findAll().stream()
+                .filter(u -> u.getDeletedAt() == null)   // ← BỎ USER ĐÃ XÓA
                 .map(this::toResponse)
                 .toList();
     }
@@ -36,6 +39,7 @@ public class AdminUserServiceImpl implements AdminUserService {
     @Override
     public List<AdminUserResponse> getUsersByRole(Role role) {
         return userRepository.findByRole(role).stream()
+                .filter(u -> u.getDeletedAt() == null)   // ← BỎ USER ĐÃ XÓA
                 .map(this::toResponse)
                 .toList();
     }
@@ -43,6 +47,7 @@ public class AdminUserServiceImpl implements AdminUserService {
     @Override
     public List<AdminUserResponse> getUsersByStatus(VerificationStatus status) {
         return userRepository.findByVerificationStatus(status).stream()
+                .filter(u -> u.getDeletedAt() == null)   // ← BỎ USER ĐÃ XÓA
                 .map(this::toResponse)
                 .toList();
     }
@@ -53,6 +58,8 @@ public class AdminUserServiceImpl implements AdminUserService {
                 .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.USER_NOT_FOUND));
         return toResponse(user);
     }
+
+    // ===== LOCK / UNLOCK =====
 
     @Override
     @Transactional
@@ -78,30 +85,49 @@ public class AdminUserServiceImpl implements AdminUserService {
         return toResponse(updated);
     }
 
+    // ===== SOFT DELETE =====
+
     @Override
     @Transactional
     public void deleteUser(Long id) {
-        log.info("Admin deleting user: {}", id);
+        log.info("Admin soft-deleting user: {}", id);
         User user = userRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.USER_NOT_FOUND));
-        userRepository.delete(user);
+
+        // Soft delete: đánh dấu deletedAt + isActive = false
+        user.setDeletedAt(LocalDateTime.now());
+        user.setIsActive(false);
+        userRepository.save(user);
+
+        log.info("User soft-deleted: {}", id);
     }
+
+    // ===== STATS =====
 
     @Override
     public UserStatsResponse getStats() {
         List<User> all = userRepository.findAll();
 
+        // Chỉ đếm user CHƯA bị xóa
+        List<User> activeList = all.stream()
+                .filter(u -> u.getDeletedAt() == null)
+                .toList();
+
         return UserStatsResponse.builder()
-                .totalUsers(all.size())
-                .totalCustomers(all.stream().filter(u -> u.getRole() == Role.CUSTOMER).count())
-                .totalOwners(all.stream().filter(u -> u.getRole() == Role.OWNER).count())
-                .totalDrivers(all.stream().filter(u -> u.getRole() == Role.DRIVER).count())
-                .totalAdmins(all.stream().filter(u -> u.getRole() == Role.ADMIN).count())
-                .pendingVerifications(all.stream().filter(u -> u.getVerificationStatus() == VerificationStatus.PENDING).count())
-                .activeUsers(all.stream().filter(u -> u.getDeletedAt() == null).count())
+                .totalUsers(activeList.size())
+                .totalCustomers(activeList.stream().filter(u -> u.getRole() == Role.CUSTOMER).count())
+                .totalOwners(activeList.stream().filter(u -> u.getRole() == Role.OWNER).count())
+                // .totalDrivers(...)  ← TẠM ẨN
+                // .totalAdmins(...)   ← Giữ nguyên, chưa cần hiện
+                .pendingVerifications(activeList.stream()
+                        .filter(u -> u.getVerificationStatus() == VerificationStatus.PENDING)
+                        .count())
+                .activeUsers(activeList.size())
                 .lockedUsers(all.stream().filter(u -> u.getDeletedAt() != null).count())
                 .build();
     }
+
+    // ===== HELPER =====
 
     private AdminUserResponse toResponse(User user) {
         return AdminUserResponse.builder()
@@ -115,7 +141,7 @@ public class AdminUserServiceImpl implements AdminUserService {
                 .rejectionReason(user.getRejectionReason())
                 .address(user.getAddress())
                 .dateOfBirth(user.getDateOfBirth())
-                .isActive(user.getDeletedAt() == null)
+                .isActive(user.getDeletedAt() == null && Boolean.TRUE.equals(user.getIsActive()))
                 .lastLoginAt(user.getLastLoginAt())
                 .createdAt(user.getCreatedAt())
                 .updatedAt(user.getUpdatedAt())

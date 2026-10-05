@@ -18,8 +18,20 @@ import java.util.List;
 public interface HandoverMapper {
 
     @Mapping(target = "images", ignore = true)
+    @Mapping(target = "status", expression = "java(record.getStatus() != null ? record.getStatus().name() : null)")
+    @Mapping(target = "bookingStatus", ignore = true)
+    @Mapping(target = "pickupKmReading", ignore = true)
+    @Mapping(target = "kmDriven", ignore = true)
+    @Mapping(target = "canSign", ignore = true)
+    @Mapping(target = "canCreate", ignore = true)
     HandoverResponse toResponse(HandoverRecord record);
 
+    @Mapping(target = "status", expression = "java(record.getStatus() != null ? record.getStatus().name() : null)")
+    @Mapping(target = "bookingStatus", ignore = true)
+    @Mapping(target = "pickupKmReading", ignore = true)
+    @Mapping(target = "kmDriven", ignore = true)
+    @Mapping(target = "canSign", ignore = true)
+    @Mapping(target = "canCreate", ignore = true)
     @Mapping(target = "images", source = "images")
     HandoverResponse toResponse(HandoverRecord record, List<HandoverImage> images);
 

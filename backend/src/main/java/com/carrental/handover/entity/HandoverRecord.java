@@ -15,7 +15,8 @@ import java.time.LocalDateTime;
 @Entity
 @Table(name = "handover_records", indexes = {
         @Index(name = "idx_handover_booking", columnList = "booking_id"),
-        @Index(name = "idx_handover_type", columnList = "handover_type")
+        @Index(name = "idx_handover_type", columnList = "handover_type"),
+        @Index(name = "idx_handover_status", columnList = "status")
 })
 @Getter
 @Setter
@@ -47,8 +48,8 @@ public class HandoverRecord {
     @Column(name = "interior_note", columnDefinition = "TEXT")
     String interiorNote;
 
-    @Column(columnDefinition = "JSONB")
-    String damages;
+    @Column(columnDefinition = "TEXT")
+    String damages;              // JSON string
 
     @Column(name = "extra_fees", precision = 12, scale = 0)
     @Builder.Default
@@ -57,10 +58,11 @@ public class HandoverRecord {
     @Column(name = "extra_fees_note", columnDefinition = "TEXT")
     String extraFeesNote;
 
-    @Column(name = "owner_signature", length = 500)
+    // ===== Chữ ký (lưu URL ảnh) =====
+    @Column(name = "owner_signature", columnDefinition = "TEXT")
     String ownerSignature;
 
-    @Column(name = "customer_signature", length = 500)
+    @Column(name = "customer_signature", columnDefinition = "TEXT")
     String customerSignature;
 
     @Column(name = "owner_signed_at")
@@ -68,6 +70,12 @@ public class HandoverRecord {
 
     @Column(name = "customer_signed_at")
     LocalDateTime customerSignedAt;
+
+    // ===== Trạng thái biên bản =====
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false, length = 20)
+    @Builder.Default
+    HandoverStatus status = HandoverStatus.PENDING;
 
     @Column(name = "record_hash", length = 64)
     String recordHash;

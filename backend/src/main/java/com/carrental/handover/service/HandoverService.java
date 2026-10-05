@@ -7,14 +7,11 @@ import java.util.List;
 
 public interface HandoverService {
 
-    HandoverResponse createHandover(HandoverRequest request);
+    HandoverResponse createHandover(Long userId, HandoverRequest request);
 
-    HandoverResponse getHandoverById(Long id);
+    HandoverResponse getHandoverById(Long id, Long userId);
 
-    List<HandoverResponse> getHandoversByBooking(Long bookingId);
+    List<HandoverResponse> getHandoversByBooking(Long bookingId, Long userId);
 
-    HandoverResponse signHandover(Long id, String role, String signature);
-
-    List<HandoverResponse.ImageResponse> addImages(Long handoverId,
-                                                    List<HandoverRequest.HandoverImageRequest> images);
+    HandoverResponse signHandover(Long id, Long userId, String role, String signatureUrl);
 }

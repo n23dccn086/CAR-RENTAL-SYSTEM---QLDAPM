@@ -1,13 +1,23 @@
 import { useState, useEffect } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import api from '../services/api'
+import HandoverFormModal from '../components/HandoverFormModal'
 
 export default function OwnerBookingsPage() {
+  const navigate = useNavigate()
   const [bookings, setBookings] = useState([])
   const [loading, setLoading] = useState(true)
   const [filter, setFilter] = useState('ALL')
   const [assignments, setAssignments] = useState({})
+  const [handovers, setHandovers] = useState({})   // ★ NEW: map[bookingId] = { PICKUP: {...}, RETURN: {...} }
   const [message, setMessage] = useState('')
+
+  // ===== HANDOVER MODAL STATE =====
+  const [handoverModal, setHandoverModal] = useState({
+    open: false,
+    booking: null,
+    type: null, // 'PICKUP' | 'RETURN'
+  })
 
   // ===== PHÂN TRANG =====
   const [currentPage, setCurrentPage] = useState(1)
@@ -21,7 +31,10 @@ export default function OwnerBookingsPage() {
       setBookings(data)
 
       const assignMap = {}
+      const handoverMap = {}   // ★ NEW
+
       for (const b of data) {
+        // Fetch assignments (chỉ nếu có tài xế)
         if (b.rentalMode !== 'SELF_DRIVE') {
           try {
             const aRes = await api.get(`/driver/assignments/booking/${b.id}`)
@@ -29,8 +42,22 @@ export default function OwnerBookingsPage() {
             if (list.length > 0) assignMap[b.id] = list[0]
           } catch (e) {}
         }
+
+        // ★ NEW: Fetch handovers cho từng booking
+        try {
+          const hRes = await api.get(`/handovers/booking/${b.id}`)
+          const handoversList = hRes.data.data || []
+          handoverMap[b.id] = {}
+          handoversList.forEach(h => {
+            handoverMap[b.id][h.handoverType] = h  // PICKUP / RETURN
+          })
+        } catch (e) {
+          handoverMap[b.id] = {}
+        }
       }
+
       setAssignments(assignMap)
+      setHandovers(handoverMap)   // ★ NEW
     } catch (err) {
       console.error(err)
     } finally {
@@ -38,7 +65,9 @@ export default function OwnerBookingsPage() {
     }
   }
 
-  useEffect(() => { fetchBookings() }, [])
+  useEffect(() => {
+    fetchBookings()
+  }, [])
 
   // Reset page khi filter đổi
   useEffect(() => {
@@ -48,13 +77,33 @@ export default function OwnerBookingsPage() {
   const triggerAutoAssign = async (bookingId) => {
     if (!window.confirm(`Gán tài xế tự động cho đơn #${bookingId}?`)) return
     try {
-      const res = await api.post(`/driver/assignments/booking/${bookingId}/auto-assign`)
+      await api.post(`/driver/assignments/booking/${bookingId}/auto-assign`)
       setMessage(`Đã gán tài xế cho đơn #${bookingId}`)
       fetchBookings()
       setTimeout(() => setMessage(''), 5000)
     } catch (err) {
       alert('Lỗi: ' + (err.response?.data?.message || err.message))
     }
+  }
+
+  // ===== MỞ HANDOVER MODAL =====
+  const openHandoverModal = (booking, type) => {
+    setHandoverModal({
+      open: true,
+      booking,
+      type,
+    })
+  }
+
+  const handleHandoverSuccess = () => {
+    setMessage('Đã tạo biên bản thành công!')
+    fetchBookings()
+    setTimeout(() => setMessage(''), 5000)
+  }
+
+  // ===== XEM BIÊN BẢN — BÂY GIỜ ĐÃ CÓ DATA =====
+  const viewHandover = (handoverId) => {
+    navigate(`/handover/${handoverId}`)
   }
 
   const statusMap = {
@@ -126,6 +175,15 @@ export default function OwnerBookingsPage() {
               const assignment = assignments[b.id]
               const needsDriver = b.rentalMode !== 'SELF_DRIVE' && !b.driverId
 
+              // ★ NEW: Lấy handovers của booking này
+              const bookingHandovers = handovers[b.id] || {}
+              const pickupHandover = bookingHandovers.PICKUP
+              const returnHandover = bookingHandovers.RETURN
+
+              // ★ NEW LOGIC: Chỉ tạo nếu CHƯA có biên bản
+              const canCreatePickup = b.status === 'APPROVED' && !pickupHandover
+              const canCreateReturn = b.status === 'RENTED' && !returnHandover
+
               return (
                 <div key={b.id} style={{
                   display: 'grid', gridTemplateColumns: '1fr auto auto auto',
@@ -163,28 +221,80 @@ export default function OwnerBookingsPage() {
                     {statusMap[b.status]?.label || b.status}
                   </div>
 
-                  {needsDriver ? (
-                    <button onClick={() => triggerAutoAssign(b.id)} style={{
-                      padding: '10px 18px', background: 'transparent',
-                      border: '1px solid var(--xanh-reu)', color: 'var(--xanh-reu)',
-                      fontFamily: 'var(--mono)', fontSize: '10px', letterSpacing: '2px',
-                      textTransform: 'uppercase', cursor: 'pointer', whiteSpace: 'nowrap'
-                    }}>
-                      ⚡ Gán tài xế
-                    </button>
-                  ) : b.driverId ? (
-                    <div style={{
-                      padding: '10px 18px',
-                      border: `1px solid ${assignmentStatusColors[assignment?.status] || 'var(--muc-mo)'}`,
-                      color: assignmentStatusColors[assignment?.status] || 'var(--muc-mo)',
-                      fontFamily: 'var(--mono)', fontSize: '10px', letterSpacing: '1px',
-                      textTransform: 'uppercase', textAlign: 'center', whiteSpace: 'nowrap'
-                    }}>
-                      {assignment?.driverName || 'Tài xế'} · {assignment?.status || 'OK'}
-                    </div>
-                  ) : (
-                    <div style={{ width: '120px' }} />
-                  )}
+                  <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+                    {/* Nút Tạo biên bản PICKUP — chỉ khi chưa có */}
+                    {canCreatePickup && (
+                      <button onClick={() => openHandoverModal(b, 'PICKUP')} style={{
+                        padding: '10px 18px', background: 'var(--do)',
+                        border: '1px solid var(--do)', color: 'var(--kem)',
+                        fontFamily: 'var(--mono)', fontSize: '10px', letterSpacing: '1.5px',
+                        textTransform: 'uppercase', cursor: 'pointer', whiteSpace: 'nowrap'
+                      }}>
+                        📝 Tạo biên bản giao xe
+                      </button>
+                    )}
+
+                    {/* Nút Tạo biên bản RETURN — chỉ khi chưa có */}
+                    {canCreateReturn && (
+                      <button onClick={() => openHandoverModal(b, 'RETURN')} style={{
+                        padding: '10px 18px', background: 'var(--do)',
+                        border: '1px solid var(--do)', color: 'var(--kem)',
+                        fontFamily: 'var(--mono)', fontSize: '10px', letterSpacing: '1.5px',
+                        textTransform: 'uppercase', cursor: 'pointer', whiteSpace: 'nowrap'
+                      }}>
+                        📝 Tạo biên bản nhận xe
+                      </button>
+                    )}
+
+                    {/* ★ NEW: Nút Xem biên bản PICKUP — chỉ khi ĐÃ CÓ */}
+                    {pickupHandover && (
+                      <button onClick={() => viewHandover(pickupHandover.id)} style={{
+                        padding: '10px 18px', background: 'transparent',
+                        border: '1px solid var(--muc)', color: 'var(--muc)',
+                        fontFamily: 'var(--mono)', fontSize: '10px', letterSpacing: '1.5px',
+                        textTransform: 'uppercase', cursor: 'pointer', whiteSpace: 'nowrap'
+                      }}>
+                        👁 Biên bản giao xe
+                      </button>
+                    )}
+
+                    {/* ★ NEW: Nút Xem biên bản RETURN — chỉ khi ĐÃ CÓ */}
+                    {returnHandover && (
+                      <button onClick={() => viewHandover(returnHandover.id)} style={{
+                        padding: '10px 18px', background: 'transparent',
+                        border: '1px solid var(--muc)', color: 'var(--muc)',
+                        fontFamily: 'var(--mono)', fontSize: '10px', letterSpacing: '1.5px',
+                        textTransform: 'uppercase', cursor: 'pointer', whiteSpace: 'nowrap'
+                      }}>
+                        👁 Biên bản nhận xe
+                      </button>
+                    )}
+
+                    {/* Nút gán tài xế */}
+                    {needsDriver && (
+                      <button onClick={() => triggerAutoAssign(b.id)} style={{
+                        padding: '10px 18px', background: 'transparent',
+                        border: '1px solid var(--xanh-reu)', color: 'var(--xanh-reu)',
+                        fontFamily: 'var(--mono)', fontSize: '10px', letterSpacing: '2px',
+                        textTransform: 'uppercase', cursor: 'pointer', whiteSpace: 'nowrap'
+                      }}>
+                        ⚡ Gán tài xế
+                      </button>
+                    )}
+
+                    {/* Badge driver */}
+                    {b.driverId && !needsDriver && (
+                      <div style={{
+                        padding: '10px 18px',
+                        border: `1px solid ${assignmentStatusColors[assignment?.status] || 'var(--muc-mo)'}`,
+                        color: assignmentStatusColors[assignment?.status] || 'var(--muc-mo)',
+                        fontFamily: 'var(--mono)', fontSize: '10px', letterSpacing: '1px',
+                        textTransform: 'uppercase', textAlign: 'center', whiteSpace: 'nowrap'
+                      }}>
+                        {assignment?.driverName || 'Tài xế'} · {assignment?.status || 'OK'}
+                      </div>
+                    )}
+                  </div>
                 </div>
               )
             })}
@@ -207,6 +317,15 @@ export default function OwnerBookingsPage() {
           )}
         </>
       )}
+
+      {/* ===== HANDOVER MODAL ===== */}
+      <HandoverFormModal
+        open={handoverModal.open}
+        booking={handoverModal.booking}
+        handoverType={handoverModal.type}
+        onClose={() => setHandoverModal({ open: false, booking: null, type: null })}
+        onSuccess={handleHandoverSuccess}
+      />
     </div>
   )
 }

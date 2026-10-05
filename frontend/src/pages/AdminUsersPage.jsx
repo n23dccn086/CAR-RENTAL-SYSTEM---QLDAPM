@@ -12,6 +12,19 @@ export default function AdminUsersPage() {
   const [currentPage, setCurrentPage] = useState(1)
   const ITEMS_PER_PAGE = 10
 
+  // ===== MODAL XEM HỒ SƠ =====
+  const [profileModal, setProfileModal] = useState(false)
+  const [profileUser, setProfileUser] = useState(null)
+  const [profileDocs, setProfileDocs] = useState([])
+  const [profileLoading, setProfileLoading] = useState(false)
+
+  // ===== MODAL TỪ CHỐI =====
+  const [rejectModal, setRejectModal] = useState(false)
+  const [rejectingUser, setRejectingUser] = useState(null)
+  const [rejectReason, setRejectReason] = useState('')
+  const [rejectSubmitting, setRejectSubmitting] = useState(false)
+  const [rejectError, setRejectError] = useState('')
+
   const fetchData = async () => {
     setLoading(true)
     try {
@@ -53,11 +66,105 @@ export default function AdminUsersPage() {
     }
   }
 
+  // ===== XEM HỒ SƠ =====
+  const handleViewProfile = async (user) => {
+    setProfileUser(user)
+    setProfileModal(true)
+    setProfileLoading(true)
+    setProfileDocs([])
+    try {
+      const res = await api.get(`/admin/users/${user.id}/verification`)
+      const docs = res.data.data?.documents || []
+      setProfileDocs(docs)
+    } catch (err) {
+      setProfileDocs([])
+    } finally {
+      setProfileLoading(false)
+    }
+  }
+
+  // ===== DUYỆT =====
+  const handleApprove = async (user) => {
+    if (!window.confirm(`Duyệt hồ sơ xác thực cho "${user.name}"?`)) return
+    try {
+      await api.put(`/admin/users/${user.id}/verify`)
+      setMsg(`Đã duyệt xác thực cho ${user.name}`)
+      fetchData()
+      setProfileModal(false)
+      setTimeout(() => setMsg(''), 3000)
+    } catch (err) {
+      alert('Lỗi: ' + (err.response?.data?.message || err.message))
+    }
+  }
+
+  // ===== MỞ MODAL TỪ CHỐI =====
+  const openRejectModal = (user) => {
+    setRejectingUser(user)
+    setRejectReason('')
+    setRejectError('')
+    setRejectModal(true)
+  }
+
+  // ===== SUBMIT TỪ CHỐI =====
+  const handleRejectSubmit = async (e) => {
+    e.preventDefault()
+    setRejectError('')
+    if (!rejectReason.trim()) {
+      return setRejectError('Vui lòng nhập lý do từ chối')
+    }
+
+    setRejectSubmitting(true)
+    try {
+      await api.put(
+        `/admin/users/${rejectingUser.id}/reject-verification?reason=${encodeURIComponent(rejectReason.trim())}`
+      )
+      setMsg(`Đã từ chối xác thực của ${rejectingUser.name}`)
+      setRejectModal(false)
+      setProfileModal(false)
+      fetchData()
+      setTimeout(() => setMsg(''), 3000)
+    } catch (err) {
+      setRejectError(err.response?.data?.message || 'Có lỗi xảy ra')
+    } finally {
+      setRejectSubmitting(false)
+    }
+  }
+
   const roleColors = {
     CUSTOMER: '#4a5d3f',
     OWNER: '#c9a961',
     DRIVER: '#2a9d8f',
     ADMIN: '#8b2c2c',
+  }
+
+  const statusColors = {
+    VERIFIED: 'var(--xanh-reu)',
+    PENDING: 'var(--dong)',
+    REJECTED: 'var(--do)',
+    UNVERIFIED: 'var(--muc-mo)',
+  }
+
+  const statusLabels = {
+    VERIFIED: 'Đã xác thực',
+    PENDING: 'Chờ duyệt',
+    REJECTED: 'Bị từ chối',
+    UNVERIFIED: 'Chưa xác thực',
+  }
+
+  const docTypeLabels = {
+    GPLX_FRONT: 'GPLX — Mặt trước',
+    GPLX_BACK: 'GPLX — Mặt sau',
+    CCCD_FRONT: 'CCCD — Mặt trước',
+    CCCD_BACK: 'CCCD — Mặt sau',
+    SELFIE: 'Ảnh chân dung (selfie)',
+  }
+
+  const formatDateTime = (dt) => {
+    if (!dt) return '—'
+    return new Date(dt).toLocaleString('vi-VN', {
+      day: '2-digit', month: '2-digit', year: 'numeric',
+      hour: '2-digit', minute: '2-digit'
+    })
   }
 
   // ===== TÍNH TOÁN PHÂN TRANG =====
@@ -80,11 +187,10 @@ export default function AdminUsersPage() {
 
       {/* STATS */}
       {stats && (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '20px', marginBottom: '40px' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '20px', marginBottom: '40px' }}>
           <StatCard label="Tổng user" value={stats.totalUsers} />
           <StatCard label="Khách hàng" value={stats.totalCustomers} color="#4a5d3f" />
           <StatCard label="Chủ xe" value={stats.totalOwners} color="#c9a961" />
-          <StatCard label="Tài xế" value={stats.totalDrivers} color="#2a9d8f" />
         </div>
       )}
 
@@ -111,7 +217,7 @@ export default function AdminUsersPage() {
             fontFamily: 'var(--mono)', fontSize: '10px', letterSpacing: '2px', textTransform: 'uppercase',
             cursor: 'pointer'
           }}>
-            {s}
+            {statusLabels[s] || s}
           </button>
         ))}
       </div>
@@ -126,42 +232,106 @@ export default function AdminUsersPage() {
       ) : (
         <>
           <div>
-            {currentUsers.map(u => (
-              <div key={u.id} style={{
-                display: 'grid', gridTemplateColumns: '60px 1fr auto auto auto',
-                gap: '24px', alignItems: 'center', padding: '20px 0',
-                borderBottom: '1px solid rgba(15,14,12,0.12)'
-              }}>
-                <div style={{ width: '48px', height: '48px', borderRadius: '50%', background: 'var(--dong)', color: 'var(--muc)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'var(--serif)', fontWeight: 700, fontSize: '20px' }}>
-                  {u.name?.charAt(0)?.toUpperCase() || '?'}
-                </div>
-                <div>
-                  <div style={{ fontFamily: 'var(--serif)', fontSize: '18px', fontWeight: 700 }}>{u.name}</div>
-                  <div style={{ fontFamily: 'var(--mono)', fontSize: '11px', letterSpacing: '1px', color: 'var(--muc-mo)' }}>
-                    {u.phone} {u.email && `· ${u.email}`}
+            {currentUsers.map(u => {
+              const isAdmin = u.role === 'ADMIN'
+              const isPending = u.verificationStatus === 'PENDING'
+              const canVerify = !isAdmin && isPending
+
+              return (
+                <div key={u.id} style={{
+                  display: 'grid',
+                  gridTemplateColumns: '60px minmax(0, 1fr) auto auto auto',
+                  gap: '24px', alignItems: 'center', padding: '20px 0',
+                  borderBottom: '1px solid rgba(15,14,12,0.12)'
+                }}>
+                  <div style={{
+                    width: '48px', height: '48px', borderRadius: '50%',
+                    background: 'var(--dong)', color: 'var(--muc)',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    fontFamily: 'var(--serif)', fontWeight: 700, fontSize: '20px'
+                  }}>
+                    {u.name?.charAt(0)?.toUpperCase() || '?'}
+                  </div>
+
+                  <div style={{ minWidth: 0 }}>
+                    <div style={{ fontFamily: 'var(--serif)', fontSize: '18px', fontWeight: 700 }}>
+                      {u.name}
+                    </div>
+                    <div style={{ fontFamily: 'var(--mono)', fontSize: '11px', letterSpacing: '1px', color: 'var(--muc-mo)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {u.phone} {u.email && `· ${u.email}`}
+                    </div>
+                    {u.rejectionReason && (
+                      <div style={{
+                        fontFamily: 'var(--serif-2)', fontStyle: 'italic',
+                        fontSize: '12px', color: 'var(--do)', marginTop: '4px'
+                      }}>
+                        Lý do từ chối: {u.rejectionReason}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* ROLE */}
+                  <div style={{
+                    padding: '4px 10px', background: roleColors[u.role] || 'var(--muc-mo)',
+                    color: 'var(--kem)', fontFamily: 'var(--mono)', fontSize: '9px', letterSpacing: '1px'
+                  }}>
+                    {u.role}
+                  </div>
+
+                  {/* VERIFICATION STATUS — ẨN với ADMIN */}
+                  {!isAdmin ? (
+                    <div style={{
+                      padding: '4px 10px',
+                      border: `1px solid ${statusColors[u.verificationStatus] || 'var(--muc-mo)'}`,
+                      color: statusColors[u.verificationStatus] || 'var(--muc-mo)',
+                      fontFamily: 'var(--mono)', fontSize: '9px', letterSpacing: '1px',
+                      whiteSpace: 'nowrap'
+                    }}>
+                      {statusLabels[u.verificationStatus] || u.verificationStatus}
+                    </div>
+                  ) : (
+                    <div style={{
+                      padding: '4px 10px',
+                      fontFamily: 'var(--mono)', fontSize: '9px', color: 'var(--muc-mo)',
+                      whiteSpace: 'nowrap'
+                    }}>
+                      —
+                    </div>
+                  )}
+
+                  {/* ACTIONS */}
+                  <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+                    {canVerify && (
+                      <>
+                        <button onClick={() => handleViewProfile(u)} style={btnStyle('var(--muc)')}>
+                          👁 Hồ sơ
+                        </button>
+                        <button onClick={() => handleApprove(u)} style={btnStyle('var(--xanh-reu)')}>
+                          ✓ Duyệt
+                        </button>
+                        <button onClick={() => openRejectModal(u)} style={btnStyle('var(--do)')}>
+                          ✕ Từ chối
+                        </button>
+                      </>
+                    )}
+
+                    {u.isActive ? (
+                      <button onClick={() => handleAction(u.id, 'lock')} style={btnStyle('var(--do)')}>
+                        Khóa
+                      </button>
+                    ) : (
+                      <button onClick={() => handleAction(u.id, 'unlock')} style={btnStyle('var(--xanh-reu)')}>
+                        Mở
+                      </button>
+                    )}
+
+                    <button onClick={() => handleAction(u.id, 'delete')} style={btnStyle('var(--muc-mo)')}>
+                      Xóa
+                    </button>
                   </div>
                 </div>
-                <div style={{ padding: '4px 10px', background: roleColors[u.role] || 'var(--muc-mo)', color: 'var(--kem)', fontFamily: 'var(--mono)', fontSize: '9px', letterSpacing: '1px' }}>
-                  {u.role}
-                </div>
-                <div style={{
-                  padding: '4px 10px',
-                  border: `1px solid ${u.verificationStatus === 'VERIFIED' ? 'var(--xanh-reu)' : u.verificationStatus === 'PENDING' ? 'var(--dong)' : 'var(--do)'}`,
-                  color: u.verificationStatus === 'VERIFIED' ? 'var(--xanh-reu)' : u.verificationStatus === 'PENDING' ? 'var(--dong)' : 'var(--do)',
-                  fontFamily: 'var(--mono)', fontSize: '9px', letterSpacing: '1px'
-                }}>
-                  {u.verificationStatus}
-                </div>
-                <div style={{ display: 'flex', gap: '8px' }}>
-                  {u.isActive ? (
-                    <button onClick={() => handleAction(u.id, 'lock')} style={btnStyle('var(--do)')}>Khóa</button>
-                  ) : (
-                    <button onClick={() => handleAction(u.id, 'unlock')} style={btnStyle('var(--xanh-reu)')}>Mở</button>
-                  )}
-                  <button onClick={() => handleAction(u.id, 'delete')} style={btnStyle('var(--muc-mo)')}>Xóa</button>
-                </div>
-              </div>
-            ))}
+              )
+            })}
           </div>
 
           {/* PHÂN TRANG */}
@@ -181,6 +351,217 @@ export default function AdminUsersPage() {
           )}
         </>
       )}
+
+      {/* ===== MODAL XEM HỒ SƠ ===== */}
+      {profileModal && profileUser && (
+        <div style={{
+          position: 'fixed', inset: 0, background: 'rgba(15,14,12,0.7)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          zIndex: 1000, padding: '20px', overflowY: 'auto'
+        }} onClick={() => setProfileModal(false)}>
+          <div style={{
+            background: 'var(--kem)', border: '1px solid var(--muc)',
+            maxWidth: '900px', width: '100%', maxHeight: '90vh',
+            overflowY: 'auto', padding: '48px', position: 'relative'
+          }} onClick={(e) => e.stopPropagation()}>
+            <button type="button" onClick={() => setProfileModal(false)} style={{
+              position: 'absolute', top: '16px', right: '16px',
+              width: '40px', height: '40px', background: 'transparent',
+              border: '1px solid var(--muc)', color: 'var(--muc)',
+              fontFamily: 'var(--mono)', fontSize: '18px', cursor: 'pointer',
+              display: 'flex', alignItems: 'center', justifyContent: 'center'
+            }}>✕</button>
+
+            <h2 style={{
+              fontFamily: 'var(--serif)', fontSize: '32px', fontWeight: 900,
+              marginBottom: '8px', paddingRight: '48px'
+            }}>
+              Hồ sơ xác thực.
+            </h2>
+            <p style={{
+              fontFamily: 'var(--mono)', fontSize: '11px', letterSpacing: '2px',
+              color: 'var(--muc-mo)', marginBottom: '24px'
+            }}>
+              {profileUser.name} · {profileUser.phone}
+            </p>
+
+            {/* THÔNG TIN CÁ NHÂN */}
+            <div style={{
+              display: 'grid', gridTemplateColumns: '1fr 1fr',
+              gap: '16px', marginBottom: '32px',
+              padding: '20px', background: 'var(--kem-dam)',
+              border: '1px solid rgba(15,14,12,0.15)'
+            }}>
+              <InfoRow label="Email" value={profileUser.email || '—'} />
+              <InfoRow label="Vai trò" value={profileUser.role} />
+              <InfoRow label="Địa chỉ" value={profileUser.address || '—'} />
+              <InfoRow label="Ngày sinh" value={profileUser.dateOfBirth || '—'} />
+              <InfoRow label="Trạng thái" value={statusLabels[profileUser.verificationStatus] || profileUser.verificationStatus} />
+              <InfoRow label="Ngày tạo" value={formatDateTime(profileUser.createdAt)} />
+            </div>
+
+            {/* 5 ẢNH */}
+            <h3 style={{
+              fontFamily: 'var(--serif)', fontSize: '20px', fontWeight: 700,
+              marginBottom: '16px'
+            }}>
+              Ảnh giấy tờ ({profileDocs.length}/5)
+            </h3>
+
+            {profileLoading ? (
+              <p style={{ fontFamily: 'var(--serif-2)', fontStyle: 'italic', color: 'var(--muc-mo)' }}>
+                Đang tải hồ sơ...
+              </p>
+            ) : profileDocs.length === 0 ? (
+              <p style={{ fontFamily: 'var(--serif-2)', fontStyle: 'italic', color: 'var(--muc-mo)' }}>
+                Chưa có ảnh nào được upload.
+              </p>
+            ) : (
+              <div style={{
+                display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))',
+                gap: '16px', marginBottom: '32px'
+              }}>
+                {profileDocs.map(doc => (
+                  <a key={doc.id} href={doc.documentUrl} target="_blank" rel="noreferrer"
+                    style={{ textDecoration: 'none', color: 'inherit' }}>
+                    <div style={{
+                      aspectRatio: '4/3', border: '1px solid rgba(15,14,12,0.2)',
+                      background: `url(${doc.documentUrl}) center/cover`,
+                      marginBottom: '8px', overflow: 'hidden'
+                    }} />
+                    <div style={{
+                      fontFamily: 'var(--mono)', fontSize: '10px',
+                      letterSpacing: '1px', color: 'var(--muc-mo)',
+                      textAlign: 'center'
+                    }}>
+                      {docTypeLabels[doc.documentType] || doc.documentType}
+                    </div>
+                  </a>
+                ))}
+              </div>
+            )}
+
+            {/* ACTIONS */}
+            {profileUser.verificationStatus === 'PENDING' && (
+              <div style={{
+                display: 'flex', gap: '12px',
+                paddingTop: '24px', borderTop: '1px solid rgba(15,14,12,0.15)'
+              }}>
+                <button onClick={() => handleApprove(profileUser)} style={{
+                  flex: 1, padding: '16px', background: 'var(--xanh-reu)',
+                  border: 'none', color: 'var(--kem)',
+                  fontFamily: 'var(--mono)', fontSize: '11px',
+                  letterSpacing: '2px', textTransform: 'uppercase', cursor: 'pointer'
+                }}>
+                  ✓ Duyệt hồ sơ
+                </button>
+                <button onClick={() => openRejectModal(profileUser)} style={{
+                  flex: 1, padding: '16px', background: 'var(--do)',
+                  border: 'none', color: 'var(--kem)',
+                  fontFamily: 'var(--mono)', fontSize: '11px',
+                  letterSpacing: '2px', textTransform: 'uppercase', cursor: 'pointer'
+                }}>
+                  ✕ Từ chối
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* ===== MODAL TỪ CHỐI ===== */}
+      {rejectModal && rejectingUser && (
+        <div style={{
+          position: 'fixed', inset: 0, background: 'rgba(15,14,12,0.7)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          zIndex: 1100, padding: '20px'
+        }} onClick={() => setRejectModal(false)}>
+          <div style={{
+            background: 'var(--kem)', border: '1px solid var(--muc)',
+            maxWidth: '500px', width: '100%', padding: '48px', position: 'relative'
+          }} onClick={(e) => e.stopPropagation()}>
+            <button type="button" onClick={() => setRejectModal(false)} style={{
+              position: 'absolute', top: '16px', right: '16px',
+              width: '40px', height: '40px', background: 'transparent',
+              border: '1px solid var(--muc)', color: 'var(--muc)',
+              fontFamily: 'var(--mono)', fontSize: '18px', cursor: 'pointer',
+              display: 'flex', alignItems: 'center', justifyContent: 'center'
+            }}>✕</button>
+
+            <h2 style={{
+              fontFamily: 'var(--serif)', fontSize: '28px', fontWeight: 900,
+              marginBottom: '8px', paddingRight: '48px'
+            }}>
+              Từ chối hồ sơ.
+            </h2>
+            <p style={{
+              fontFamily: 'var(--mono)', fontSize: '11px', letterSpacing: '2px',
+              color: 'var(--muc-mo)', marginBottom: '24px'
+            }}>
+              {rejectingUser.name} · {rejectingUser.phone}
+            </p>
+
+            {rejectError && (
+              <div style={{
+                background: 'rgba(139,44,44,0.1)', border: '1px solid var(--do)',
+                padding: '12px 16px', marginBottom: '20px',
+                color: 'var(--do)', fontFamily: 'var(--serif-2)', fontStyle: 'italic'
+              }}>
+                {rejectError}
+              </div>
+            )}
+
+            <form onSubmit={handleRejectSubmit}>
+              <label style={{
+                display: 'block', fontFamily: 'var(--mono)', fontSize: '10px',
+                letterSpacing: '3px', textTransform: 'uppercase',
+                color: 'var(--muc-mo)', marginBottom: '8px'
+              }}>
+                Lý do từ chối *
+              </label>
+              <textarea
+                value={rejectReason}
+                onChange={(e) => setRejectReason(e.target.value)}
+                rows={4}
+                maxLength={500}
+                placeholder="Ví dụ: Ảnh GPLX bị mờ, không đọc được số..."
+                style={{
+                  width: '100%', padding: '14px', background: 'var(--kem-dam)',
+                  border: '1px solid rgba(15,14,12,0.2)',
+                  fontFamily: 'var(--serif-2)', fontSize: '16px',
+                  resize: 'vertical', outline: 'none', boxSizing: 'border-box'
+                }}
+              />
+              <div style={{
+                textAlign: 'right', fontFamily: 'var(--mono)',
+                fontSize: '10px', color: 'var(--muc-mo)', marginTop: '4px'
+              }}>
+                {rejectReason.length}/500
+              </div>
+
+              <div style={{ display: 'flex', gap: '12px', marginTop: '24px' }}>
+                <button type="button" onClick={() => setRejectModal(false)} style={{
+                  flex: 1, padding: '16px', background: 'transparent',
+                  border: '1px solid var(--muc)', color: 'var(--muc)',
+                  fontFamily: 'var(--mono)', fontSize: '11px',
+                  letterSpacing: '2px', textTransform: 'uppercase', cursor: 'pointer'
+                }}>
+                  Hủy
+                </button>
+                <button type="submit" disabled={rejectSubmitting} style={{
+                  flex: 2, padding: '16px', background: 'var(--do)',
+                  border: 'none', color: 'var(--kem)',
+                  fontFamily: 'var(--mono)', fontSize: '11px',
+                  letterSpacing: '2px', textTransform: 'uppercase',
+                  cursor: rejectSubmitting ? 'wait' : 'pointer'
+                }}>
+                  {rejectSubmitting ? 'Đang xử lý...' : 'Xác nhận từ chối'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
@@ -194,14 +575,53 @@ function StatCard({ label, value, color = 'var(--muc)' }) {
   )
 }
 
+function InfoRow({ label, value }) {
+  return (
+    <div>
+      <div style={{
+        fontFamily: 'var(--mono)', fontSize: '9px', letterSpacing: '1.5px',
+        textTransform: 'uppercase', color: 'var(--muc-mo)', marginBottom: '4px'
+      }}>
+        {label}
+      </div>
+      <div style={{
+        fontFamily: 'var(--serif-2)', fontSize: '16px', color: 'var(--muc)'
+      }}>
+        {value || '—'}
+      </div>
+    </div>
+  )
+}
+
 function btnStyle(color) {
-  return { padding: '6px 14px', background: 'transparent', border: `1px solid ${color}`, color, fontFamily: 'var(--mono)', fontSize: '10px', letterSpacing: '1px', textTransform: 'uppercase', cursor: 'pointer', transition: 'all 0.3s' }
+  return {
+    padding: '6px 12px', background: 'transparent',
+    border: `1px solid ${color}`, color,
+    fontFamily: 'var(--mono)', fontSize: '10px', letterSpacing: '1px',
+    textTransform: 'uppercase', cursor: 'pointer',
+    transition: 'all 0.3s', whiteSpace: 'nowrap'
+  }
 }
 
 function paginationBtnStyle(disabled) {
-  return { padding: '8px 16px', background: 'transparent', border: '1px solid var(--muc)', color: disabled ? 'var(--muc-mo)' : 'var(--muc)', fontFamily: 'var(--mono)', fontSize: '11px', letterSpacing: '2px', textTransform: 'uppercase', cursor: disabled ? 'not-allowed' : 'pointer', opacity: disabled ? 0.4 : 1 }
+  return {
+    padding: '8px 16px', background: 'transparent',
+    border: '1px solid var(--muc)',
+    color: disabled ? 'var(--muc-mo)' : 'var(--muc)',
+    fontFamily: 'var(--mono)', fontSize: '11px', letterSpacing: '2px',
+    textTransform: 'uppercase',
+    cursor: disabled ? 'not-allowed' : 'pointer',
+    opacity: disabled ? 0.4 : 1
+  }
 }
 
 function paginationNumStyle(active) {
-  return { padding: '8px 14px', background: active ? 'var(--muc)' : 'transparent', color: active ? 'var(--kem)' : 'var(--muc)', border: '1px solid var(--muc)', fontFamily: 'var(--mono)', fontSize: '11px', cursor: 'pointer', minWidth: '40px' }
+  return {
+    padding: '8px 14px',
+    background: active ? 'var(--muc)' : 'transparent',
+    color: active ? 'var(--kem)' : 'var(--muc)',
+    border: '1px solid var(--muc)',
+    fontFamily: 'var(--mono)', fontSize: '11px',
+    cursor: 'pointer', minWidth: '40px'
+  }
 }

@@ -41,6 +41,11 @@ export default function WheelNav() {
     ...(isLoggedIn && user?.role !== "ADMIN"
       ? [{ path: "/disputes", label: "Tranh chấp", icon: "⚖" }]
       : []),
+    ...(isLoggedIn &&
+    user?.verificationStatus !== "VERIFIED" &&
+    user?.role !== "ADMIN"
+      ? [{ path: "/verification", label: "Xác thực tài khoản", icon: "☑" }]
+      : []),
     ...(isLoggedIn ? [{ path: "/profile", label: "Hồ sơ", icon: "❦" }] : []),
     ...(isLoggedIn && user?.role === "OWNER"
       ? [{ path: "/owner/dashboard", label: "Quản lý xe", icon: "⚙" }]

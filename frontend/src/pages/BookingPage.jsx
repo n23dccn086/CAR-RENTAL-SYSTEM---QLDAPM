@@ -1,12 +1,14 @@
 import { useState, useEffect } from 'react'
-import { useParams, useNavigate } from 'react-router-dom'
+import { useParams, useNavigate, Link } from 'react-router-dom'
 import { getCarById } from '../services/carService'
 import { createBooking } from '../services/bookingService'
+import { useAuth } from '../hooks/useAuth'
 import FormInput from '../components/FormInput'
 
 export default function BookingPage() {
   const { carId } = useParams()
   const navigate = useNavigate()
+  const { user } = useAuth()
   const [car, setCar] = useState(null)
   const [form, setForm] = useState({
     startDate: '', endDate: '', pickupAddress: '', rentalMode: 'SELF_DRIVE', note: ''
@@ -28,9 +30,22 @@ export default function BookingPage() {
 
   const formatPrice = (p) => new Intl.NumberFormat('vi-VN').format(p)
 
+  // ===== UC-C03: Check trước khi submit =====
+  const needsVerification =
+    form.rentalMode === 'SELF_DRIVE' &&
+    user?.verificationStatus !== 'VERIFIED'
+
   const handleSubmit = async (e) => {
     e.preventDefault()
     setError('')
+
+    if (needsVerification) {
+      setError(
+        'Bạn cần xác thực GPLX/CCCD trước khi thuê xe tự lái. Vui lòng vào mục "Xác thực tài khoản".'
+      )
+      return
+    }
+
     setLoading(true)
     try {
       const res = await createBooking({
@@ -61,7 +76,27 @@ export default function BookingPage() {
 
       <div style={{ display: 'grid', gridTemplateColumns: '1.5fr 1fr', gap: '48px' }}>
         <form onSubmit={handleSubmit}>
+          {/* ===== UC-C03: Cảnh báo chưa xác thực ===== */}
+          {needsVerification && (
+            <div style={{
+              padding: '16px 20px',
+              background: 'rgba(139,44,44,0.1)',
+              border: '1px solid var(--do)',
+              borderLeft: '4px solid var(--do)',
+              marginBottom: '24px',
+              fontFamily: 'var(--serif-2)',
+              fontStyle: 'italic',
+              color: 'var(--do)',
+            }}>
+              ⚠️ Bạn cần <strong>xác thực GPLX/CCCD</strong> trước khi thuê xe tự lái.{' '}
+              <Link to="/verification" style={{ color: 'var(--do)', textDecoration: 'underline' }}>
+                Xác thực ngay →
+              </Link>
+            </div>
+          )}
+
           {error && <div style={{ background: 'rgba(139,44,44,0.1)', border: '1px solid var(--do)', padding: '12px 16px', marginBottom: '24px', color: 'var(--do)' }}>{error}</div>}
+
           <FormInput label="Ngày nhận xe" name="startDate" type="datetime-local" value={form.startDate} onChange={handleChange} required />
           <FormInput label="Ngày trả xe" name="endDate" type="datetime-local" value={form.endDate} onChange={handleChange} required />
           <FormInput label="Địa chỉ nhận xe" name="pickupAddress" value={form.pickupAddress} onChange={handleChange} placeholder="123 Nguyễn Huệ, Q1" required />
@@ -79,7 +114,7 @@ export default function BookingPage() {
             <textarea name="note" value={form.note} onChange={handleChange} rows="3" style={{ width: '100%', padding: '14px 16px', background: 'var(--kem-dam)', border: '1px solid rgba(15,14,12,0.2)', fontFamily: 'var(--serif-2)', fontSize: '16px', resize: 'vertical' }} />
           </div>
 
-          <button type="submit" className="btn-login" disabled={loading} style={{ width: '100%', justifyContent: 'center', padding: '18px' }}>
+          <button type="submit" className="btn-login" disabled={loading || needsVerification} style={{ width: '100%', justifyContent: 'center', padding: '18px', opacity: needsVerification ? 0.5 : 1, cursor: needsVerification ? 'not-allowed' : 'pointer' }}>
             <span>{loading ? 'Đang xử lý...' : 'Xác nhận đặt xe'}</span>
           </button>
         </form>

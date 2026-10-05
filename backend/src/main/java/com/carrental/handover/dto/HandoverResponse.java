@@ -18,7 +18,7 @@ public class HandoverResponse {
 
     Long id;
     Long bookingId;
-    String handoverType;
+    String handoverType;         // PICKUP, RETURN
 
     Integer kmReading;
     Short fuelLevel;
@@ -32,6 +32,19 @@ public class HandoverResponse {
     String customerSignature;
     LocalDateTime ownerSignedAt;
     LocalDateTime customerSignedAt;
+
+    // ===== Trạng thái =====
+    String status;               // PENDING, SIGNED, CANCELLED
+    String bookingStatus;        // Trạng thái booking hiện tại
+
+    // ===== Thông tin để so sánh (chỉ có khi RETURN) =====
+    Integer pickupKmReading;     // Km lúc PICKUP
+    Integer kmDriven;            // Số km đã chạy
+
+    // ===== Quyền của user hiện tại =====
+    Boolean canSign;             // User hiện tại có được ký không
+    Boolean canCreate;           // User hiện tại có được tạo không
+
     String recordHash;
 
     LocalDateTime createdAt;

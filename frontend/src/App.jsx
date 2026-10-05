@@ -29,7 +29,9 @@ import ReviewPage from "./pages/ReviewPage";
 import OwnerReviewsPage from "./pages/OwnerReviewsPage";
 import AdminApprovalsPage from "./pages/AdminApprovalsPage";
 import DisputesPage from "./pages/DisputesPage";
-import AdminDisputesPage from "./pages/AdminDisputesPage";          // ← THÊM MỚI
+import AdminDisputesPage from "./pages/AdminDisputesPage";
+import VerificationPage from "./pages/VerificationPage";
+import HandoverPage from "./pages/HandoverPage";
 
 function App() {
   return (
@@ -48,135 +50,218 @@ function App() {
           <Route path="/cars/:id" element={<CarDetailPage />} />
 
           {/* ===== DRIVER MAGIC LINK — PUBLIC ===== */}
-          <Route path="/driver/assignment/:id" element={<DriverAssignmentPage />} />
+          <Route
+            path="/driver/assignment/:id"
+            element={<DriverAssignmentPage />}
+          />
 
           {/* ===== CẦN ĐĂNG NHẬP ===== */}
-          <Route path="/profile" element={
-            <ProtectedRoute allowedRoles={["CUSTOMER", "OWNER", "DRIVER", "ADMIN"]}>
-              <ProfilePage />
-            </ProtectedRoute>
-          } />
+          <Route
+            path="/profile"
+            element={
+              <ProtectedRoute
+                allowedRoles={["CUSTOMER", "OWNER", "DRIVER", "ADMIN"]}
+              >
+                <ProfilePage />
+              </ProtectedRoute>
+            }
+          />
 
-          <Route path="/my-bookings" element={
-            <ProtectedRoute allowedRoles={["CUSTOMER", "ADMIN"]}>
-              <MyBookingsPage />
-            </ProtectedRoute>
-          } />
+          {/* ===== XÁC THỰC TÀI KHOẢN (UC-C03) — MỚI ===== */}
+          <Route
+            path="/verification"
+            element={
+              <ProtectedRoute allowedRoles={["CUSTOMER", "OWNER", "DRIVER"]}>
+                <VerificationPage />
+              </ProtectedRoute>
+            }
+          />
 
-          <Route path="/notifications" element={
-            <ProtectedRoute allowedRoles={["CUSTOMER", "OWNER", "DRIVER", "ADMIN"]}>
-              <NotificationsPage />
-            </ProtectedRoute>
-          } />
+          <Route
+            path="/my-bookings"
+            element={
+              <ProtectedRoute allowedRoles={["CUSTOMER", "ADMIN"]}>
+                <MyBookingsPage />
+              </ProtectedRoute>
+            }
+          />
 
-          <Route path="/disputes" element={
-            <ProtectedRoute allowedRoles={["CUSTOMER", "OWNER", "ADMIN"]}>
-              <DisputesPage />
-            </ProtectedRoute>
-          } />
+          <Route
+            path="/notifications"
+            element={
+              <ProtectedRoute
+                allowedRoles={["CUSTOMER", "OWNER", "DRIVER", "ADMIN"]}
+              >
+                <NotificationsPage />
+              </ProtectedRoute>
+            }
+          />
 
-          <Route path="/booking/:carId" element={
-            <ProtectedRoute allowedRoles={["CUSTOMER", "ADMIN"]}>
-              <BookingPage />
-            </ProtectedRoute>
-          } />
+          <Route
+            path="/disputes"
+            element={
+              <ProtectedRoute allowedRoles={["CUSTOMER", "OWNER", "ADMIN"]}>
+                <DisputesPage />
+              </ProtectedRoute>
+            }
+          />
 
-          <Route path="/payment/:bookingId" element={
-            <ProtectedRoute allowedRoles={["CUSTOMER", "ADMIN"]}>
-              <PaymentPage />
-            </ProtectedRoute>
-          } />
+          <Route
+            path="/handover/:id"
+            element={
+              <ProtectedRoute allowedRoles={["CUSTOMER", "OWNER", "ADMIN"]}>
+                <HandoverPage />
+              </ProtectedRoute>
+            }
+          />
 
-          <Route path="/review/:bookingId" element={
-            <ProtectedRoute allowedRoles={["CUSTOMER", "ADMIN"]}>
-              <ReviewPage />
-            </ProtectedRoute>
-          } />
+          <Route
+            path="/booking/:carId"
+            element={
+              <ProtectedRoute allowedRoles={["CUSTOMER", "ADMIN"]}>
+                <BookingPage />
+              </ProtectedRoute>
+            }
+          />
+
+          <Route
+            path="/payment/:bookingId"
+            element={
+              <ProtectedRoute allowedRoles={["CUSTOMER", "ADMIN"]}>
+                <PaymentPage />
+              </ProtectedRoute>
+            }
+          />
+
+          <Route
+            path="/review/:bookingId"
+            element={
+              <ProtectedRoute allowedRoles={["CUSTOMER", "ADMIN"]}>
+                <ReviewPage />
+              </ProtectedRoute>
+            }
+          />
 
           {/* ===== OWNER ===== */}
-          <Route path="/cars/create" element={
-            <ProtectedRoute allowedRoles={["OWNER", "ADMIN"]}>
-              <CreateCarPage />
-            </ProtectedRoute>
-          } />
+          <Route
+            path="/cars/create"
+            element={
+              <ProtectedRoute allowedRoles={["OWNER", "ADMIN"]}>
+                <CreateCarPage />
+              </ProtectedRoute>
+            }
+          />
 
-          <Route path="/owner/dashboard" element={
-            <ProtectedRoute allowedRoles={["OWNER", "ADMIN"]}>
-              <OwnerDashboard />
-            </ProtectedRoute>
-          } />
+          <Route
+            path="/owner/dashboard"
+            element={
+              <ProtectedRoute allowedRoles={["OWNER", "ADMIN"]}>
+                <OwnerDashboard />
+              </ProtectedRoute>
+            }
+          />
 
-          <Route path="/owner/bookings" element={
-            <ProtectedRoute allowedRoles={["OWNER", "ADMIN"]}>
-              <OwnerBookingsPage />
-            </ProtectedRoute>
-          } />
+          <Route
+            path="/owner/bookings"
+            element={
+              <ProtectedRoute allowedRoles={["OWNER", "ADMIN"]}>
+                <OwnerBookingsPage />
+              </ProtectedRoute>
+            }
+          />
 
-          <Route path="/owner/drivers" element={
-            <ProtectedRoute allowedRoles={["OWNER", "ADMIN"]}>
-              <OwnerDriversPage />
-            </ProtectedRoute>
-          } />
+          <Route
+            path="/owner/drivers"
+            element={
+              <ProtectedRoute allowedRoles={["OWNER", "ADMIN"]}>
+                <OwnerDriversPage />
+              </ProtectedRoute>
+            }
+          />
 
-          <Route path="/owner/reviews" element={
-            <ProtectedRoute allowedRoles={["OWNER", "ADMIN"]}>
-              <OwnerReviewsPage />
-            </ProtectedRoute>
-          } />
+          <Route
+            path="/owner/reviews"
+            element={
+              <ProtectedRoute allowedRoles={["OWNER", "ADMIN"]}>
+                <OwnerReviewsPage />
+              </ProtectedRoute>
+            }
+          />
 
           {/* ===== ADMIN ===== */}
-          <Route path="/admin/dashboard" element={
-            <ProtectedRoute allowedRoles={["ADMIN"]}>
-              <AdminDashboard />
-            </ProtectedRoute>
-          } />
+          <Route
+            path="/admin/dashboard"
+            element={
+              <ProtectedRoute allowedRoles={["ADMIN"]}>
+                <AdminDashboard />
+              </ProtectedRoute>
+            }
+          />
 
-          <Route path="/admin/users" element={
-            <ProtectedRoute allowedRoles={["ADMIN"]}>
-              <AdminUsersPage />
-            </ProtectedRoute>
-          } />
+          <Route
+            path="/admin/users"
+            element={
+              <ProtectedRoute allowedRoles={["ADMIN"]}>
+                <AdminUsersPage />
+              </ProtectedRoute>
+            }
+          />
 
-          <Route path="/admin/refunds" element={
-            <ProtectedRoute allowedRoles={["ADMIN"]}>
-              <AdminRefundsPage />
-            </ProtectedRoute>
-          } />
+          <Route
+            path="/admin/refunds"
+            element={
+              <ProtectedRoute allowedRoles={["ADMIN"]}>
+                <AdminRefundsPage />
+              </ProtectedRoute>
+            }
+          />
 
-          <Route path="/admin/approvals" element={
-            <ProtectedRoute allowedRoles={["ADMIN"]}>
-              <AdminApprovalsPage />
-            </ProtectedRoute>
-          } />
+          <Route
+            path="/admin/approvals"
+            element={
+              <ProtectedRoute allowedRoles={["ADMIN"]}>
+                <AdminApprovalsPage />
+              </ProtectedRoute>
+            }
+          />
 
-          {/* ===== ADMIN DISPUTES — MỚI ===== */}
-          <Route path="/admin/disputes" element={
-            <ProtectedRoute allowedRoles={["ADMIN"]}>
-              <AdminDisputesPage />
-            </ProtectedRoute>
-          } />
+          <Route
+            path="/admin/disputes"
+            element={
+              <ProtectedRoute allowedRoles={["ADMIN"]}>
+                <AdminDisputesPage />
+              </ProtectedRoute>
+            }
+          />
 
           {/* ===== 404 ===== */}
-          <Route path="*" element={
-            <div style={{ textAlign: "center", padding: "120px 48px" }}>
-              <h1 style={{
-                fontFamily: "var(--serif)",
-                fontSize: "96px",
-                fontWeight: 900,
-                color: "var(--do)"
-              }}>
-                404
-              </h1>
-              <p style={{
-                fontFamily: "var(--serif-2)",
-                fontStyle: "italic",
-                fontSize: "24px",
-                color: "var(--muc-mo)"
-              }}>
-                Trang này không tồn tại.
-              </p>
-            </div>
-          } />
+          <Route
+            path="*"
+            element={
+              <div style={{ textAlign: "center", padding: "120px 48px" }}>
+                <h1
+                  style={{
+                    fontFamily: "var(--serif)",
+                    fontSize: "96px",
+                    fontWeight: 900,
+                    color: "var(--do)",
+                  }}
+                >
+                  404
+                </h1>
+                <p
+                  style={{
+                    fontFamily: "var(--serif-2)",
+                    fontStyle: "italic",
+                    fontSize: "24px",
+                    color: "var(--muc-mo)",
+                  }}
+                >
+                  Trang này không tồn tại.
+                </p>
+              </div>
+            }
+          />
         </Routes>
       </main>
       <Footer />

@@ -23,11 +23,15 @@ public class DisputeResponse {
     String disputeCode;
     Long bookingId;
     Long raisedBy;
+    String raisedByName;     
+    String raisedByPhone; 
     Long againstUser;
+    String againstUserName;   
+    String againstUserPhone;
 
     String category;
     String description;
-    String evidence;                    // JSON string: [{url, note, filename}]
+    String evidence;                    
     BigDecimal claimedAmount;
 
     String status;

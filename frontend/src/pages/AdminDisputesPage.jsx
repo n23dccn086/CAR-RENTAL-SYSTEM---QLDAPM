@@ -457,7 +457,9 @@ export default function AdminDisputesPage() {
                           marginBottom: "6px",
                         }}
                       >
-                        BÊN A (Người khởi kiện) · User #{d.raisedBy}
+                        BÊN A (Người khởi kiện) ·{" "}
+                        {d.raisedByName || `User #${d.raisedBy}`}
+                        {d.raisedByPhone && ` · ${d.raisedByPhone}`}
                       </div>
                       <div
                         style={{
@@ -492,7 +494,9 @@ export default function AdminDisputesPage() {
                           marginBottom: "6px",
                         }}
                       >
-                        BÊN B (Người bị kiện) · User #{d.againstUser}
+                        BÊN B (Người bị kiện) ·{" "}
+                        {d.againstUserName || `User #${d.againstUser}`}
+                        {d.againstUserPhone && ` · ${d.againstUserPhone}`}
                       </div>
                       <div
                         style={{
@@ -563,9 +567,7 @@ export default function AdminDisputesPage() {
                                   textTransform: "uppercase",
                                 }}
                               >
-                                {isSystem
-                                  ? "⚙ Hệ thống"
-                                  : `👤 User #${h.by}`}
+                                {isSystem ? "⚙ Hệ thống" : `👤 User #${h.by}`}
                                 {h.at ? ` · ${formatDate(h.at)}` : ""}
                               </div>
                               "{h.note}"
@@ -726,8 +728,8 @@ export default function AdminDisputesPage() {
                   marginBottom: "24px",
                 }}
               >
-                Trang {currentPage} / {totalPages} · Tổng {disputes.length} tranh
-                chấp
+                Trang {currentPage} / {totalPages} · Tổng {disputes.length}{" "}
+                tranh chấp
               </div>
             </>
           )}
@@ -1284,7 +1286,9 @@ function DetailModal({
                 marginBottom: "12px",
               }}
             >
-              FORM BÊN A · Người khởi kiện (User #{dispute.raisedBy})
+              FORM BÊN A · Người khởi kiện ·{" "}
+              {dispute.raisedByName || `User #${dispute.raisedBy}`}
+              {dispute.raisedByPhone && ` · ${dispute.raisedByPhone}`}
             </div>
             <div
               style={{
@@ -1343,7 +1347,9 @@ function DetailModal({
                 marginBottom: "12px",
               }}
             >
-              FORM BÊN B · Người bị kiện (User #{dispute.againstUser})
+              FORM BÊN B · Người bị kiện ·{" "}
+              {dispute.againstUserName || `User #${dispute.againstUser}`}
+              {dispute.againstUserPhone && ` · ${dispute.againstUserPhone}`}
             </div>
             <div
               style={{
@@ -1403,7 +1409,9 @@ function DetailModal({
             >
               💬 LỊCH SỬ GHI CHÚ ({history.length})
             </div>
-            <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+            <div
+              style={{ display: "flex", flexDirection: "column", gap: "6px" }}
+            >
               {history.map((h, i) => {
                 const isSystem = h.by === "SYSTEM";
                 return (

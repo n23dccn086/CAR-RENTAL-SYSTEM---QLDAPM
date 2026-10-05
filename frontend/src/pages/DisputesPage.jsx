@@ -809,7 +809,9 @@ export default function DisputesPage() {
                               >
                                 {isSystem
                                   ? "⚙ Hệ thống"
-                                  : `👤 User #${h.by}`}
+                                  : h.by === user?.id
+                                    ? `👤 Bạn`
+                                    : `👤 User #${h.by}`}
                                 {h.at ? ` · ${formatDate(h.at)}` : ""}
                               </div>
                               "{h.note}"

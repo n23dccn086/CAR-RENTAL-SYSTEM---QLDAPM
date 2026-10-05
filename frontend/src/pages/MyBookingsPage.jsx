@@ -75,6 +75,27 @@ export default function MyBookingsPage() {
 
   const canCancel = (status) => !["RENTED", "RETURNED", "COMPLETED", "CANCELLED"].includes(status);
 
+  // ===== XEM BIÊN BẢN =====
+  const handleViewHandover = async (booking) => {
+    try {
+      const res = await api.get(`/handovers/booking/${booking.id}`);
+      const handovers = res.data.data || [];
+
+      if (handovers.length === 0) {
+        alert("Chưa có biên bản nào cho đơn này");
+        return;
+      }
+
+      // Ưu tiên biên bản chưa ký đủ
+      const pendingHandover = handovers.find((h) => h.status === "PENDING");
+      const target = pendingHandover || handovers[handovers.length - 1];
+
+      navigate(`/handover/${target.id}`);
+    } catch (err) {
+      alert("Lỗi: " + (err.response?.data?.message || err.message));
+    }
+  };
+
   const filtered = filter === "ALL" ? bookings : bookings.filter((b) => b.status === filter);
 
   // ===== TÍNH TOÁN PHÂN TRANG =====
@@ -120,42 +141,123 @@ export default function MyBookingsPage() {
       ) : (
         <>
           <div>
-            {currentBookings.map((b) => (
-              <div key={b.id} style={{ display: "grid", gridTemplateColumns: "1fr auto auto auto", gap: "24px", alignItems: "center", padding: "24px 0", borderBottom: "1px solid rgba(15,14,12,0.12)" }}>
-                <Link to={`/payment/${b.id}`} style={{ color: "inherit" }}>
-                  <div style={{ fontFamily: "var(--mono)", fontSize: "11px", letterSpacing: "2px", color: "var(--muc-mo)", marginBottom: "8px" }}>#{b.id}</div>
-                  <div style={{ fontFamily: "var(--serif)", fontSize: "22px", fontWeight: 700, marginBottom: "6px" }}>{b.carName || "Cỗ xe"}</div>
-                  <div style={{ fontFamily: "var(--serif-2)", fontStyle: "italic", color: "var(--muc-mo)" }}>
-                    {new Date(b.startDate).toLocaleDateString("vi-VN")} → {new Date(b.endDate).toLocaleDateString("vi-VN")}
+            {currentBookings.map((b) => {
+              const canSignHandover = ["RENTED", "RETURNED"].includes(b.status);
+              const canViewHandover = ["RENTED", "RETURNED", "COMPLETED"].includes(b.status);
+              const showCancelOrReview = canCancel(b.status) || b.status === "COMPLETED";
+
+              return (
+                <div key={b.id} style={{ display: "grid", gridTemplateColumns: "1fr auto auto auto", gap: "24px", alignItems: "center", padding: "24px 0", borderBottom: "1px solid rgba(15,14,12,0.12)" }}>
+                  <Link to={`/payment/${b.id}`} style={{ color: "inherit" }}>
+                    <div style={{ fontFamily: "var(--mono)", fontSize: "11px", letterSpacing: "2px", color: "var(--muc-mo)", marginBottom: "8px" }}>#{b.id}</div>
+                    <div style={{ fontFamily: "var(--serif)", fontSize: "22px", fontWeight: 700, marginBottom: "6px" }}>{b.carName || "Cỗ xe"}</div>
+                    <div style={{ fontFamily: "var(--serif-2)", fontStyle: "italic", color: "var(--muc-mo)" }}>
+                      {new Date(b.startDate).toLocaleDateString("vi-VN")} → {new Date(b.endDate).toLocaleDateString("vi-VN")}
+                    </div>
+                  </Link>
+
+                  <div style={{ fontFamily: "var(--mono)", fontSize: "20px", fontWeight: 500 }}>{formatPrice(b.totalPrice)}đ</div>
+
+                  <div style={{ padding: "6px 14px", border: `1px solid ${statusMap[b.status]?.color || "var(--muc-mo)"}`, color: statusMap[b.status]?.color || "var(--muc-mo)", fontFamily: "var(--mono)", fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase" }}>
+                    {statusMap[b.status]?.label || b.status}
                   </div>
-                </Link>
 
-                <div style={{ fontFamily: "var(--mono)", fontSize: "20px", fontWeight: 500 }}>{formatPrice(b.totalPrice)}đ</div>
+                  <div style={{ display: "flex", gap: "8px", flexWrap: "wrap", justifyContent: "flex-end" }}>
+                    {/* Nút KÝ BIÊN BẢN */}
+                    {canSignHandover && (
+                      <button
+                        onClick={() => handleViewHandover(b)}
+                        style={{
+                          padding: "8px 16px",
+                          background: "var(--do)",
+                          border: "1px solid var(--do)",
+                          color: "var(--kem)",
+                          fontFamily: "var(--mono)",
+                          fontSize: "10px",
+                          letterSpacing: "2px",
+                          textTransform: "uppercase",
+                          cursor: "pointer",
+                          whiteSpace: "nowrap",
+                        }}
+                      >
+                        ✍️ Ký biên bản
+                      </button>
+                    )}
 
-                <div style={{ padding: "6px 14px", border: `1px solid ${statusMap[b.status]?.color || "var(--muc-mo)"}`, color: statusMap[b.status]?.color || "var(--muc-mo)", fontFamily: "var(--mono)", fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase" }}>
-                  {statusMap[b.status]?.label || b.status}
+                    {/* Nút XEM BIÊN BẢN (chỉ khi COMPLETED) */}
+                    {b.status === "COMPLETED" && (
+                      <button
+                        onClick={() => handleViewHandover(b)}
+                        style={{
+                          padding: "8px 16px",
+                          background: "transparent",
+                          border: "1px solid var(--muc)",
+                          color: "var(--muc)",
+                          fontFamily: "var(--mono)",
+                          fontSize: "10px",
+                          letterSpacing: "2px",
+                          textTransform: "uppercase",
+                          cursor: "pointer",
+                          whiteSpace: "nowrap",
+                        }}
+                      >
+                        👁 Xem biên bản
+                      </button>
+                    )}
+
+                    {/* Hủy đơn / Đánh giá */}
+                    {canCancel(b.status) ? (
+                      <button
+                        onClick={() => handleCancel(b)}
+                        style={{
+                          padding: "8px 16px",
+                          background: "transparent",
+                          border: "1px solid var(--do)",
+                          color: "var(--do)",
+                          fontFamily: "var(--mono)",
+                          fontSize: "10px",
+                          letterSpacing: "2px",
+                          textTransform: "uppercase",
+                          cursor: "pointer",
+                          whiteSpace: "nowrap",
+                        }}
+                      >
+                        Hủy đơn
+                      </button>
+                    ) : b.status === "COMPLETED" ? (
+                      <button
+                        onClick={() => navigate(`/review/${b.id}`)}
+                        style={{
+                          padding: "8px 16px",
+                          background: "transparent",
+                          border: "1px solid var(--dong)",
+                          color: "var(--dong)",
+                          fontFamily: "var(--mono)",
+                          fontSize: "10px",
+                          letterSpacing: "2px",
+                          textTransform: "uppercase",
+                          cursor: "pointer",
+                          whiteSpace: "nowrap",
+                        }}
+                      >
+                        ★ Đánh giá
+                      </button>
+                    ) : null}
+                  </div>
                 </div>
-
-                {canCancel(b.status) ? (
-                  <button onClick={() => handleCancel(b)} style={{ padding: "8px 16px", background: "transparent", border: "1px solid var(--do)", color: "var(--do)", fontFamily: "var(--mono)", fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", cursor: "pointer" }}>Hủy đơn</button>
-                ) : b.status === "COMPLETED" ? (
-                  <button onClick={() => navigate(`/review/${b.id}`)} style={{ padding: "8px 16px", background: "transparent", border: "1px solid var(--dong)", color: "var(--dong)", fontFamily: "var(--mono)", fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", cursor: "pointer" }}>★ Đánh giá</button>
-                ) : (
-                  <div style={{ width: "90px" }} />
-                )}
-              </div>
-            ))}
+              );
+            })}
           </div>
 
           {/* PHÂN TRANG */}
           {totalPages > 1 && (
             <>
               <div style={{ display: "flex", justifyContent: "center", gap: "8px", marginTop: "32px", flexWrap: "wrap" }}>
-                <button onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={currentPage === 1} style={paginationBtnStyle(currentPage === 1)}>← Trước</button>
-                {Array.from({ length: totalPages }, (_, i) => i + 1).map(p => (
+                <button onClick={() => setCurrentPage((p) => Math.max(1, p - 1))} disabled={currentPage === 1} style={paginationBtnStyle(currentPage === 1)}>← Trước</button>
+                {Array.from({ length: totalPages }, (_, i) => i + 1).map((p) => (
                   <button key={p} onClick={() => setCurrentPage(p)} style={paginationNumStyle(currentPage === p)}>{p}</button>
                 ))}
-                <button onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages} style={paginationBtnStyle(currentPage === totalPages)}>Sau →</button>
+                <button onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages} style={paginationBtnStyle(currentPage === totalPages)}>Sau →</button>
               </div>
               <div style={{ textAlign: "center", fontFamily: "var(--mono)", fontSize: "11px", color: "var(--muc-mo)", marginTop: "16px", marginBottom: "24px" }}>
                 Trang {currentPage} / {totalPages} · Tổng {filtered.length} đơn
@@ -169,9 +271,9 @@ export default function MyBookingsPage() {
 }
 
 function paginationBtnStyle(disabled) {
-  return { padding: '8px 16px', background: 'transparent', border: '1px solid var(--muc)', color: disabled ? 'var(--muc-mo)' : 'var(--muc)', fontFamily: 'var(--mono)', fontSize: '11px', letterSpacing: '2px', textTransform: 'uppercase', cursor: disabled ? 'not-allowed' : 'pointer', opacity: disabled ? 0.4 : 1 }
+  return { padding: "8px 16px", background: "transparent", border: "1px solid var(--muc)", color: disabled ? "var(--muc-mo)" : "var(--muc)", fontFamily: "var(--mono)", fontSize: "11px", letterSpacing: "2px", textTransform: "uppercase", cursor: disabled ? "not-allowed" : "pointer", opacity: disabled ? 0.4 : 1 };
 }
 
 function paginationNumStyle(active) {
-  return { padding: '8px 14px', background: active ? 'var(--muc)' : 'transparent', color: active ? 'var(--kem)' : 'var(--muc)', border: '1px solid var(--muc)', fontFamily: 'var(--mono)', fontSize: '11px', cursor: 'pointer', minWidth: '40px' }
+  return { padding: "8px 14px", background: active ? "var(--muc)" : "transparent", color: active ? "var(--kem)" : "var(--muc)", border: "1px solid var(--muc)", fontFamily: "var(--mono)", fontSize: "11px", cursor: "pointer", minWidth: "40px" };
 }
