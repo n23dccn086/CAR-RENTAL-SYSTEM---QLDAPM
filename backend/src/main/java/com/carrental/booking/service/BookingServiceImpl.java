@@ -10,6 +10,7 @@ import com.carrental.booking.repository.BookingDetailRepository;
 import com.carrental.booking.repository.BookingRepository;
 import com.carrental.car.entity.Car;
 import com.carrental.car.entity.CarStatus;
+import com.carrental.car.entity.RentalMode;
 import com.carrental.car.repository.CarRepository;
 import com.carrental.common.constant.ErrorCode;
 import com.carrental.common.exception.BadRequestException;
@@ -23,6 +24,7 @@ import com.carrental.payment.entity.Refund;
 import com.carrental.payment.repository.PaymentRepository;
 import com.carrental.payment.repository.RefundRepository;
 import com.carrental.user.entity.User;
+import com.carrental.user.entity.VerificationStatus;
 import com.carrental.user.repository.UserRepository;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
@@ -60,6 +62,14 @@ public class BookingServiceImpl implements BookingService {
 
         User customer = userRepository.findById(customerId)
                 .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.USER_NOT_FOUND));
+
+        // ===== UC-C03: Chặn đặt xe tự lái nếu chưa xác thực GPLX/CCCD =====
+        if (request.getRentalMode() == RentalMode.SELF_DRIVE
+                && customer.getVerificationStatus() != VerificationStatus.VERIFIED) {
+            throw new BadRequestException(ErrorCode.VALIDATION_ERROR,
+                    "Bạn cần xác thực GPLX/CCCD trước khi thuê xe tự lái. "
+                    + "Vui lòng vào mục 'Xác thực tài khoản'.");
+        }
 
         Car car = carRepository.findById(request.getCarId())
                 .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.CAR_NOT_FOUND));

@@ -4,8 +4,10 @@ import com.carrental.admin.dto.AdminUserResponse;
 import com.carrental.admin.dto.UserStatsResponse;
 import com.carrental.admin.service.AdminUserService;
 import com.carrental.common.dto.ApiResponse;
+import com.carrental.user.dto.VerificationResponse;
 import com.carrental.user.entity.Role;
 import com.carrental.user.entity.VerificationStatus;
+import com.carrental.user.service.VerificationService;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
@@ -24,6 +26,7 @@ import java.util.List;
 public class AdminUserController {
 
     AdminUserService adminUserService;
+    VerificationService verificationService;
 
     /**
      * Lấy danh sách user (có filter theo role/status).
@@ -90,5 +93,46 @@ public class AdminUserController {
         log.info("REST: Admin deleting user {}", id);
         adminUserService.deleteUser(id);
         return ApiResponse.success("Đã xóa tài khoản", null);
+    }
+
+    // ============================================================
+    // XÁC THỰC GPLX/CCCD (UC-C03)
+    // ============================================================
+
+    /**
+     * Xem hồ sơ xác thực của user (ảnh GPLX, CCCD, selfie).
+     * GET /api/v1/admin/users/{id}/verification
+     */
+    @GetMapping("/{id}/verification")
+    public ApiResponse<VerificationResponse> getUserVerification(@PathVariable Long id) {
+        log.info("REST: Admin viewing verification of user {}", id);
+        return ApiResponse.success(verificationService.getMyVerification(id));
+    }
+
+    /**
+     * Duyệt hồ sơ xác thực → user VERIFIED.
+     * PUT /api/v1/admin/users/{id}/verify
+     */
+    @PutMapping("/{id}/verify")
+    public ApiResponse<VerificationResponse> verifyUser(
+            @PathVariable Long id,
+            @RequestAttribute("userId") Long adminId) {
+        log.info("REST: Admin {} verifying user {}", adminId, id);
+        return ApiResponse.success("Đã duyệt xác thực",
+                verificationService.approve(id, adminId));
+    }
+
+    /**
+     * Từ chối hồ sơ xác thực → user REJECTED.
+     * PUT /api/v1/admin/users/{id}/reject-verification?reason=...
+     */
+    @PutMapping("/{id}/reject-verification")
+    public ApiResponse<VerificationResponse> rejectVerification(
+            @PathVariable Long id,
+            @RequestAttribute("userId") Long adminId,
+            @RequestParam String reason) {
+        log.info("REST: Admin {} rejecting verification of user {}", adminId, id);
+        return ApiResponse.success("Đã từ chối xác thực",
+                verificationService.reject(id, adminId, reason));
     }
 }

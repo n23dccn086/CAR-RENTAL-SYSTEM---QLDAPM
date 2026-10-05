@@ -57,3 +57,8 @@ pnpm-debug.log*
 # === Logs ===
 logs/
 *.log
+# ===== USER UPLOADS (không commit) =====
+backend/uploads/
+
+# ===== CHROMADB (build artifact, t? reindex) =====
+ai-service/data/chroma_db/

@@ -1,12 +1,10 @@
-package com.carrental.admin.dto;
+package com.carrental.user.dto;
 
-import com.carrental.user.entity.Role;
 import com.carrental.user.entity.VerificationStatus;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import lombok.*;
 import lombok.experimental.FieldDefaults;
 
-import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
 
@@ -16,28 +14,17 @@ import java.util.List;
 @AllArgsConstructor
 @FieldDefaults(level = AccessLevel.PRIVATE)
 @JsonInclude(JsonInclude.Include.NON_NULL)
-public class AdminUserResponse {
+public class VerificationResponse {
 
-    Long id;
-    String name;
-    String phone;
-    String email;
-    String avatarUrl;
-
-    Role role;
-    VerificationStatus verificationStatus;
+    Long userId;
+    String userName;
+    String userPhone;
+    VerificationStatus status;
     String rejectionReason;
+    LocalDateTime submittedAt;
+    LocalDateTime verifiedAt;
 
-    String address;
-    LocalDate dateOfBirth;
-
-    Boolean isActive;
-    LocalDateTime lastLoginAt;
-    LocalDateTime createdAt;
-    LocalDateTime updatedAt;
-    LocalDateTime deletedAt;
-
-    // ===== MỚI: Danh sách giấy tờ xác thực =====
+    // Danh sách ảnh đã upload
     List<DocumentInfo> documents;
 
     @Data
@@ -48,7 +35,7 @@ public class AdminUserResponse {
     @JsonInclude(JsonInclude.Include.NON_NULL)
     public static class DocumentInfo {
         Long id;
-        String documentType;    // GPLX_FRONT, GPLX_BACK, CCCD_FRONT, CCCD_BACK, SELFIE
+        String documentType;
         String documentUrl;
         LocalDateTime uploadedAt;
     }
