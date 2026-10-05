@@ -29,10 +29,6 @@ public class SecurityConfig {
 
     final JwtAuthFilter jwtAuthFilter;
 
-    /**
-     * Public endpoints — KHÔNG cần JWT.
-     * Bao gồm: auth, health, uploads, driver magic link.
-     */
     @Bean
     @Order(1)
     public SecurityFilterChain publicFilterChain(HttpSecurity http) throws Exception {
@@ -41,9 +37,12 @@ public class SecurityConfig {
                         "/api/v1/auth/**", "/auth/**",
                         "/api/v1/health", "/health",
                         "/error",
+                        "/files/**",                    // ← THÊM MỚI
+                        "/api/v1/files/**",
+                        "/api/v1/uploads/**",
                         "/uploads/**",
-                        "/api/v1/driver/assignments/**",   // ← THÊM: magic link cho tài xế
-                        "/driver/assignments/**"           // ← THÊM: fallback
+                        "/api/v1/driver/assignments/**",
+                        "/driver/assignments/**"
                 )
                 .csrf(AbstractHttpConfigurer::disable)
                 .cors(cors -> cors.configurationSource(corsConfigurationSource()))
@@ -55,9 +54,6 @@ public class SecurityConfig {
         return http.build();
     }
 
-    /**
-     * Public GET — không cần JWT.
-     */
     @Bean
     @Order(2)
     public SecurityFilterChain publicReadFilterChain(HttpSecurity http) throws Exception {
@@ -66,6 +62,8 @@ public class SecurityConfig {
                         "/api/v1/cars/**", "/cars/**",
                         "/api/v1/reviews/cars/**", "/reviews/cars/**",
                         "/api/v1/reviews/owner/**", "/reviews/owner/**",
+                        "/files/**",                     // ← THÊM MỚI
+                        "/api/v1/files/**",
                         "/uploads/**"
                 )
                 .csrf(AbstractHttpConfigurer::disable)
@@ -82,9 +80,6 @@ public class SecurityConfig {
         return http.build();
     }
 
-    /**
-     * Protected — tất cả cần JWT.
-     */
     @Bean
     @Order(3)
     public SecurityFilterChain apiFilterChain(HttpSecurity http) throws Exception {

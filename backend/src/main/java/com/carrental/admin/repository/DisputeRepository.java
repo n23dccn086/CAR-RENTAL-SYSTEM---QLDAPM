@@ -4,6 +4,7 @@ import com.carrental.admin.entity.Dispute;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
 
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 
@@ -16,7 +17,15 @@ public interface DisputeRepository extends JpaRepository<Dispute, Long> {
 
     List<Dispute> findByRaisedByOrderByCreatedAtDesc(Long raisedBy);
 
+    List<Dispute> findByAgainstUserOrderByCreatedAtDesc(Long againstUser);
+
     List<Dispute> findByBookingId(Long bookingId);
 
     long countByStatus(String status);
+
+    /** Tìm dispute có deadline phản bác đã hết hạn */
+    List<Dispute> findByStatusAndCounterDeadlineAtBefore(String status, LocalDateTime deadline);
+
+    /** Tìm dispute đang chờ bổ sung và đã hết hạn */
+    List<Dispute> findByStatusAndReviewDeadlineAtBefore(String status, LocalDateTime deadline);
 }

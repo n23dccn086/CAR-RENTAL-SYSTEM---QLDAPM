@@ -9,6 +9,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.StandardCopyOption;
+import java.util.List;
 import java.util.UUID;
 
 @Service
@@ -27,21 +28,34 @@ public class FileStorageService {
         }
     }
 
+    /**
+     * Lưu file — chấp nhận ảnh, PDF, Word.
+     * @param file file upload
+     * @param subDir thư mục con (vd: "disputes/1", "cars/2")
+     * @return URL public (vd: /files/disputes/1/abc.pdf)
+     */
     public String storeFile(MultipartFile file, String subDir) throws IOException {
         if (file.isEmpty()) {
             throw new IOException("File rỗng");
         }
 
         String contentType = file.getContentType();
-        if (contentType == null || !contentType.startsWith("image/")) {
-            throw new IOException("Chỉ chấp nhận file ảnh");
+        String originalName = file.getOriginalFilename();
+        String ext = getExtension(originalName);
+
+        boolean isImage = contentType != null && contentType.startsWith("image/");
+        boolean isPdf = "application/pdf".equals(contentType) || ".pdf".equals(ext);
+        boolean isWord = ".doc".equals(ext) || ".docx".equals(ext);
+
+        if (!isImage && !isPdf && !isWord) {
+            throw new IOException("Chỉ chấp nhận file ảnh, PDF hoặc Word");
         }
 
-        if (file.getSize() > 5 * 1024 * 1024) {
-            throw new IOException("Ảnh vượt quá 5MB");
+        long maxSize = (isPdf || isWord) ? 20 * 1024 * 1024 : 5 * 1024 * 1024;
+        if (file.getSize() > maxSize) {
+            throw new IOException("File vượt quá giới hạn cho phép");
         }
 
-        String ext = getExtension(file.getOriginalFilename());
         String filename = UUID.randomUUID().toString() + ext;
 
         Path targetDir = rootLocation.resolve(subDir);
@@ -51,12 +65,12 @@ public class FileStorageService {
         Files.copy(file.getInputStream(), targetPath, StandardCopyOption.REPLACE_EXISTING);
 
         log.info("Stored file: {}", targetPath);
-        return "/uploads/" + subDir + "/" + filename;
+        return "/files/" + subDir + "/" + filename;   // ← ĐỔI: /uploads/ → /files/
     }
 
     public void deleteFile(String fileUrl) {
         try {
-            String relativePath = fileUrl.replaceFirst("^/uploads/", "");
+            String relativePath = fileUrl.replaceFirst("^/files/", "");
             Path path = rootLocation.resolve(relativePath).normalize();
             if (path.startsWith(rootLocation)) {
                 Files.deleteIfExists(path);
@@ -68,8 +82,14 @@ public class FileStorageService {
     }
 
     private String getExtension(String filename) {
-        if (filename == null) return ".jpg";
+        if (filename == null) return ".bin";
         int dot = filename.lastIndexOf(".");
-        return dot > 0 ? filename.substring(dot).toLowerCase() : ".jpg";
+        if (dot <= 0) return ".bin";
+        String ext = filename.substring(dot).toLowerCase();
+        if (List.of(".jpg", ".jpeg", ".png", ".gif", ".webp",
+                ".pdf", ".doc", ".docx").contains(ext)) {
+            return ext;
+        }
+        return ".bin";
     }
 }

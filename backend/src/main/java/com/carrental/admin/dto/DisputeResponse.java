@@ -9,6 +9,7 @@ import java.time.LocalDateTime;
 
 /**
  * Response DTO cho tranh chấp.
+ * Đã bổ sung đầy đủ 11 field từ V13 + V14.
  */
 @Data
 @Builder
@@ -26,7 +27,7 @@ public class DisputeResponse {
 
     String category;
     String description;
-    String evidence;
+    String evidence;                    // JSON string: [{url, note, filename}]
     BigDecimal claimedAmount;
 
     String status;
@@ -35,6 +36,22 @@ public class DisputeResponse {
     Long resolvedBy;
     LocalDateTime resolvedAt;
     LocalDateTime deadlineAt;
+
+    // ===== MỚI (từ V13) =====
+    String adminRequest;
+    String evidenceHistory;
+    LocalDateTime lastSubmittedAt;
+
+    // ===== MỚI (từ V14) =====
+    String counterDescription;
+    String counterEvidence;             // JSON string
+    LocalDateTime counterFiledAt;
+    LocalDateTime counterDeadlineAt;
+    LocalDateTime reviewDeadlineAt;
+    String awaitingResponseFrom;
+
+    String contractUrl;
+    LocalDateTime contractGeneratedAt;
 
     LocalDateTime createdAt;
     LocalDateTime updatedAt;

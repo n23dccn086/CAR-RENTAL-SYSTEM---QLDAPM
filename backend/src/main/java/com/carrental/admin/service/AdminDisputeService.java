@@ -1,7 +1,6 @@
 package com.carrental.admin.service;
 
 import com.carrental.admin.dto.DisputeResponse;
-import com.carrental.admin.entity.Dispute;
 
 import java.math.BigDecimal;
 import java.util.List;
@@ -14,10 +13,17 @@ public interface AdminDisputeService {
 
     DisputeResponse getDisputeById(Long id);
 
-    DisputeResponse resolveDispute(Long disputeId, Long adminId,
-                                    String resolution, BigDecimal resolvedAmount);
+    DisputeResponse approveRaiser(Long disputeId, Long adminId);
 
-    DisputeResponse escalateDispute(Long disputeId, Long adminId, String reason);
+    DisputeResponse approveAgainst(Long disputeId, Long adminId);
+
+    DisputeResponse resolveDispute(Long disputeId, Long adminId,
+            String resolution, BigDecimal resolvedAmount);
+
+    DisputeResponse requestEvidence(Long disputeId, Long adminId, String target, String request);
+
+    DisputeResponse finalizeDispute(Long disputeId, Long adminId,
+            String resolution, BigDecimal resolvedAmount);
 
     long countPending();
 }

@@ -85,6 +85,7 @@ public enum ErrorCode {
     DISPUTE_NOT_FOUND(13001, "Không tìm thấy tranh chấp"),
     DISPUTE_ALREADY_RESOLVED(13002, "Tranh chấp đã được giải quyết"),
     DISPUTE_NOT_OWNED(13003, "Bạn không có quyền xử lý tranh chấp này"),
+    DISPUTE_INVALID_STATUS(13004, "Trạng thái tranh chấp không hợp lệ để thực hiện hành động này"),
 
     // ===== WITHDRAWAL (14xxx) =====
     WITHDRAWAL_NOT_FOUND(14001, "Không tìm thấy yêu cầu rút tiền"),

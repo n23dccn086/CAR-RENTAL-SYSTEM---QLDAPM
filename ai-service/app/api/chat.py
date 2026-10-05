@@ -5,6 +5,7 @@ from app.models.schemas import (
 )
 from app.services.llm_service import generate_reply, detect_intent
 from app.services.backend_client import get_my_bookings, search_cars
+from app.services.rag_service import retrieve_context
 from datetime import datetime
 from uuid import uuid4
 
@@ -43,6 +44,17 @@ async def chat(
         if cars and not (isinstance(cars, dict) and cars.get("error")):
             context["cars"] = cars
 
+    # ===== RAG: retrieve knowledge base cho policy / emergency / general =====
+    # (Không chạy cho check_booking vì intent đó cần data realtime từ backend)
+    if intent in ("policy_inquiry", "emergency", "general"):
+        try:
+            rag_context = retrieve_context(request.message, top_k=3)
+            if rag_context:
+                context["rag"] = rag_context
+                print(f"[Chat] RAG retrieved {len(rag_context)} chars for: {request.message[:50]}")
+        except Exception as e:
+            print(f"[Chat] RAG retrieve failed: {e}")
+
     # ===== Gọi Gemini với context =====
     result = generate_reply(request.message, history, context)
 
@@ -62,6 +74,7 @@ async def chat(
     return ChatResponse(
         reply=result["reply"],
         intent=intent,
+        session_id=session_id,
         suggestions=[
             "Đơn hàng của tôi thế nào?",
             "Tìm xe 7 chỗ",

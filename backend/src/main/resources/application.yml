@@ -32,8 +32,8 @@ spring:
   servlet:
     multipart:
       enabled: true
-      max-file-size: 5MB
-      max-request-size: 50MB
+      max-file-size: 20MB
+      max-request-size: 100MB
 
 server:
   port: 8080
@@ -49,7 +49,6 @@ logging:
   level:
     root: WARN
     com.carrental: INFO
-    com.carrental.notification.service.MockNotificationSender: INFO
     org.hibernate: WARN
     org.springframework: WARN
     com.zaxxer.hikari: WARN

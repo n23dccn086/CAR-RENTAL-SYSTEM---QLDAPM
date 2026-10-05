@@ -8,6 +8,10 @@ export default function AdminUsersPage() {
   const [filter, setFilter] = useState({ role: '', status: '' })
   const [msg, setMsg] = useState('')
 
+  // ===== PHÂN TRANG =====
+  const [currentPage, setCurrentPage] = useState(1)
+  const ITEMS_PER_PAGE = 10
+
   const fetchData = async () => {
     setLoading(true)
     try {
@@ -30,6 +34,11 @@ export default function AdminUsersPage() {
 
   useEffect(() => { fetchData() }, [filter])
 
+  // Reset page khi filter đổi
+  useEffect(() => {
+    setCurrentPage(1)
+  }, [filter])
+
   const handleAction = async (id, action) => {
     if (!window.confirm(`Xác nhận ${action} user #${id}?`)) return
     try {
@@ -50,6 +59,11 @@ export default function AdminUsersPage() {
     DRIVER: '#2a9d8f',
     ADMIN: '#8b2c2c',
   }
+
+  // ===== TÍNH TOÁN PHÂN TRANG =====
+  const totalPages = Math.ceil(users.length / ITEMS_PER_PAGE)
+  const startIndex = (currentPage - 1) * ITEMS_PER_PAGE
+  const currentUsers = users.slice(startIndex, startIndex + ITEMS_PER_PAGE)
 
   return (
     <div style={{ maxWidth: '1400px', margin: '0 auto', padding: '60px 48px' }}>
@@ -110,57 +124,62 @@ export default function AdminUsersPage() {
           Không có user nào.
         </p>
       ) : (
-        <div>
-          {users.map(u => (
-            <div key={u.id} style={{
-              display: 'grid',
-              gridTemplateColumns: '60px 1fr auto auto auto',
-              gap: '24px',
-              alignItems: 'center',
-              padding: '20px 0',
-              borderBottom: '1px solid rgba(15,14,12,0.12)'
-            }}>
-              <div style={{
-                width: '48px', height: '48px', borderRadius: '50%',
-                background: 'var(--dong)', color: 'var(--muc)',
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                fontFamily: 'var(--serif)', fontWeight: 700, fontSize: '20px'
+        <>
+          <div>
+            {currentUsers.map(u => (
+              <div key={u.id} style={{
+                display: 'grid', gridTemplateColumns: '60px 1fr auto auto auto',
+                gap: '24px', alignItems: 'center', padding: '20px 0',
+                borderBottom: '1px solid rgba(15,14,12,0.12)'
               }}>
-                {u.name?.charAt(0)?.toUpperCase() || '?'}
-              </div>
-              <div>
-                <div style={{ fontFamily: 'var(--serif)', fontSize: '18px', fontWeight: 700 }}>{u.name}</div>
-                <div style={{ fontFamily: 'var(--mono)', fontSize: '11px', letterSpacing: '1px', color: 'var(--muc-mo)' }}>
-                  {u.phone} {u.email && `· ${u.email}`}
+                <div style={{ width: '48px', height: '48px', borderRadius: '50%', background: 'var(--dong)', color: 'var(--muc)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'var(--serif)', fontWeight: 700, fontSize: '20px' }}>
+                  {u.name?.charAt(0)?.toUpperCase() || '?'}
+                </div>
+                <div>
+                  <div style={{ fontFamily: 'var(--serif)', fontSize: '18px', fontWeight: 700 }}>{u.name}</div>
+                  <div style={{ fontFamily: 'var(--mono)', fontSize: '11px', letterSpacing: '1px', color: 'var(--muc-mo)' }}>
+                    {u.phone} {u.email && `· ${u.email}`}
+                  </div>
+                </div>
+                <div style={{ padding: '4px 10px', background: roleColors[u.role] || 'var(--muc-mo)', color: 'var(--kem)', fontFamily: 'var(--mono)', fontSize: '9px', letterSpacing: '1px' }}>
+                  {u.role}
+                </div>
+                <div style={{
+                  padding: '4px 10px',
+                  border: `1px solid ${u.verificationStatus === 'VERIFIED' ? 'var(--xanh-reu)' : u.verificationStatus === 'PENDING' ? 'var(--dong)' : 'var(--do)'}`,
+                  color: u.verificationStatus === 'VERIFIED' ? 'var(--xanh-reu)' : u.verificationStatus === 'PENDING' ? 'var(--dong)' : 'var(--do)',
+                  fontFamily: 'var(--mono)', fontSize: '9px', letterSpacing: '1px'
+                }}>
+                  {u.verificationStatus}
+                </div>
+                <div style={{ display: 'flex', gap: '8px' }}>
+                  {u.isActive ? (
+                    <button onClick={() => handleAction(u.id, 'lock')} style={btnStyle('var(--do)')}>Khóa</button>
+                  ) : (
+                    <button onClick={() => handleAction(u.id, 'unlock')} style={btnStyle('var(--xanh-reu)')}>Mở</button>
+                  )}
+                  <button onClick={() => handleAction(u.id, 'delete')} style={btnStyle('var(--muc-mo)')}>Xóa</button>
                 </div>
               </div>
-              <div style={{
-                padding: '4px 10px',
-                background: roleColors[u.role] || 'var(--muc-mo)',
-                color: 'var(--kem)',
-                fontFamily: 'var(--mono)', fontSize: '9px', letterSpacing: '1px'
-              }}>
-                {u.role}
+            ))}
+          </div>
+
+          {/* PHÂN TRANG */}
+          {totalPages > 1 && (
+            <>
+              <div style={{ display: 'flex', justifyContent: 'center', gap: '8px', marginTop: '32px', flexWrap: 'wrap' }}>
+                <button onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={currentPage === 1} style={paginationBtnStyle(currentPage === 1)}>← Trước</button>
+                {Array.from({ length: totalPages }, (_, i) => i + 1).map(p => (
+                  <button key={p} onClick={() => setCurrentPage(p)} style={paginationNumStyle(currentPage === p)}>{p}</button>
+                ))}
+                <button onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages} style={paginationBtnStyle(currentPage === totalPages)}>Sau →</button>
               </div>
-              <div style={{
-                padding: '4px 10px',
-                border: `1px solid ${u.verificationStatus === 'VERIFIED' ? 'var(--xanh-reu)' : u.verificationStatus === 'PENDING' ? 'var(--dong)' : 'var(--do)'}`,
-                color: u.verificationStatus === 'VERIFIED' ? 'var(--xanh-reu)' : u.verificationStatus === 'PENDING' ? 'var(--dong)' : 'var(--do)',
-                fontFamily: 'var(--mono)', fontSize: '9px', letterSpacing: '1px'
-              }}>
-                {u.verificationStatus}
+              <div style={{ textAlign: 'center', fontFamily: 'var(--mono)', fontSize: '11px', color: 'var(--muc-mo)', marginTop: '16px', marginBottom: '24px' }}>
+                Trang {currentPage} / {totalPages} · Tổng {users.length} user
               </div>
-              <div style={{ display: 'flex', gap: '8px' }}>
-                {u.isActive ? (
-                  <button onClick={() => handleAction(u.id, 'lock')} style={btnStyle('var(--do)')}>Khóa</button>
-                ) : (
-                  <button onClick={() => handleAction(u.id, 'unlock')} style={btnStyle('var(--xanh-reu)')}>Mở</button>
-                )}
-                <button onClick={() => handleAction(u.id, 'delete')} style={btnStyle('var(--muc-mo)')}>Xóa</button>
-              </div>
-            </div>
-          ))}
-        </div>
+            </>
+          )}
+        </>
       )}
     </div>
   )
@@ -176,16 +195,13 @@ function StatCard({ label, value, color = 'var(--muc)' }) {
 }
 
 function btnStyle(color) {
-  return {
-    padding: '6px 14px',
-    background: 'transparent',
-    border: `1px solid ${color}`,
-    color,
-    fontFamily: 'var(--mono)',
-    fontSize: '10px',
-    letterSpacing: '1px',
-    textTransform: 'uppercase',
-    cursor: 'pointer',
-    transition: 'all 0.3s'
-  }
+  return { padding: '6px 14px', background: 'transparent', border: `1px solid ${color}`, color, fontFamily: 'var(--mono)', fontSize: '10px', letterSpacing: '1px', textTransform: 'uppercase', cursor: 'pointer', transition: 'all 0.3s' }
+}
+
+function paginationBtnStyle(disabled) {
+  return { padding: '8px 16px', background: 'transparent', border: '1px solid var(--muc)', color: disabled ? 'var(--muc-mo)' : 'var(--muc)', fontFamily: 'var(--mono)', fontSize: '11px', letterSpacing: '2px', textTransform: 'uppercase', cursor: disabled ? 'not-allowed' : 'pointer', opacity: disabled ? 0.4 : 1 }
+}
+
+function paginationNumStyle(active) {
+  return { padding: '8px 14px', background: active ? 'var(--muc)' : 'transparent', color: active ? 'var(--kem)' : 'var(--muc)', border: '1px solid var(--muc)', fontFamily: 'var(--mono)', fontSize: '11px', cursor: 'pointer', minWidth: '40px' }
 }

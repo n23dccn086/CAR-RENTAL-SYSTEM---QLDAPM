@@ -38,8 +38,8 @@ export default function WheelNav() {
     ...(isLoggedIn
       ? [{ path: "/notifications", label: "Thông báo", icon: "◎" }]
       : []),
-    ...(isLoggedIn
-      ? [{ path: "/disputes", label: "Tranh chấp", icon: "⚖" }] // ← MỚI
+    ...(isLoggedIn && user?.role !== "ADMIN"
+      ? [{ path: "/disputes", label: "Tranh chấp", icon: "⚖" }]
       : []),
     ...(isLoggedIn ? [{ path: "/profile", label: "Hồ sơ", icon: "❦" }] : []),
     ...(isLoggedIn && user?.role === "OWNER"

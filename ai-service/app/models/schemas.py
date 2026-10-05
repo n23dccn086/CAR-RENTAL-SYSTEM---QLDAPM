@@ -22,6 +22,7 @@ class ChatResponse(BaseModel):
     """Response từ chatbot."""
     reply: str
     intent: Optional[str] = None
+    session_id: Optional[str] = None
     entities: Optional[Dict[str, Any]] = None
     cars: Optional[List[CarSuggestion]] = None
     suggestions: Optional[List[str]] = None

@@ -9,7 +9,10 @@ export default function NotificationsPage() {
   const [unreadCount, setUnreadCount] = useState(0)
   const [message, setMessage] = useState('')
 
-  // ===== FETCH =====
+  // ===== PHÂN TRANG =====
+  const [currentPage, setCurrentPage] = useState(1)
+  const ITEMS_PER_PAGE = 10
+
   const fetchNotifications = async () => {
     setLoading(true)
     try {
@@ -30,9 +33,7 @@ export default function NotificationsPage() {
     try {
       const res = await api.get('/notifications/unread-count')
       setUnreadCount(res.data.data || 0)
-    } catch (err) {
-      // ignore
-    }
+    } catch (err) {}
   }
 
   useEffect(() => {
@@ -40,7 +41,11 @@ export default function NotificationsPage() {
     fetchUnreadCount()
   }, [filter, unreadOnly])
 
-  // ===== ACTIONS =====
+  // Reset page khi filter/unreadOnly đổi
+  useEffect(() => {
+    setCurrentPage(1)
+  }, [filter, unreadOnly])
+
   const handleMarkAsRead = async (id) => {
     try {
       await api.put(`/notifications/${id}/read`)
@@ -75,7 +80,6 @@ export default function NotificationsPage() {
     }
   }
 
-  // ===== HELPERS =====
   const typeMap = {
     BOOKING_NEW: { label: 'Đơn mới', color: 'var(--dong)' },
     BOOKING_APPROVED: { label: 'Đơn duyệt', color: 'var(--xanh-reu)' },
@@ -98,33 +102,30 @@ export default function NotificationsPage() {
     })
   }
 
+  // ===== TÍNH TOÁN PHÂN TRANG =====
+  const totalPages = Math.ceil(notifications.length / ITEMS_PER_PAGE)
+  const startIndex = (currentPage - 1) * ITEMS_PER_PAGE
+  const currentNotifications = notifications.slice(startIndex, startIndex + ITEMS_PER_PAGE)
+
   return (
     <div style={{ maxWidth: '1000px', margin: '0 auto', padding: '60px 48px' }}>
       <div className="chapter-num" style={{ marginBottom: '24px' }}>Chương Thông Báo</div>
 
       <div style={{
-        display: 'flex',
-        justifyContent: 'space-between',
-        alignItems: 'flex-end',
-        marginBottom: '40px'
+        display: 'flex', justifyContent: 'space-between',
+        alignItems: 'flex-end', marginBottom: '40px'
       }}>
         <div>
           <h1 style={{
-            fontFamily: 'var(--serif)',
-            fontSize: 'clamp(36px, 5vw, 56px)',
-            fontWeight: 900,
-            letterSpacing: '-2px',
-            margin: 0
+            fontFamily: 'var(--serif)', fontSize: 'clamp(36px, 5vw, 56px)',
+            fontWeight: 900, letterSpacing: '-2px', margin: 0
           }}>
             Tin <em style={{ fontStyle: 'italic', color: 'var(--do)' }}>nhắn.</em>
           </h1>
           {unreadCount > 0 && (
             <div style={{
-              fontFamily: 'var(--mono)',
-              fontSize: '11px',
-              letterSpacing: '2px',
-              color: 'var(--do)',
-              marginTop: '12px'
+              fontFamily: 'var(--mono)', fontSize: '11px',
+              letterSpacing: '2px', color: 'var(--do)', marginTop: '12px'
             }}>
               {unreadCount} CHƯA ĐỌC
             </div>
@@ -132,20 +133,12 @@ export default function NotificationsPage() {
         </div>
 
         {unreadCount > 0 && (
-          <button
-            onClick={handleMarkAllAsRead}
-            style={{
-              padding: '12px 24px',
-              background: 'transparent',
-              border: '1px solid var(--muc)',
-              color: 'var(--muc)',
-              fontFamily: 'var(--mono)',
-              fontSize: '10px',
-              letterSpacing: '2px',
-              textTransform: 'uppercase',
-              cursor: 'pointer'
-            }}
-          >
+          <button onClick={handleMarkAllAsRead} style={{
+            padding: '12px 24px', background: 'transparent',
+            border: '1px solid var(--muc)', color: 'var(--muc)',
+            fontFamily: 'var(--mono)', fontSize: '10px',
+            letterSpacing: '2px', textTransform: 'uppercase', cursor: 'pointer'
+          }}>
             Đọc tất cả
           </button>
         )}
@@ -153,13 +146,9 @@ export default function NotificationsPage() {
 
       {message && (
         <div style={{
-          background: 'rgba(74,93,63,0.1)',
-          border: '1px solid var(--xanh-reu)',
-          padding: '12px 16px',
-          marginBottom: '24px',
-          color: 'var(--xanh-reu)',
-          fontFamily: 'var(--serif-2)',
-          fontStyle: 'italic'
+          background: 'rgba(74,93,63,0.1)', border: '1px solid var(--xanh-reu)',
+          padding: '12px 16px', marginBottom: '24px', color: 'var(--xanh-reu)',
+          fontFamily: 'var(--serif-2)', fontStyle: 'italic'
         }}>
           {message}
         </div>
@@ -167,11 +156,8 @@ export default function NotificationsPage() {
 
       {/* FILTER */}
       <div style={{
-        display: 'flex',
-        gap: '12px',
-        marginBottom: '40px',
-        flexWrap: 'wrap',
-        alignItems: 'center'
+        display: 'flex', gap: '12px', marginBottom: '40px',
+        flexWrap: 'wrap', alignItems: 'center'
       }}>
         {[
           { v: '', l: 'Tất cả' },
@@ -181,35 +167,22 @@ export default function NotificationsPage() {
           { v: 'REFUND_SUCCESS', l: 'Hoàn tiền' },
           { v: 'SYSTEM', l: 'Hệ thống' },
         ].map(opt => (
-          <button
-            key={opt.v}
-            onClick={() => setFilter(opt.v)}
-            style={{
-              padding: '8px 16px',
-              background: filter === opt.v ? 'var(--muc)' : 'transparent',
-              color: filter === opt.v ? 'var(--kem)' : 'var(--muc-mo)',
-              border: `1px solid ${filter === opt.v ? 'var(--muc)' : 'rgba(15,14,12,0.2)'}`,
-              fontFamily: 'var(--mono)',
-              fontSize: '10px',
-              letterSpacing: '2px',
-              textTransform: 'uppercase',
-              cursor: 'pointer'
-            }}
-          >
+          <button key={opt.v} onClick={() => setFilter(opt.v)} style={{
+            padding: '8px 16px',
+            background: filter === opt.v ? 'var(--muc)' : 'transparent',
+            color: filter === opt.v ? 'var(--kem)' : 'var(--muc-mo)',
+            border: `1px solid ${filter === opt.v ? 'var(--muc)' : 'rgba(15,14,12,0.2)'}`,
+            fontFamily: 'var(--mono)', fontSize: '10px', letterSpacing: '2px',
+            textTransform: 'uppercase', cursor: 'pointer'
+          }}>
             {opt.l}
           </button>
         ))}
 
         <label style={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: '8px',
-          fontFamily: 'var(--mono)',
-          fontSize: '10px',
-          letterSpacing: '2px',
-          textTransform: 'uppercase',
-          cursor: 'pointer',
-          marginLeft: 'auto'
+          display: 'flex', alignItems: 'center', gap: '8px',
+          fontFamily: 'var(--mono)', fontSize: '10px', letterSpacing: '2px',
+          textTransform: 'uppercase', cursor: 'pointer', marginLeft: 'auto'
         }}>
           <input
             type="checkbox"
@@ -233,119 +206,152 @@ export default function NotificationsPage() {
           </p>
         </div>
       ) : (
-        <div>
-          {notifications.map(n => (
-            <div
-              key={n.id}
-              style={{
-                display: 'grid',
-                gridTemplateColumns: '120px 1fr auto',
-                gap: '24px',
-                alignItems: 'center',
-                padding: '24px 0',
+        <>
+          <div>
+            {currentNotifications.map(n => (
+              <div key={n.id} style={{
+                display: 'grid', gridTemplateColumns: '120px 1fr auto',
+                gap: '24px', alignItems: 'center', padding: '24px 0',
                 borderBottom: '1px solid rgba(15,14,12,0.12)',
                 background: n.isRead ? 'transparent' : 'rgba(201,169,97,0.05)',
                 opacity: n.isRead ? 0.7 : 1,
                 paddingLeft: n.isRead ? '0' : '16px',
                 paddingRight: n.isRead ? '0' : '16px',
                 transition: 'all 0.3s'
-              }}
-            >
-              {/* TYPE + UNREAD DOT */}
-              <div>
-                <div style={{
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  gap: '8px',
-                  padding: '4px 12px',
-                  border: `1px solid ${typeMap[n.type]?.color || 'var(--muc-mo)'}`,
-                  color: typeMap[n.type]?.color || 'var(--muc-mo)',
-                  fontFamily: 'var(--mono)',
-                  fontSize: '9px',
-                  letterSpacing: '1.5px',
-                  textTransform: 'uppercase'
-                }}>
+              }}>
+                <div>
+                  <div style={{
+                    display: 'inline-flex', alignItems: 'center', gap: '8px',
+                    padding: '4px 12px',
+                    border: `1px solid ${typeMap[n.type]?.color || 'var(--muc-mo)'}`,
+                    color: typeMap[n.type]?.color || 'var(--muc-mo)',
+                    fontFamily: 'var(--mono)', fontSize: '9px',
+                    letterSpacing: '1.5px', textTransform: 'uppercase'
+                  }}>
+                    {!n.isRead && (
+                      <span style={{
+                        width: '6px', height: '6px', borderRadius: '50%',
+                        background: 'var(--do)'
+                      }}></span>
+                    )}
+                    {typeMap[n.type]?.label || n.type}
+                  </div>
+                </div>
+
+                <div>
+                  <div style={{
+                    fontFamily: 'var(--serif)', fontSize: '18px',
+                    fontWeight: 700, marginBottom: '6px', color: 'var(--muc)'
+                  }}>
+                    {n.title}
+                  </div>
+                  <div style={{
+                    fontFamily: 'var(--serif-2)', fontStyle: 'italic',
+                    fontSize: '15px', color: 'var(--muc-mo)',
+                    marginBottom: '6px', lineHeight: 1.5
+                  }}>
+                    {n.content}
+                  </div>
+                  <div style={{
+                    fontFamily: 'var(--mono)', fontSize: '10px',
+                    letterSpacing: '1px', color: 'var(--muc-mo)'
+                  }}>
+                    {formatDateTime(n.createdAt)}
+                  </div>
+                </div>
+
+                <div style={{ display: 'flex', gap: '8px' }}>
                   {!n.isRead && (
-                    <span style={{
-                      width: '6px',
-                      height: '6px',
-                      borderRadius: '50%',
-                      background: 'var(--do)'
-                    }}></span>
+                    <button onClick={() => handleMarkAsRead(n.id)} title="Đánh dấu đã đọc" style={btnStyle('var(--xanh-reu)')}>
+                      ✓ Đọc
+                    </button>
                   )}
-                  {typeMap[n.type]?.label || n.type}
-                </div>
-              </div>
-
-              {/* CONTENT */}
-              <div>
-                <div style={{
-                  fontFamily: 'var(--serif)',
-                  fontSize: '18px',
-                  fontWeight: 700,
-                  marginBottom: '6px',
-                  color: 'var(--muc)'
-                }}>
-                  {n.title}
-                </div>
-                <div style={{
-                  fontFamily: 'var(--serif-2)',
-                  fontStyle: 'italic',
-                  fontSize: '15px',
-                  color: 'var(--muc-mo)',
-                  marginBottom: '6px',
-                  lineHeight: 1.5
-                }}>
-                  {n.content}
-                </div>
-                <div style={{
-                  fontFamily: 'var(--mono)',
-                  fontSize: '10px',
-                  letterSpacing: '1px',
-                  color: 'var(--muc-mo)'
-                }}>
-                  {formatDateTime(n.createdAt)}
-                </div>
-              </div>
-
-              {/* ACTIONS */}
-              <div style={{ display: 'flex', gap: '8px' }}>
-                {!n.isRead && (
-                  <button
-                    onClick={() => handleMarkAsRead(n.id)}
-                    title="Đánh dấu đã đọc"
-                    style={btnStyle('var(--xanh-reu)')}
-                  >
-                    ✓ Đọc
+                  <button onClick={() => handleDelete(n.id)} title="Xóa" style={btnStyle('var(--do)')}>
+                    ✕
                   </button>
-                )}
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {/* PHÂN TRANG */}
+          {totalPages > 1 && (
+            <>
+              <div style={{
+                display: 'flex', justifyContent: 'center', gap: '8px',
+                marginTop: '32px', flexWrap: 'wrap'
+              }}>
                 <button
-                  onClick={() => handleDelete(n.id)}
-                  title="Xóa"
-                  style={btnStyle('var(--do)')}
+                  onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                  disabled={currentPage === 1}
+                  style={paginationBtnStyle(currentPage === 1)}
                 >
-                  ✕
+                  ← Trước
+                </button>
+
+                {Array.from({ length: totalPages }, (_, i) => i + 1).map(p => (
+                  <button
+                    key={p}
+                    onClick={() => setCurrentPage(p)}
+                    style={paginationNumStyle(currentPage === p)}
+                  >
+                    {p}
+                  </button>
+                ))}
+
+                <button
+                  onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                  disabled={currentPage === totalPages}
+                  style={paginationBtnStyle(currentPage === totalPages)}
+                >
+                  Sau →
                 </button>
               </div>
-            </div>
-          ))}
-        </div>
+
+              <div style={{
+                textAlign: 'center', fontFamily: 'var(--mono)',
+                fontSize: '11px', color: 'var(--muc-mo)',
+                marginTop: '16px', marginBottom: '24px'
+              }}>
+                Trang {currentPage} / {totalPages} · Tổng {notifications.length} thông báo
+              </div>
+            </>
+          )}
+        </>
       )}
     </div>
   )
 }
 
+function paginationBtnStyle(disabled) {
+  return {
+    padding: '8px 16px', background: 'transparent',
+    border: '1px solid var(--muc)',
+    color: disabled ? 'var(--muc-mo)' : 'var(--muc)',
+    fontFamily: 'var(--mono)', fontSize: '11px', letterSpacing: '2px',
+    textTransform: 'uppercase',
+    cursor: disabled ? 'not-allowed' : 'pointer',
+    opacity: disabled ? 0.4 : 1
+  }
+}
+
+function paginationNumStyle(active) {
+  return {
+    padding: '8px 14px',
+    background: active ? 'var(--muc)' : 'transparent',
+    color: active ? 'var(--kem)' : 'var(--muc)',
+    border: '1px solid var(--muc)',
+    fontFamily: 'var(--mono)', fontSize: '11px',
+    cursor: 'pointer', minWidth: '40px'
+  }
+}
+
 function btnStyle(color) {
   return {
-    padding: '6px 12px',
-    background: 'transparent',
-    border: `1px solid ${color}`,
-    color,
-    fontFamily: 'var(--mono)',
-    fontSize: '10px',
-    letterSpacing: '1px',
-    textTransform: 'uppercase',
-    cursor: 'pointer',
-    whiteSpace: 'nowrap'
+    padding: '6px 12px', background: 'transparent',
+    border: `1px solid ${color}`, color,
+    fontFamily: 'var(--mono)', fontSize: '10px',
+    letterSpacing: '1px', textTransform: 'uppercase',
+    cursor: 'pointer', whiteSpace: 'nowrap'
   }
 }

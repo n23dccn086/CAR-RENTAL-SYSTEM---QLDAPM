@@ -13,10 +13,6 @@ import org.springframework.web.bind.annotation.*;
 import java.math.BigDecimal;
 import java.util.List;
 
-/**
- * Controller quản lý tranh chấp (Admin).
- * Base path: /api/v1/admin/disputes
- */
 @RestController
 @RequestMapping("/admin/disputes")
 @RequiredArgsConstructor
@@ -27,10 +23,6 @@ public class AdminDisputeController {
 
     AdminDisputeService disputeService;
 
-    /**
-     * Lấy tất cả tranh chấp (có filter theo status).
-     * GET /api/v1/admin/disputes?status=PENDING
-     */
     @GetMapping
     public ApiResponse<List<DisputeResponse>> getAllDisputes(
             @RequestParam(required = false) String status) {
@@ -40,28 +32,36 @@ public class AdminDisputeController {
         return ApiResponse.success(disputeService.getAllDisputes());
     }
 
-    /**
-     * Chi tiết tranh chấp.
-     * GET /api/v1/admin/disputes/{id}
-     */
     @GetMapping("/{id}")
     public ApiResponse<DisputeResponse> getDisputeById(@PathVariable Long id) {
         return ApiResponse.success(disputeService.getDisputeById(id));
     }
 
-    /**
-     * Đếm số tranh chấp đang chờ.
-     * GET /api/v1/admin/disputes/pending-count
-     */
     @GetMapping("/pending-count")
     public ApiResponse<Long> countPending() {
         return ApiResponse.success(disputeService.countPending());
     }
 
-    /**
-     * Giải quyết tranh chấp.
-     * PUT /api/v1/admin/disputes/{id}/resolve
-     */
+    /** Admin duyệt form của người khởi kiện (raiser) */
+    @PutMapping("/{id}/approve-raiser")
+    public ApiResponse<DisputeResponse> approveRaiser(
+            @PathVariable Long id,
+            @RequestAttribute("userId") Long adminId) {
+        log.info("REST: Admin {} approving raiser for dispute {}", adminId, id);
+        return ApiResponse.success("Đã duyệt form người khởi kiện",
+                disputeService.approveRaiser(id, adminId));
+    }
+
+    /** Admin duyệt form của người bị kiện (against) */
+    @PutMapping("/{id}/approve-against")
+    public ApiResponse<DisputeResponse> approveAgainst(
+            @PathVariable Long id,
+            @RequestAttribute("userId") Long adminId) {
+        log.info("REST: Admin {} approving against for dispute {}", adminId, id);
+        return ApiResponse.success("Đã duyệt form người bị kiện",
+                disputeService.approveAgainst(id, adminId));
+    }
+
     @PutMapping("/{id}/resolve")
     public ApiResponse<DisputeResponse> resolveDispute(
             @PathVariable Long id,
@@ -74,16 +74,29 @@ public class AdminDisputeController {
     }
 
     /**
-     * Chuyển tranh chấp lên cấp cao.
-     * PUT /api/v1/admin/disputes/{id}/escalate
+     * Admin yêu cầu bổ sung bằng chứng.
+     * @param target "RAISER" | "AGAINST" | "BOTH"
      */
-    @PutMapping("/{id}/escalate")
-    public ApiResponse<DisputeResponse> escalateDispute(
+    @PutMapping("/{id}/request-evidence")
+    public ApiResponse<DisputeResponse> requestEvidence(
             @PathVariable Long id,
             @RequestAttribute("userId") Long adminId,
-            @RequestParam String reason) {
-        log.info("REST: Admin {} escalating dispute {}", adminId, id);
-        return ApiResponse.success("Đã chuyển cấp",
-                disputeService.escalateDispute(id, adminId, reason));
+            @RequestParam String target,
+            @RequestParam String request) {
+        log.info("REST: Admin {} requesting evidence for dispute {} target {}",
+                adminId, id, target);
+        return ApiResponse.success("Đã gửi yêu cầu bổ sung bằng chứng",
+                disputeService.requestEvidence(id, adminId, target, request));
+    }
+
+    @PutMapping("/{id}/finalize")
+    public ApiResponse<DisputeResponse> finalizeDispute(
+            @PathVariable Long id,
+            @RequestAttribute("userId") Long adminId,
+            @RequestParam String resolution,
+            @RequestParam(required = false) BigDecimal resolvedAmount) {
+        log.info("REST: Admin {} finalizing dispute {}", adminId, id);
+        return ApiResponse.success("Đã tạo hợp đồng tranh chấp",
+                disputeService.finalizeDispute(id, adminId, resolution, resolvedAmount));
     }
 }

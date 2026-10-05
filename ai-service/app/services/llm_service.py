@@ -34,13 +34,16 @@ Quy định vượt thời gian:
 - Vượt 4h - 24h: 100% giá thuê ngày
 - Vượt trên 24h: theo ngày + phạt 20%
 
+Khi có thêm "TÀI LIỆU THAM KHẢO" trong context, hãy ưu tiên dùng thông tin đó để trả lời.
+Nếu tài liệu tham khảo không đề cập, mới dùng kiến thức chung.
+Nếu vẫn không biết, nói: "Tôi chưa có thông tin về vấn đề này, vui lòng liên hệ hotline 1900-xxxx."
+
 Trả lời bằng tiếng Việt, thân thiện, ngắn gọn, dễ hiểu.
-Nếu không biết, nói: "Tôi chưa có thông tin về vấn đề này, vui lòng liên hệ hotline 1900-xxxx."
 """
 
 
 def generate_reply(user_message: str, history: list = None, context: dict = None) -> dict:
-    """Gọi Gemini để sinh câu trả lời, có inject context từ backend."""
+    """Gọi Gemini để sinh câu trả lời, có inject context từ backend + RAG."""
     if not settings.gemini_api_key:
         return {
             "reply": "AI service chưa được cấu hình. Vui lòng liên hệ admin.",
@@ -79,6 +82,10 @@ def generate_reply(user_message: str, history: list = None, context: dict = None
                         f"giá: {c.get('pricePerDay', 0):,}đ/ngày\n"
                     )
 
+        # Inject RAG (knowledge base chính sách, FAQ, quy trình)
+        if "rag" in context and context["rag"]:
+            backend_context += context["rag"]
+
     try:
         model = genai.GenerativeModel(
             model_name=settings.gemini_model,
@@ -112,10 +119,7 @@ def generate_reply(user_message: str, history: list = None, context: dict = None
             "intent": "general"
         }
     except Exception as e:
-        # Log chi tiết lỗi ra console (chỉ dev thấy)
         print(f"[LLM] Error: {str(e)[:300]}")
-
-        # Trả lời user gọn gàng, KHÔNG hiển thị chi tiết lỗi
         return {
             "reply": "Xin lỗi, AI đang bận. Vui lòng thử lại sau ạ.",
             "intent": "error"
@@ -133,19 +137,36 @@ def detect_intent(message: str) -> str:
     ]):
         return "check_booking"
 
+    # ===== POLICY / FAQ / PROCEDURE (ưu tiên CAO) =====
+    # Đặt TRƯỚC search_car vì câu hỏi về giấy tờ/quy trình
+    # thường chứa từ "thuê xe" nhưng KHÔNG phải là tìm xe.
+    if any(kw in msg for kw in [
+        # Chính sách
+        "chính sách", "hủy cọc", "hoàn tiền", "hoàn cọc",
+        "vượt km", "vượt thời gian", "vượt giờ", "quy định",
+        # Bảo mật
+        "bảo mật", "quyền", "cookie", "dữ liệu", "thông tin cá nhân",
+        # Quy trình / thủ tục
+        "đặt xe", "quy trình", "thủ tục", "các bước",
+        # Giấy tờ / FAQ
+        "giấy tờ", "cần gì", "cần những gì", "yêu cầu gì",
+        "câu hỏi thường gặp", "faq", "hỏi đáp",
+        "gplx", "bằng lái", "cccd", "cmnd",
+        # Chung
+        "làm sao", "làm thế nào", "như thế nào", "ra sao",
+        "bao lâu", "bao nhiêu", "thế nào",
+        # Xe / bảo hiểm
+        "bảo hiểm", "đổi xe", "trả xe", "nhận xe",
+        "thuê dài hạn", "thanh toán",
+    ]):
+        return "policy_inquiry"
+
     # ===== SEARCH CAR =====
     if any(kw in msg for kw in [
         "tìm xe", "thuê xe", "gợi ý xe", "xe 7 chỗ",
         "xe 4 chỗ", "danh sách xe", "có xe nào"
     ]):
         return "search_car"
-
-    # ===== POLICY =====
-    if any(kw in msg for kw in [
-        "chính sách", "hủy cọc", "hoàn tiền",
-        "vượt km", "vượt thời gian", "quy định"
-    ]):
-        return "policy_inquiry"
 
     # ===== EMERGENCY =====
     if any(kw in msg for kw in [
