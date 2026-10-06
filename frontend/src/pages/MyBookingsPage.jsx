@@ -151,9 +151,32 @@ export default function MyBookingsPage() {
                   <Link to={`/payment/${b.id}`} style={{ color: "inherit" }}>
                     <div style={{ fontFamily: "var(--mono)", fontSize: "11px", letterSpacing: "2px", color: "var(--muc-mo)", marginBottom: "8px" }}>#{b.id}</div>
                     <div style={{ fontFamily: "var(--serif)", fontSize: "22px", fontWeight: 700, marginBottom: "6px" }}>{b.carName || "Cỗ xe"}</div>
-                    <div style={{ fontFamily: "var(--serif-2)", fontStyle: "italic", color: "var(--muc-mo)" }}>
+                                        <div style={{ fontFamily: "var(--serif-2)", fontStyle: "italic", color: "var(--muc-mo)" }}>
                       {new Date(b.startDate).toLocaleDateString("vi-VN")} → {new Date(b.endDate).toLocaleDateString("vi-VN")}
                     </div>
+
+                    {/* ===== MỚI: Hiển thị phí phát sinh ===== */}
+                    {b.totalExtraFees > 0 && (
+                      <div
+                        style={{
+                          marginTop: "8px",
+                          padding: "8px 12px",
+                          background: "rgba(139,44,44,0.08)",
+                          borderLeft: "3px solid var(--do)",
+                          fontFamily: "var(--mono)",
+                          fontSize: "11px",
+                          letterSpacing: "1px",
+                          color: "var(--do)",
+                        }}
+                      >
+                        ⚠️ Phí phát sinh: {formatPrice(b.totalExtraFees)}đ
+                        {b.lateFee > 0 && (
+                          <span style={{ marginLeft: "8px", opacity: 0.7 }}>
+                            (trả muộn: {formatPrice(b.lateFee)}đ)
+                          </span>
+                        )}
+                      </div>
+                    )}
                   </Link>
 
                   <div style={{ fontFamily: "var(--mono)", fontSize: "20px", fontWeight: 500 }}>{formatPrice(b.totalPrice)}đ</div>

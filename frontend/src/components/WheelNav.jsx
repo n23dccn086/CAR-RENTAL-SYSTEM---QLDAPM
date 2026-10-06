@@ -31,8 +31,10 @@ export default function WheelNav() {
 
   const navItems = [
     { path: "/", label: "Trang chủ", icon: "⌂" },
-    { path: "/search", label: "Bộ sưu tập", icon: "⚲" },
-    ...(isLoggedIn
+    ...(!isLoggedIn || user?.role !== "OWNER"
+      ? [{ path: "/search", label: "Bộ sưu tập", icon: "⚲" }]
+      : []),
+    ...(isLoggedIn && user?.role !== "OWNER"
       ? [{ path: "/my-bookings", label: "Chuyến đi", icon: "✦" }]
       : []),
     ...(isLoggedIn

@@ -21,10 +21,10 @@ public class BookingResponse {
     Long carId;
     Long ownerId;
 
-    String carName;                  // Tên xe (brand + model)
-    String carPlate;                 // Biển số
-    String customerName;             // Tên khách
-    String ownerName;                // Tên chủ xe
+    String carName;
+    String carPlate;
+    String customerName;
+    String ownerName;
 
     LocalDateTime startDate;
     LocalDateTime endDate;
@@ -47,8 +47,15 @@ public class BookingResponse {
     String cancelReason;
     LocalDateTime cancelledAt;
 
-    // Chi tiết phí
+    // ===== Chi tiết phí =====
     BookingDetailResponse details;
+
+    // ===== Phí phát sinh (từ handover RETURN) =====
+    Long lateFee;              // Phí trả muộn
+    Long extraFees;            // Phí phát sinh (vệ sinh, xăng, ...)
+    Long totalExtraFees;       // Tổng = lateFee + extraFees
+    Integer lateMinutes;       // Số phút trả muộn (null nếu không muộn)
+    String extraFeesNote;      // Ghi chú phí phát sinh
 
     LocalDateTime createdAt;
     LocalDateTime updatedAt;

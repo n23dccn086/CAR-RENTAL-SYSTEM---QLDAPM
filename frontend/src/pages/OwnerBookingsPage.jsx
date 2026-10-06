@@ -197,12 +197,35 @@ export default function OwnerBookingsPage() {
                     <div style={{ fontFamily: 'var(--serif)', fontSize: '22px', fontWeight: 700, marginBottom: '6px' }}>
                       {b.carName || 'Cỗ xe'} {b.carPlate && `— ${b.carPlate}`}
                     </div>
-                    <div style={{ fontFamily: 'var(--serif-2)', fontStyle: 'italic', color: 'var(--muc-mo)' }}>
+                                        <div style={{ fontFamily: 'var(--serif-2)', fontStyle: 'italic', color: 'var(--muc-mo)' }}>
                       {formatDate(b.startDate)} → {formatDate(b.endDate)} · Khách: {b.customerName || 'Khách'}
                     </div>
                     {b.rentalMode !== 'SELF_DRIVE' && (
                       <div style={{ fontFamily: 'var(--mono)', fontSize: '10px', letterSpacing: '1px', color: 'var(--dong)', marginTop: '6px' }}>
                         🚙 CÓ TÀI XẾ
+                      </div>
+                    )}
+
+                    {/* ===== MỚI: Hiển thị phí phát sinh ===== */}
+                    {b.totalExtraFees > 0 && (
+                      <div
+                        style={{
+                          marginTop: "8px",
+                          padding: "8px 12px",
+                          background: "rgba(139,44,44,0.08)",
+                          borderLeft: "3px solid var(--do)",
+                          fontFamily: "var(--mono)",
+                          fontSize: "11px",
+                          letterSpacing: "1px",
+                          color: "var(--do)",
+                        }}
+                      >
+                        ⚠️ Phí phát sinh: {formatPrice(b.totalExtraFees)}đ
+                        {b.lateFee > 0 && (
+                          <span style={{ marginLeft: "8px", opacity: 0.7 }}>
+                            (trả muộn: {formatPrice(b.lateFee)}đ)
+                          </span>
+                        )}
                       </div>
                     )}
                   </Link>

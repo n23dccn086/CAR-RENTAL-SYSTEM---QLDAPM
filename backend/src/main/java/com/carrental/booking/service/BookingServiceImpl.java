@@ -16,6 +16,8 @@ import com.carrental.common.constant.ErrorCode;
 import com.carrental.common.exception.BadRequestException;
 import com.carrental.common.exception.ResourceNotFoundException;
 import com.carrental.common.exception.UnauthorizedException;
+import com.carrental.handover.entity.HandoverRecord;
+import com.carrental.handover.repository.HandoverRecordRepository;
 import com.carrental.notification.entity.NotificationType;
 import com.carrental.notification.service.NotificationService;
 import com.carrental.payment.entity.Payment;
@@ -33,6 +35,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.math.BigDecimal;
 import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.List;
@@ -52,6 +55,7 @@ public class BookingServiceImpl implements BookingService {
     PaymentRepository paymentRepository;
     RefundRepository refundRepository;
     NotificationService notificationService;
+    HandoverRecordRepository handoverRepository;  // ← MỚI: để query phí
 
     // ===== CREATE =====
 
@@ -63,7 +67,6 @@ public class BookingServiceImpl implements BookingService {
         User customer = userRepository.findById(customerId)
                 .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.USER_NOT_FOUND));
 
-        // ===== UC-C03: Chặn đặt xe tự lái nếu chưa xác thực GPLX/CCCD =====
         if (request.getRentalMode() == RentalMode.SELF_DRIVE
                 && customer.getVerificationStatus() != VerificationStatus.VERIFIED) {
             throw new BadRequestException(ErrorCode.VALIDATION_ERROR,
@@ -178,7 +181,6 @@ public class BookingServiceImpl implements BookingService {
                     "Không thể hủy đơn ở trạng thái này");
         }
 
-        // ===== TÍNH HOÀN CỌC =====
         long refundAmount = calculateRefundAmount(booking);
         long depositPaid = booking.getDepositAmount();
         long lostAmount = depositPaid - refundAmount;
@@ -186,7 +188,6 @@ public class BookingServiceImpl implements BookingService {
         log.info("Refund calculation: deposit={}, refund={}, lost={}",
                 depositPaid, refundAmount, lostAmount);
 
-        // ===== TẠO REFUND RECORD =====
         if (refundAmount > 0) {
             Payment payment = paymentRepository
                     .findByBookingIdAndStatus(id, PaymentStatus.SUCCESS)
@@ -205,13 +206,11 @@ public class BookingServiceImpl implements BookingService {
             }
         }
 
-        // ===== UPDATE BOOKING =====
         booking.setStatus(BookingStatus.CANCELLED);
         booking.setCancelReason(reason);
         booking.setCancelledAt(LocalDateTime.now());
         Booking updated = bookingRepository.save(booking);
 
-        // ===== THÔNG BÁO OWNER =====
         try {
             notificationService.createNotification(
                     booking.getOwnerId(),
@@ -264,7 +263,6 @@ public class BookingServiceImpl implements BookingService {
             throw new UnauthorizedException(ErrorCode.UNAUTHORIZED);
         }
 
-        // ===== OWNER REJECT → HOÀN 100% CỌC =====
         long refundAmount = 0;
         if (booking.getStatus() == BookingStatus.PAID
                 || booking.getStatus() == BookingStatus.APPROVED) {
@@ -381,14 +379,6 @@ public class BookingServiceImpl implements BookingService {
 
     // ===== HELPER =====
 
-    /**
-     * Tính số tiền hoàn cọc dựa trên chính sách:
-     * - PENDING: 0đ
-     * - Trước 24h: 100%
-     * - Trong 24h: 70%
-     * - Trong 4h: 50%
-     * - Sau giờ nhận: 0%
-     */
     private long calculateRefundAmount(Booking booking) {
         if (booking.getStatus() == BookingStatus.PENDING) {
             return 0;
@@ -434,6 +424,27 @@ public class BookingServiceImpl implements BookingService {
 
         if (detail != null) {
             response.setDetails(bookingMapper.toDetailResponse(detail));
+        }
+
+        // ===== MỚI: Lấy phí từ handover RETURN =====
+        try {
+            handoverRepository.findReturnHandoverByBookingId(booking.getId())
+                    .ifPresent(handover -> {
+                        BigDecimal lateFee = handover.getLateFee();
+                        BigDecimal extraFees = handover.getExtraFees();
+
+                        long lateFeeVal = lateFee != null ? lateFee.longValue() : 0L;
+                        long extraFeeVal = extraFees != null ? extraFees.longValue() : 0L;
+
+                        response.setLateFee(lateFeeVal);
+                        response.setExtraFees(extraFeeVal);
+                        response.setTotalExtraFees(lateFeeVal + extraFeeVal);
+                        response.setLateMinutes(handover.getLateMinutes());
+                        response.setExtraFeesNote(handover.getExtraFeesNote());
+                    });
+        } catch (Exception e) {
+            log.warn("Failed to load handover fees for booking {}: {}",
+                    booking.getId(), e.getMessage());
         }
 
         return response;
