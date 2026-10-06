@@ -32,8 +32,9 @@ import DisputesPage from "./pages/DisputesPage";
 import AdminDisputesPage from "./pages/AdminDisputesPage";
 import VerificationPage from "./pages/VerificationPage";
 import HandoverPage from "./pages/HandoverPage";
-import OwnerWithdrawalsPage from "./pages/OwnerWithdrawalsPage";      // ← THÊM MỚI
-import AdminWithdrawalsPage from "./pages/AdminWithdrawalsPage";      // ← THÊM MỚI
+import OwnerWithdrawalsPage from "./pages/OwnerWithdrawalsPage";
+import AdminWithdrawalsPage from "./pages/AdminWithdrawalsPage";
+import AdminConfigPage from "./pages/AdminConfigPage";              // ★ MỚI: UC-AD03
 
 function App() {
   return (
@@ -190,7 +191,7 @@ function App() {
             }
           />
 
-          {/* ★ MỚI: Owner Withdrawals (UC-O08) */}
+          {/* ★ Owner Withdrawals (UC-O08) */}
           <Route
             path="/owner/withdrawals"
             element={
@@ -246,12 +247,22 @@ function App() {
             }
           />
 
-          {/* ★ MỚI: Admin Withdrawals (UC-AD05) */}
+          {/* ★ Admin Withdrawals (UC-AD05) */}
           <Route
             path="/admin/withdrawals"
             element={
               <ProtectedRoute allowedRoles={["ADMIN"]}>
                 <AdminWithdrawalsPage />
+              </ProtectedRoute>
+            }
+          />
+
+          {/* ★ MỚI: Admin Config (UC-AD03) */}
+          <Route
+            path="/admin/config"
+            element={
+              <ProtectedRoute allowedRoles={["ADMIN"]}>
+                <AdminConfigPage />
               </ProtectedRoute>
             }
           />

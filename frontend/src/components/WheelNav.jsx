@@ -80,6 +80,9 @@ export default function WheelNav() {
     ...(isLoggedIn && user?.role === "ADMIN"
       ? [{ path: "/admin/withdrawals", label: "Duyệt rút tiền", icon: "₫" }]
       : []),
+      ...(isLoggedIn && user?.role === "ADMIN"
+      ? [{ path: "/admin/config", label: "Cấu hình", icon: "⌬" }]
+      : []),
   ];
 
   return (

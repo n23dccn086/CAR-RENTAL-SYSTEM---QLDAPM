@@ -78,17 +78,18 @@ export default function CarDecor() {
         <circle cx="50" cy="50" r="8" fill="var(--muc)" />
       </svg>
 
-      {/* Xe hơi chạy ngang dưới */}
+             {/* Xe hơi chạy ngang dưới — PHẢI → TRÁI */}
       <div style={{
         position: 'fixed',
         bottom: '20px',
         left: 0,
         animation: 'carDrive 25s linear infinite',
+        animationDirection: 'reverse',
         fontSize: '32px',
         opacity: 0.15,
         zIndex: 0
       }}>
-        🚗
+        🚗🚙🚕
       </div>
     </div>
   )
