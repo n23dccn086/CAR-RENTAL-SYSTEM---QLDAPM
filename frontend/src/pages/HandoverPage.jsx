@@ -243,6 +243,61 @@ export default function HandoverPage() {
           </div>
         )}
 
+        {/* ===== UC-C12: PHÍ VƯỢT GIỜ ===== */}
+        {!isPickup && handover.lateFee > 0 && (
+          <div
+            style={{
+              padding: '16px',
+              background: 'rgba(139,44,44,0.1)',
+              borderLeft: '3px solid var(--do)',
+              marginBottom: '24px',
+            }}
+          >
+            <div
+              style={{
+                fontFamily: 'var(--mono)',
+                fontSize: '10px',
+                letterSpacing: '2px',
+                color: 'var(--do)',
+                marginBottom: '8px',
+              }}
+            >
+              ⏰ PHÍ TRẢ XE MUỘN
+            </div>
+            <div
+              style={{
+                fontFamily: 'var(--serif-2)',
+                fontStyle: 'italic',
+                fontSize: '16px',
+                lineHeight: 1.7,
+                marginBottom: '8px',
+              }}
+            >
+              Trả muộn:{' '}
+              <strong>
+                {Math.floor(handover.lateMinutes / 60)}h
+                {String(handover.lateMinutes % 60).padStart(2, '0')}p
+              </strong>
+              {handover.actualReturnTime && (
+                <>
+                  {' '}— Thời gian thực tế:{' '}
+                  <strong>{formatDate(handover.actualReturnTime)}</strong>
+                </>
+              )}
+            </div>
+            <div
+              style={{
+                fontFamily: 'var(--serif)',
+                fontSize: '28px',
+                fontWeight: 900,
+                color: 'var(--do)',
+              }}
+            >
+              + {formatPrice(handover.lateFee)}đ
+            </div>
+          </div>
+        )}
+
         {handover.exteriorNote && (
           <div style={{ marginBottom: '16px' }}>
             <div style={labelSmall}>Ngoại thất</div>

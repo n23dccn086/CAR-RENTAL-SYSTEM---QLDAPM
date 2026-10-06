@@ -58,6 +58,18 @@ public class HandoverRecord {
     @Column(name = "extra_fees_note", columnDefinition = "TEXT")
     String extraFeesNote;
 
+// ===== UC-C12: Phí vượt giờ (chỉ RETURN) =====
+    @Column(name = "actual_return_time")
+    LocalDateTime actualReturnTime;
+
+    @Column(name = "late_fee", precision = 12, scale = 0)
+    @Builder.Default
+    BigDecimal lateFee = BigDecimal.ZERO;
+
+    @Column(name = "late_minutes")
+    @Builder.Default
+    Integer lateMinutes = 0;
+
     // ===== Chữ ký (lưu URL ảnh) =====
     @Column(name = "owner_signature", columnDefinition = "TEXT")
     String ownerSignature;

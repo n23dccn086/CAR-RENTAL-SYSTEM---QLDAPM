@@ -28,6 +28,11 @@ public class HandoverResponse {
     BigDecimal extraFees;
     String extraFeesNote;
 
+    LocalDateTime actualReturnTime;
+    BigDecimal lateFee;
+    Integer lateMinutes;
+    String lateFeeBreakdown;
+
     String ownerSignature;
     String customerSignature;
     LocalDateTime ownerSignedAt;

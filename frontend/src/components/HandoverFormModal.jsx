@@ -31,6 +31,7 @@ export default function HandoverFormModal({
     extraFees: 0,
     extraFeesNote: '',
     damages: '',
+    actualReturnTime: '',
   })
 
   const [images, setImages] = useState([])       // [{url, imageType, note}]
@@ -49,6 +50,7 @@ export default function HandoverFormModal({
         extraFees: 0,
         extraFeesNote: '',
         damages: '',
+        actualReturnTime: '',
       })
       setImages([])
       setError('')
@@ -125,6 +127,7 @@ export default function HandoverFormModal({
         damages: form.damages?.trim() || null,
         extraFees: form.extraFees ? parseInt(form.extraFees) : 0,
         extraFeesNote: form.extraFeesNote?.trim() || null,
+         actualReturnTime: form.actualReturnTime || null, 
         images: images.map(img => ({
           imageUrl: img.url,
           imageType: img.imageType,
@@ -273,6 +276,32 @@ export default function HandoverFormModal({
               </div>
             </div>
           </div>
+
+          {/* ===== UC-C12: Thời gian trả thực tế (chỉ RETURN) ===== */}
+          {!isPickup && (
+            <div style={{ marginBottom: '24px' }}>
+              <label style={labelStyle}>Thời gian trả xe thực tế *</label>
+              <input
+                type="datetime-local"
+                value={form.actualReturnTime}
+                onChange={(e) =>
+                  setForm({ ...form, actualReturnTime: e.target.value })
+                }
+                style={inputStyle}
+              />
+              <div
+                style={{
+                  fontFamily: 'var(--serif-2)',
+                  fontStyle: 'italic',
+                  fontSize: '12px',
+                  color: 'var(--muc-mo)',
+                  marginTop: '4px',
+                }}
+              >
+                Nếu trả muộn sẽ tự động tính phí theo bảng giá
+              </div>
+            </div>
+          )}
 
           {/* ===== NOTES ===== */}
           <div style={{ marginBottom: '24px' }}>

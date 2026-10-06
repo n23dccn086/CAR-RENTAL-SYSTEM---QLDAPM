@@ -24,6 +24,7 @@ public interface HandoverMapper {
     @Mapping(target = "kmDriven", ignore = true)
     @Mapping(target = "canSign", ignore = true)
     @Mapping(target = "canCreate", ignore = true)
+    @Mapping(target = "lateFeeBreakdown", ignore = true) 
     HandoverResponse toResponse(HandoverRecord record);
 
     @Mapping(target = "status", expression = "java(record.getStatus() != null ? record.getStatus().name() : null)")
@@ -32,6 +33,7 @@ public interface HandoverMapper {
     @Mapping(target = "kmDriven", ignore = true)
     @Mapping(target = "canSign", ignore = true)
     @Mapping(target = "canCreate", ignore = true)
+    @Mapping(target = "lateFeeBreakdown", ignore = true)
     @Mapping(target = "images", source = "images")
     HandoverResponse toResponse(HandoverRecord record, List<HandoverImage> images);
 
