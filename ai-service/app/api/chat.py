@@ -5,7 +5,7 @@ from app.models.schemas import (
 )
 from app.services.llm_service import generate_reply, detect_intent
 from app.services.backend_client import get_my_bookings, search_cars
-from app.services.rag_service import retrieve_context
+from app.services.rag_service import retrieve_context, index_documents, get_stats
 from datetime import datetime
 from uuid import uuid4
 
@@ -48,7 +48,8 @@ async def chat(
     # (Không chạy cho check_booking vì intent đó cần data realtime từ backend)
     if intent in ("policy_inquiry", "emergency", "general"):
         try:
-            rag_context = retrieve_context(request.message, top_k=3)
+            # ★ Tăng top_k lên 8 để cover đủ chunks của file dài
+            rag_context = retrieve_context(request.message, top_k=15)
             if rag_context:
                 context["rag"] = rag_context
                 print(f"[Chat] RAG retrieved {len(rag_context)} chars for: {request.message[:50]}")
@@ -98,3 +99,18 @@ async def get_history(session_id: str):
 async def feedback(message_id: str, request: FeedbackRequest):
     """Đánh giá phản hồi chatbot."""
     return {"success": True, "message": "Cảm ơn phản hồi của bạn"}
+
+
+# ===== RAG MANAGEMENT =====
+
+@router.post("/rag/reindex")
+async def reindex_rag(force: bool = True):
+    """Force re-index toàn bộ tài liệu."""
+    count = index_documents(force_reindex=force)
+    return {"success": True, "chunks": count}
+
+
+@router.get("/rag/stats")
+async def rag_stats():
+    """Xem thống kê RAG."""
+    return get_stats()

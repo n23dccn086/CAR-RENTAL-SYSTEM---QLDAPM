@@ -32,6 +32,8 @@ import DisputesPage from "./pages/DisputesPage";
 import AdminDisputesPage from "./pages/AdminDisputesPage";
 import VerificationPage from "./pages/VerificationPage";
 import HandoverPage from "./pages/HandoverPage";
+import OwnerWithdrawalsPage from "./pages/OwnerWithdrawalsPage";      // ← THÊM MỚI
+import AdminWithdrawalsPage from "./pages/AdminWithdrawalsPage";      // ← THÊM MỚI
 
 function App() {
   return (
@@ -67,7 +69,7 @@ function App() {
             }
           />
 
-          {/* ===== XÁC THỰC TÀI KHOẢN (UC-C03) — MỚI ===== */}
+          {/* ===== XÁC THỰC TÀI KHOẢN (UC-C03) ===== */}
           <Route
             path="/verification"
             element={
@@ -188,6 +190,16 @@ function App() {
             }
           />
 
+          {/* ★ MỚI: Owner Withdrawals (UC-O08) */}
+          <Route
+            path="/owner/withdrawals"
+            element={
+              <ProtectedRoute allowedRoles={["OWNER", "ADMIN"]}>
+                <OwnerWithdrawalsPage />
+              </ProtectedRoute>
+            }
+          />
+
           {/* ===== ADMIN ===== */}
           <Route
             path="/admin/dashboard"
@@ -230,6 +242,16 @@ function App() {
             element={
               <ProtectedRoute allowedRoles={["ADMIN"]}>
                 <AdminDisputesPage />
+              </ProtectedRoute>
+            }
+          />
+
+          {/* ★ MỚI: Admin Withdrawals (UC-AD05) */}
+          <Route
+            path="/admin/withdrawals"
+            element={
+              <ProtectedRoute allowedRoles={["ADMIN"]}>
+                <AdminWithdrawalsPage />
               </ProtectedRoute>
             }
           />

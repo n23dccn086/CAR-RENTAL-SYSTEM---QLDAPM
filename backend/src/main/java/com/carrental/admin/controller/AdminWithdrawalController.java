@@ -7,27 +7,21 @@ import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 
-/**
- * Controller duyệt yêu cầu rút tiền (Admin).
- * Base path: /api/v1/admin/withdrawals
- */
 @RestController
 @RequestMapping("/admin/withdrawals")
 @RequiredArgsConstructor
 @FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
 @Slf4j
+@PreAuthorize("hasRole('ADMIN')")
 public class AdminWithdrawalController {
 
     AdminWithdrawalService withdrawalService;
 
-    /**
-     * Lấy tất cả yêu cầu rút tiền.
-     * GET /api/v1/admin/withdrawals?status=PENDING
-     */
     @GetMapping
     public ApiResponse<List<WithdrawalResponse>> getAllWithdrawals(
             @RequestParam(required = false) String status) {
@@ -37,28 +31,16 @@ public class AdminWithdrawalController {
         return ApiResponse.success(withdrawalService.getAllWithdrawals());
     }
 
-    /**
-     * Chi tiết yêu cầu rút tiền.
-     * GET /api/v1/admin/withdrawals/{id}
-     */
     @GetMapping("/{id}")
     public ApiResponse<WithdrawalResponse> getWithdrawalById(@PathVariable Long id) {
         return ApiResponse.success(withdrawalService.getWithdrawalById(id));
     }
 
-    /**
-     * Đếm số yêu cầu đang chờ.
-     * GET /api/v1/admin/withdrawals/pending-count
-     */
     @GetMapping("/pending-count")
     public ApiResponse<Long> countPending() {
         return ApiResponse.success(withdrawalService.countPending());
     }
 
-    /**
-     * Duyệt yêu cầu rút tiền.
-     * PUT /api/v1/admin/withdrawals/{id}/approve
-     */
     @PutMapping("/{id}/approve")
     public ApiResponse<WithdrawalResponse> approveWithdrawal(
             @PathVariable Long id,
@@ -69,10 +51,6 @@ public class AdminWithdrawalController {
                 withdrawalService.approveWithdrawal(id, adminId, transactionId));
     }
 
-    /**
-     * Từ chối yêu cầu rút tiền.
-     * PUT /api/v1/admin/withdrawals/{id}/reject
-     */
     @PutMapping("/{id}/reject")
     public ApiResponse<WithdrawalResponse> rejectWithdrawal(
             @PathVariable Long id,

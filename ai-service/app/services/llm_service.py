@@ -34,11 +34,31 @@ Quy định vượt thời gian:
 - Vượt 4h - 24h: 100% giá thuê ngày
 - Vượt trên 24h: theo ngày + phạt 20%
 
-Khi có thêm "TÀI LIỆU THAM KHẢO" trong context, hãy ưu tiên dùng thông tin đó để trả lời.
-Nếu tài liệu tham khảo không đề cập, mới dùng kiến thức chung.
-Nếu vẫn không biết, nói: "Tôi chưa có thông tin về vấn đề này, vui lòng liên hệ hotline 1900-xxxx."
+===== QUY TẮC QUAN TRỌNG =====
 
-Trả lời bằng tiếng Việt, thân thiện, ngắn gọn, dễ hiểu.
+1. **ƯU TIÊN TÀI LIỆU THAM KHẢO**: Khi có "TÀI LIỆU THAM KHẢO" trong context, 
+   BẮT BUỘC dùng thông tin đó để trả lời. Không tự bịa.
+
+2. **GIỮ NGUYÊN SỐ THỨ TỰ BƯỚC**: Nếu tài liệu có "Bước 1, Bước 2, ... Bước N", 
+   PHẢI liệt kê ĐẦY ĐỦ tất cả các bước với số thứ tự GỐC (không tự đánh số lại).
+   
+3. **LIỆT KÊ ĐẦY ĐỦ**: Không được bỏ sót bước nào trong quy trình. 
+   Nếu quy trình có 7 bước, phải liệt kê đủ 7 bước.
+   
+4. **KHÔNG GỘP BƯỚC**: Không gộp 2 bước thành 1. Giữ đúng cấu trúc tài liệu.
+
+5. **ĐỊNH DẠNG**: Dùng format rõ ràng:
+   - **Bước 1: [Tên bước]**
+     - Chi tiết...
+   - **Bước 2: [Tên bước]**
+     - Chi tiết...
+
+6. **FALLBACK**: Nếu tài liệu tham khảo không đề cập, mới dùng kiến thức chung.
+   Nếu vẫn không biết, nói: "Tôi chưa có thông tin về vấn đề này, 
+   vui lòng liên hệ hotline 1900-xxxx."
+
+Trả lời bằng tiếng Việt, thân thiện, ngắn gọn, dễ hiểu. 
+Không lan man, đi thẳng vào câu trả lời.
 """
 
 
@@ -109,7 +129,9 @@ def generate_reply(user_message: str, history: list = None, context: dict = None
             full_message = (
                 f"{backend_context}\n\n"
                 f"Dựa vào thông tin trên, hãy trả lời câu hỏi sau của khách "
-                f"một cách chính xác và tự nhiên: {user_message}"
+                f"một cách chính xác và tự nhiên. "
+                f"NẾU LÀ QUY TRÌNH NHIỀU BƯỚC, PHẢI LIỆT KÊ ĐẦY ĐỦ VÀ GIỮ NGUYÊN SỐ THỨ TỰ: "
+                f"{user_message}"
             )
 
         response = chat.send_message(full_message)

@@ -59,6 +59,9 @@ export default function WheelNav() {
     ...(isLoggedIn && user?.role === "OWNER"
       ? [{ path: "/owner/reviews", label: "Đánh giá", icon: "✿" }]
       : []),
+    ...(isLoggedIn && user?.role === "OWNER"
+      ? [{ path: "/owner/withdrawals", label: "Rút tiền", icon: "₫" }]
+      : []),
     ...(isLoggedIn && user?.role === "ADMIN"
       ? [{ path: "/admin/dashboard", label: "Quản trị", icon: "⚙" }]
       : []),
@@ -73,6 +76,9 @@ export default function WheelNav() {
       : []),
     ...(isLoggedIn && user?.role === "ADMIN"
       ? [{ path: "/admin/refunds", label: "Hoàn tiền", icon: "❖" }]
+      : []),
+    ...(isLoggedIn && user?.role === "ADMIN"
+      ? [{ path: "/admin/withdrawals", label: "Duyệt rút tiền", icon: "₫" }]
       : []),
   ];
 

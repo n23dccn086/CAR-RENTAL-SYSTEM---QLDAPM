@@ -15,7 +15,7 @@ DOCUMENTS_DIR = Path(__file__).parent.parent.parent / "data" / "documents"
 CHROMA_DB_DIR = Path(__file__).parent.parent.parent / "data" / "chroma_db"
 
 COLLECTION_NAME = "maison_documents"
-MODEL_NAME = "all-MiniLM-L6-v2"
+MODEL_NAME = "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
 
 
 def _get_model() -> SentenceTransformer:
@@ -42,8 +42,8 @@ def _get_collection():
     return _collection
 
 
-def _split_into_chunks(text: str, max_chars: int = 500) -> list:
-    """Chia tài liệu thành chunks nhỏ theo section."""
+def _split_into_chunks(text: str, max_chars: int = 800) -> list:
+    """Chia tài liệu thành chunks nhỏ theo section, giữ overlap."""
     lines = text.split("\n")
     chunks = []
     current = ""
@@ -61,7 +61,9 @@ def _split_into_chunks(text: str, max_chars: int = 500) -> list:
         if len(current) > max_chars:
             if len(current.strip()) > 50:
                 chunks.append(current.strip())
-            current = ""
+            # Overlap 100 ký tự cuối để giữ ngữ cảnh
+            overlap = current[-100:] if len(current) > 100 else ""
+            current = overlap
 
     # Chunk cuối
     if current.strip() and len(current.strip()) > 50:
@@ -105,7 +107,8 @@ def index_documents(force_reindex: bool = False):
         with open(file_path, "r", encoding="utf-8") as f:
             content = f.read()
 
-        chunks = _split_into_chunks(content, max_chars=500)
+        # ★ Dùng default max_chars=800 (không truyền tham số)
+        chunks = _split_into_chunks(content)
         for j, chunk in enumerate(chunks):
             documents.append(chunk)
             metadatas.append({
@@ -134,8 +137,8 @@ def index_documents(force_reindex: bool = False):
     return len(documents)
 
 
-def retrieve_context(query: str, top_k: int = 3) -> str:
-    """Tìm top_k chunks liên quan tới query."""
+def retrieve_context(query: str, top_k: int = 5) -> str:
+    """Tìm top_k chunks liên quan tới query, filter theo similarity."""
     collection = _get_collection()
 
     if collection.count() == 0:
@@ -164,7 +167,9 @@ def retrieve_context(query: str, top_k: int = 3) -> str:
     context = "\n### TÀI LIỆU THAM KHẢO:\n"
     for i, (chunk, src) in enumerate(zip(chunks, sources)):
         score = 1 - distances[i] if i < len(distances) else 0
-        context += f"\n**[{src}]** (độ liên quan: {score:.2f})\n{chunk}\n"
+        # ★ Chỉ lấy chunks có similarity >= 0.3 (tránh noise)
+        if score >= 0.15:
+            context += f"\n**[{src}]** (độ liên quan: {score:.2f})\n{chunk}\n"
 
     return context
 
