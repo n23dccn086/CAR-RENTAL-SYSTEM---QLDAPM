@@ -59,10 +59,11 @@ export default function OwnerWithdrawalsPage() {
     e.preventDefault()
     setFormError('')
 
-    // Validate
     const amount = parseInt(form.amount)
-    if (!amount || amount < 100000) {
-      return setFormError('Số tiền rút tối thiểu 100.000đ')
+    const minWithdrawal = balanceInfo?.minWithdrawal || 100000
+
+    if (!amount || amount < minWithdrawal) {
+      return setFormError(`Số tiền rút tối thiểu ${formatPrice(minWithdrawal)}đ`)
     }
     if (balanceInfo && amount > balanceInfo.availableBalance) {
       return setFormError(`Số dư không đủ. Hiện có: ${formatPrice(balanceInfo.availableBalance)}đ`)
@@ -131,6 +132,12 @@ export default function OwnerWithdrawalsPage() {
   const startIndex = (currentPage - 1) * ITEMS_PER_PAGE
   const currentItems = filtered.slice(startIndex, startIndex + ITEMS_PER_PAGE)
 
+  // ===== CONFIG =====
+  const minWithdrawal = balanceInfo?.minWithdrawal || 100000
+  const withdrawalFee = balanceInfo?.withdrawalFee || 0
+  const hasFee = withdrawalFee > 0
+  const totalWithdrawn = balanceInfo?.totalWithdrawn || 0
+
   return (
     <div style={{ maxWidth: '1200px', margin: '0 auto', padding: '60px 48px' }}>
       <Link
@@ -173,7 +180,7 @@ export default function OwnerWithdrawalsPage() {
         </h1>
         <button
           onClick={openModal}
-          disabled={!balanceInfo || balanceInfo.availableBalance < 100000}
+          disabled={!balanceInfo || balanceInfo.availableBalance < minWithdrawal}
           style={{
             padding: '14px 28px',
             background: 'var(--do)',
@@ -183,8 +190,14 @@ export default function OwnerWithdrawalsPage() {
             fontSize: '11px',
             letterSpacing: '2px',
             textTransform: 'uppercase',
-            cursor: !balanceInfo || balanceInfo.availableBalance < 100000 ? 'not-allowed' : 'pointer',
-            opacity: !balanceInfo || balanceInfo.availableBalance < 100000 ? 0.5 : 1,
+            cursor:
+              !balanceInfo || balanceInfo.availableBalance < minWithdrawal
+                ? 'not-allowed'
+                : 'pointer',
+            opacity:
+              !balanceInfo || balanceInfo.availableBalance < minWithdrawal
+                ? 0.5
+                : 1,
           }}
         >
           + Yêu cầu rút tiền
@@ -198,10 +211,13 @@ export default function OwnerWithdrawalsPage() {
               message.type === 'success'
                 ? 'rgba(74,93,63,0.1)'
                 : 'rgba(139,44,44,0.1)',
-            border: `1px solid ${message.type === 'success' ? 'var(--xanh-reu)' : 'var(--do)'}`,
+            border: `1px solid ${
+              message.type === 'success' ? 'var(--xanh-reu)' : 'var(--do)'
+            }`,
             padding: '12px 16px',
             marginBottom: '24px',
-            color: message.type === 'success' ? 'var(--xanh-reu)' : 'var(--do)',
+            color:
+              message.type === 'success' ? 'var(--xanh-reu)' : 'var(--do)',
             fontFamily: 'var(--serif-2)',
             fontStyle: 'italic',
           }}
@@ -210,19 +226,24 @@ export default function OwnerWithdrawalsPage() {
         </div>
       )}
 
-      {/* ===== BALANCE INFO ===== */}
+      {/* ===== BALANCE INFO — GRID ĐỘNG ===== */}
       {balanceInfo && (
         <div
           style={{
             display: 'grid',
-            gridTemplateColumns: 'repeat(3, 1fr)',
-            gap: '24px',
+            gridTemplateColumns: hasFee ? 'repeat(5, 1fr)' : 'repeat(4, 1fr)',
+            gap: '20px',
             marginBottom: '40px',
           }}
         >
           <StatCard
             label="Tổng thu nhập"
             value={`${formatPrice(balanceInfo.totalIncome)}đ`}
+          />
+          <StatCard
+            label="Đã rút"
+            value={`${formatPrice(totalWithdrawn)}đ`}
+            color="var(--muc-mo)"
           />
           <StatCard
             label="Đang chờ rút"
@@ -234,11 +255,25 @@ export default function OwnerWithdrawalsPage() {
             value={`${formatPrice(balanceInfo.availableBalance)}đ`}
             color="var(--xanh-reu)"
           />
+          {hasFee && (
+            <StatCard
+              label="Phí rút tiền"
+              value={`${formatPrice(withdrawalFee)}đ`}
+              color="var(--do)"
+            />
+          )}
         </div>
       )}
 
       {/* ===== FILTER ===== */}
-      <div style={{ display: 'flex', gap: '12px', marginBottom: '32px', flexWrap: 'wrap' }}>
+      <div
+        style={{
+          display: 'flex',
+          gap: '12px',
+          marginBottom: '32px',
+          flexWrap: 'wrap',
+        }}
+      >
         {[
           { v: '', l: 'Tất cả' },
           { v: 'PENDING', l: 'Chờ duyệt' },
@@ -252,7 +287,9 @@ export default function OwnerWithdrawalsPage() {
               padding: '8px 16px',
               background: filter === opt.v ? 'var(--muc)' : 'transparent',
               color: filter === opt.v ? 'var(--kem)' : 'var(--muc-mo)',
-              border: `1px solid ${filter === opt.v ? 'var(--muc)' : 'rgba(15,14,12,0.2)'}`,
+              border: `1px solid ${
+                filter === opt.v ? 'var(--muc)' : 'rgba(15,14,12,0.2)'
+              }`,
               fontFamily: 'var(--mono)',
               fontSize: '10px',
               letterSpacing: '2px',
@@ -323,7 +360,7 @@ export default function OwnerWithdrawalsPage() {
                     >
                       Yêu cầu #{w.id} · {formatDate(w.createdAt)}
                     </div>
-                    <div
+                                        <div
                       style={{
                         fontFamily: 'var(--serif)',
                         fontSize: '32px',
@@ -334,11 +371,29 @@ export default function OwnerWithdrawalsPage() {
                     >
                       {formatPrice(w.amount)}đ
                     </div>
+                    {w.fee > 0 && (
+                      <div
+                        style={{
+                          fontFamily: 'var(--mono)',
+                          fontSize: '11px',
+                          letterSpacing: '1px',
+                          color: 'var(--muc-mo)',
+                          marginTop: '6px',
+                        }}
+                      >
+                        Phí: {formatPrice(w.fee)}đ → Thực nhận:{' '}
+                        <strong style={{ color: 'var(--xanh-reu)' }}>
+                          {formatPrice(w.netAmount)}đ
+                        </strong>
+                      </div>
+                    )}
                   </div>
                   <div
                     style={{
                       padding: '6px 14px',
-                      border: `1px solid ${statusMap[w.status]?.color || 'var(--muc-mo)'}`,
+                      border: `1px solid ${
+                        statusMap[w.status]?.color || 'var(--muc-mo)'
+                      }`,
                       color: statusMap[w.status]?.color || 'var(--muc-mo)',
                       fontFamily: 'var(--mono)',
                       fontSize: '10px',
@@ -428,7 +483,9 @@ export default function OwnerWithdrawalsPage() {
                   </button>
                 ))}
                 <button
-                  onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                  onClick={() =>
+                    setCurrentPage((p) => Math.min(totalPages, p + 1))
+                  }
                   disabled={currentPage === totalPages}
                   style={paginationBtnStyle(currentPage === totalPages)}
                 >
@@ -474,8 +531,16 @@ export default function OwnerWithdrawalsPage() {
               </strong>
               <br />
               <span style={{ fontSize: '14px', color: 'var(--muc-mo)' }}>
-                Số tiền rút tối thiểu: 100.000đ
+                Số tiền rút tối thiểu: {formatPrice(minWithdrawal)}đ
               </span>
+              {hasFee && (
+                <>
+                  <br />
+                  <span style={{ fontSize: '14px', color: 'var(--do)' }}>
+                    Phí rút tiền: {formatPrice(withdrawalFee)}đ (sẽ trừ khi admin duyệt)
+                  </span>
+                </>
+              )}
             </div>
           )}
 
@@ -485,8 +550,8 @@ export default function OwnerWithdrawalsPage() {
               type="number"
               value={form.amount}
               onChange={(e) => setForm({ ...form, amount: e.target.value })}
-              placeholder="100000"
-              min="100000"
+              placeholder={String(minWithdrawal)}
+              min={minWithdrawal}
               step="1000"
             />
 
@@ -500,14 +565,18 @@ export default function OwnerWithdrawalsPage() {
             <FormInput
               label="Số tài khoản *"
               value={form.bankAccount}
-              onChange={(e) => setForm({ ...form, bankAccount: e.target.value })}
+              onChange={(e) =>
+                setForm({ ...form, bankAccount: e.target.value })
+              }
               placeholder="1234567890"
             />
 
             <FormInput
               label="Tên chủ tài khoản *"
               value={form.accountHolder}
-              onChange={(e) => setForm({ ...form, accountHolder: e.target.value })}
+              onChange={(e) =>
+                setForm({ ...form, accountHolder: e.target.value })
+              }
               placeholder="NGUYEN VAN A"
             />
 
@@ -546,7 +615,7 @@ function StatCard({ label, value, color = 'var(--muc)' }) {
       style={{
         background: 'var(--kem-dam)',
         border: '1px solid rgba(15,14,12,0.15)',
-        padding: '24px',
+        padding: '20px',
         textAlign: 'center',
       }}
     >
@@ -565,7 +634,7 @@ function StatCard({ label, value, color = 'var(--muc)' }) {
       <div
         style={{
           fontFamily: 'var(--serif)',
-          fontSize: '28px',
+          fontSize: '24px',
           fontWeight: 900,
           color,
           letterSpacing: '-1px',

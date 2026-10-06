@@ -38,10 +38,7 @@ public class OwnerWithdrawalServiceImpl implements OwnerWithdrawalService {
     UserRepository userRepository;
     WithdrawalMapper withdrawalMapper;
     NotificationService notificationService;
-
-    // Tỷ lệ hoa hồng nền tảng = 15% → owner nhận 85%
-    static final BigDecimal OWNER_SHARE_RATE = new BigDecimal("0.85");
-    static final BigDecimal MIN_WITHDRAWAL = new BigDecimal("100000");
+    ConfigHelper configHelper;
 
     // ===== CREATE =====
 
@@ -50,10 +47,19 @@ public class OwnerWithdrawalServiceImpl implements OwnerWithdrawalService {
     public WithdrawalResponse createWithdrawal(Long ownerId, CreateWithdrawalRequest request) {
         log.info("Owner {} creating withdrawal: amount={}", ownerId, request.getAmount());
 
+        // ===== ĐỌC CONFIG TỪ DB =====
+        BigDecimal minWithdrawal = configHelper.getMinWithdrawal();
+        BigDecimal ownerShareRate = configHelper.getOwnerShareRate();
+        BigDecimal withdrawalFee = configHelper.getWithdrawalFee();
+
+        log.info("Config loaded: minWithdrawal={}, ownerShareRate={}, withdrawalFee={}",
+                minWithdrawal, ownerShareRate, withdrawalFee);
+
         // 1. Validate số tiền
-        if (request.getAmount().compareTo(MIN_WITHDRAWAL) < 0) {
+        if (request.getAmount().compareTo(minWithdrawal) < 0) {
             throw new BadRequestException(ErrorCode.WITHDRAWAL_MIN_AMOUNT,
-                    "Số tiền rút tối thiểu là 100.000đ");
+                    "Số tiền rút tối thiểu là " +
+                    String.format("%,d", minWithdrawal.longValue()) + "đ");
         }
 
         // 2. Check owner có ít nhất 1 booking COMPLETED
@@ -67,29 +73,45 @@ public class OwnerWithdrawalServiceImpl implements OwnerWithdrawalService {
                     "Bạn chưa có đơn hàng hoàn tất nào để rút tiền");
         }
 
-        // 3. Tính số dư khả dụng
+        // 3. Tính tổng thu nhập GỘP
         BigDecimal totalIncome = completedBookings.stream()
                 .map(b -> BigDecimal.valueOf(b.getTotalPrice())
-                        .multiply(OWNER_SHARE_RATE)
+                        .multiply(ownerShareRate)
                         .setScale(0, RoundingMode.DOWN))
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
 
-        BigDecimal pendingAmount = withdrawalRepository.sumPendingAmountByOwner(ownerId);
-        BigDecimal availableBalance = totalIncome.subtract(pendingAmount);
-
-        log.info("Owner {} balance: totalIncome={}, pending={}, available={}",
-                ownerId, totalIncome, pendingAmount, availableBalance);
-
-        // 4. Check số dư đủ
-        if (request.getAmount().compareTo(availableBalance) > 0) {
-            throw new BadRequestException(ErrorCode.WITHDRAWAL_INSUFFICIENT_BALANCE,
-                    "Số dư khả dụng không đủ. Hiện có: " + availableBalance + "đ");
+        // 4. Tính số dư khả dụng
+        BigDecimal totalWithdrawn = withdrawalRepository.sumWithdrawnAmountByOwner(ownerId);
+        BigDecimal availableBalance = totalIncome.subtract(totalWithdrawn);
+        if (availableBalance.compareTo(BigDecimal.ZERO) < 0) {
+            availableBalance = BigDecimal.ZERO;
         }
 
-        // 5. Tạo Withdrawal
+        log.info("Owner {} balance: totalIncome={}, totalWithdrawn={}, available={}",
+                ownerId, totalIncome, totalWithdrawn, availableBalance);
+
+        // 5. Check số dư đủ
+        if (request.getAmount().compareTo(availableBalance) > 0) {
+            throw new BadRequestException(ErrorCode.WITHDRAWAL_INSUFFICIENT_BALANCE,
+                    "Số dư khả dụng không đủ. Hiện có: " +
+                    String.format("%,d", availableBalance.longValue()) + "đ");
+        }
+
+        // 6. Tính netAmount = amount - fee
+        BigDecimal fee = withdrawalFee != null ? withdrawalFee : BigDecimal.ZERO;
+        BigDecimal netAmount = request.getAmount().subtract(fee);
+
+        if (netAmount.compareTo(BigDecimal.ZERO) <= 0) {
+            throw new BadRequestException(ErrorCode.WITHDRAWAL_MIN_AMOUNT,
+                    "Số tiền thực nhận phải lớn hơn 0đ. Vui lòng rút thêm.");
+        }
+
+        // 7. Tạo Withdrawal
         Withdrawal withdrawal = Withdrawal.builder()
                 .ownerId(ownerId)
                 .amount(request.getAmount())
+                .fee(fee)
+                .netAmount(netAmount)
                 .bankName(request.getBankName().trim())
                 .bankAccount(request.getBankAccount().trim())
                 .accountHolder(request.getAccountHolder().trim())
@@ -97,23 +119,30 @@ public class OwnerWithdrawalServiceImpl implements OwnerWithdrawalService {
                 .build();
 
         Withdrawal saved = withdrawalRepository.save(withdrawal);
-        log.info("Withdrawal created: id={}", saved.getId());
+        log.info("Withdrawal created: id={}, amount={}, fee={}, net={}",
+                saved.getId(), saved.getAmount(), saved.getFee(), saved.getNetAmount());
 
-        // 6. Thông báo cho Admin
+        // 8. Thông báo cho Admin
         try {
             User owner = userRepository.findById(ownerId).orElse(null);
             String ownerName = owner != null ? owner.getName() : "Chủ xe #" + ownerId;
 
-            // Notify tất cả admin (nếu có nhiều admin, gửi cho admin đầu tiên hoặc tất cả)
             List<User> admins = userRepository.findByRole(com.carrental.user.entity.Role.ADMIN);
             for (User admin : admins) {
+                String feeNote = fee.compareTo(BigDecimal.ZERO) > 0
+                        ? String.format(" (phí: %sđ, thực nhận: %sđ)",
+                            String.format("%,d", fee.longValue()),
+                            String.format("%,d", netAmount.longValue()))
+                        : "";
+
                 notificationService.createNotification(
                         admin.getId(),
                         NotificationType.SYSTEM,
                         "Có yêu cầu rút tiền mới",
-                        String.format("%s yêu cầu rút %sđ. Vui lòng vào duyệt.",
+                        String.format("%s yêu cầu rút %sđ%s. Vui lòng vào duyệt.",
                                 ownerName,
-                                String.format("%,d", request.getAmount().longValue())),
+                                String.format("%,d", request.getAmount().longValue()),
+                                feeNote),
                         saved.getId()
                 );
             }
@@ -134,7 +163,13 @@ public class OwnerWithdrawalServiceImpl implements OwnerWithdrawalService {
 
     @Override
     public Map<String, Object> getBalanceInfo(Long ownerId) {
-        // 1. Tính tổng thu nhập từ các booking COMPLETED
+        // ===== ĐỌC CONFIG TỪ DB =====
+        BigDecimal ownerShareRate = configHelper.getOwnerShareRate();
+        BigDecimal minWithdrawal = configHelper.getMinWithdrawal();
+        BigDecimal withdrawalFee = configHelper.getWithdrawalFee();
+        BigDecimal commissionRate = configHelper.getCommissionRate();
+
+        // 1. Tính tổng thu nhập GỘP
         List<Booking> completedBookings = bookingRepository.findByOwnerIdOrderByCreatedAtDesc(ownerId)
                 .stream()
                 .filter(b -> b.getStatus() == BookingStatus.COMPLETED)
@@ -142,25 +177,32 @@ public class OwnerWithdrawalServiceImpl implements OwnerWithdrawalService {
 
         BigDecimal totalIncome = completedBookings.stream()
                 .map(b -> BigDecimal.valueOf(b.getTotalPrice())
-                        .multiply(OWNER_SHARE_RATE)
+                        .multiply(ownerShareRate)
                         .setScale(0, RoundingMode.DOWN))
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
 
-        // 2. Tính số đã rút (PENDING + COMPLETED)
+        // 2. Tổng ĐÃ RÚT (PENDING + APPROVED + PROCESSING + COMPLETED)
+        BigDecimal totalWithdrawn = withdrawalRepository.sumWithdrawnAmountByOwner(ownerId);
+
+        // 3. Đang chờ rút
         BigDecimal pendingAmount = withdrawalRepository.sumPendingAmountByOwner(ownerId);
 
-        // 3. Tính số dư khả dụng
-        BigDecimal availableBalance = totalIncome.subtract(pendingAmount);
+        // 4. Số dư khả dụng
+        BigDecimal availableBalance = totalIncome.subtract(totalWithdrawn);
         if (availableBalance.compareTo(BigDecimal.ZERO) < 0) {
             availableBalance = BigDecimal.ZERO;
         }
 
         Map<String, Object> result = new HashMap<>();
         result.put("totalIncome", totalIncome);
+        result.put("totalWithdrawn", totalWithdrawn);
         result.put("pendingWithdrawal", pendingAmount);
         result.put("availableBalance", availableBalance);
         result.put("totalBookings", completedBookings.size());
-        result.put("minWithdrawal", MIN_WITHDRAWAL);
+        result.put("minWithdrawal", minWithdrawal);
+        result.put("ownerShareRate", ownerShareRate);
+        result.put("withdrawalFee", withdrawalFee);
+        result.put("commissionRate", commissionRate);
 
         return result;
     }

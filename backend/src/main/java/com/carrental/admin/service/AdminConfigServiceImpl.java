@@ -24,6 +24,7 @@ public class AdminConfigServiceImpl implements AdminConfigService {
 
     PlatformConfigRepository configRepository;
     ConfigMapper configMapper;
+    ConfigHelper configHelper;          // ← THÊM: để clear cache sau khi update
 
     @Override
     public List<ConfigResponse> getAllConfigs() {
@@ -53,6 +54,10 @@ public class AdminConfigServiceImpl implements AdminConfigService {
         c.setUpdatedBy(adminId);
 
         PlatformConfig updated = configRepository.save(c);
+
+        // ★ CLEAR CACHE để áp dụng NGAY (không cần chờ 60s)
+        configHelper.clearCache();
+
         return configMapper.toResponse(updated);
     }
 
@@ -73,6 +78,10 @@ public class AdminConfigServiceImpl implements AdminConfigService {
                 .build();
 
         PlatformConfig saved = configRepository.save(c);
+
+        // ★ CLEAR CACHE
+        configHelper.clearCache();
+
         return configMapper.toResponse(saved);
     }
 }

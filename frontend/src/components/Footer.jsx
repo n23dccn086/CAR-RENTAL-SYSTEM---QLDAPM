@@ -1,4 +1,21 @@
+import { useState, useEffect } from 'react'
+import { getPublicConfigs } from '../services/publicConfigService'
+
 export default function Footer() {
+  const [config, setConfig] = useState({
+    support_hotline: '1900-xxxx',
+    support_email: 'concierge@maison.vn',
+  })
+
+  useEffect(() => {
+    getPublicConfigs().then((data) => {
+      setConfig((prev) => ({
+        support_hotline: data.support_hotline || prev.support_hotline,
+        support_email: data.support_email || prev.support_email,
+      }))
+    })
+  }, [])
+
   return (
     <footer>
       <div className="footer-inner">
@@ -28,8 +45,16 @@ export default function Footer() {
           <div className="footer-col">
             <h4>Liên lạc</h4>
             <ul>
-              <li><a href="#">1900-xxxx</a></li>
-              <li><a href="#">concierge@maison.vn</a></li>
+              <li>
+                <a href={`tel:${config.support_hotline.replace(/[^0-9+]/g, '')}`}>
+                  {config.support_hotline}
+                </a>
+              </li>
+              <li>
+                <a href={`mailto:${config.support_email}`}>
+                  {config.support_email}
+                </a>
+              </li>
               <li><a href="#">123 Nguyễn Huệ, Q1</a></li>
             </ul>
           </div>

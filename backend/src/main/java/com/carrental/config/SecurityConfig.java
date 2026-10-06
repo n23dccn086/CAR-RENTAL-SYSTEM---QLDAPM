@@ -36,6 +36,7 @@ public class SecurityConfig {
                 .securityMatcher(
                         "/api/v1/auth/**", "/auth/**",
                         "/api/v1/health", "/health",
+                        "/api/v1/public/**", "/public/**", 
                         "/error",
                         "/files/**",                    // ← THÊM MỚI
                         "/api/v1/files/**",

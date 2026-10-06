@@ -1,11 +1,21 @@
 import { useState, useEffect } from 'react'
+import { getPublicConfig } from '../services/publicConfigService'
 
 export default function HeaderClock() {
   const [time, setTime] = useState(new Date())
+  const [hotline, setHotline] = useState('1900-xxxx')
 
+  // ===== ĐỒNG HỒ REALTIME =====
   useEffect(() => {
     const timer = setInterval(() => setTime(new Date()), 1000)
     return () => clearInterval(timer)
+  }, [])
+
+  // ===== FETCH HOTLINE TỪ CONFIG =====
+  useEffect(() => {
+    getPublicConfig('support_hotline').then((value) => {
+      if (value) setHotline(value)
+    })
   }, [])
 
   const formatTime = (d) => {
@@ -55,9 +65,9 @@ export default function HeaderClock() {
         </span>
       </div>
 
-      {/* Hotline */}
+      {/* Hotline — ĐỌC TỪ CONFIG */}
       <a
-        href="tel:1900xxxx"
+        href={`tel:${hotline.replace(/[^0-9+]/g, '')}`}
         style={{
           display: 'flex',
           alignItems: 'center',
@@ -71,7 +81,7 @@ export default function HeaderClock() {
         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
           <path d="M 22 16.92 v 3 a 2 2 0 0 1 -2.18 2 a 19.79 19.79 0 0 1 -8.63 -3.07 a 19.5 19.5 0 0 1 -6 -6 a 19.79 19.79 0 0 1 -3.07 -8.67 A 2 2 0 0 1 4.11 2 h 3 a 2 2 0 0 1 2 1.72 c .12 .96 .37 1.9 .72 2.81 a 2 2 0 0 1 -.45 2.11 L 8.09 9.91 a 16 16 0 0 0 6 6 l 1.27 -1.27 a 2 2 0 0 1 2.11 -.45 c .91 .35 1.85 .6 2.81 .72 A 2 2 0 0 1 22 16.92 z"/>
         </svg>
-        <span>1900-xxxx</span>
+        <span>{hotline}</span>
       </a>
     </div>
   )

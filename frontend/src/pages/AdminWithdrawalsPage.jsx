@@ -11,18 +11,15 @@ export default function AdminWithdrawalsPage() {
   const [filter, setFilter] = useState('PENDING')
   const [message, setMessage] = useState('')
 
-  // ===== PHÂN TRANG =====
   const [currentPage, setCurrentPage] = useState(1)
   const ITEMS_PER_PAGE = 10
 
-  // ===== MODAL TỪ CHỐI =====
   const [rejectModal, setRejectModal] = useState(false)
   const [rejectingItem, setRejectingItem] = useState(null)
   const [rejectReason, setRejectReason] = useState('')
   const [rejectSubmitting, setRejectSubmitting] = useState(false)
   const [rejectError, setRejectError] = useState('')
 
-  // ===== FETCH =====
   const fetchData = async () => {
     setLoading(true)
     try {
@@ -43,10 +40,14 @@ export default function AdminWithdrawalsPage() {
     setCurrentPage(1)
   }, [filter])
 
-  // ===== DUYỆT =====
   const handleApprove = async (item) => {
+    const displayAmount = item.netAmount || item.amount
     const txId = window.prompt(
-      `Duyệt yêu cầu rút ${formatPrice(item.amount)}đ?\n\nNhập mã giao dịch (không bắt buộc):`,
+      `Duyệt yêu cầu rút #${item.id}?\n\n` +
+      `Số tiền yêu cầu: ${formatPrice(item.amount)}đ\n` +
+      `Phí rút: ${formatPrice(item.fee || 0)}đ\n` +
+      `→ Chuyển khoản: ${formatPrice(displayAmount)}đ\n\n` +
+      `Nhập mã giao dịch (không bắt buộc):`,
       'TXN_' + Date.now()
     )
     if (txId === null) return
@@ -61,7 +62,6 @@ export default function AdminWithdrawalsPage() {
     }
   }
 
-  // ===== MỞ MODAL TỪ CHỐI =====
   const openRejectModal = (item) => {
     setRejectingItem(item)
     setRejectReason('')
@@ -69,7 +69,6 @@ export default function AdminWithdrawalsPage() {
     setRejectModal(true)
   }
 
-  // ===== SUBMIT TỪ CHỐI =====
   const handleRejectSubmit = async (e) => {
     e.preventDefault()
     setRejectError('')
@@ -92,7 +91,6 @@ export default function AdminWithdrawalsPage() {
     }
   }
 
-  // ===== UTILS =====
   const formatPrice = (p) => new Intl.NumberFormat('vi-VN').format(p || 0)
   const formatDate = (d) =>
     d
@@ -113,7 +111,6 @@ export default function AdminWithdrawalsPage() {
     REJECTED: { label: 'Bị từ chối', color: 'var(--do)' },
   }
 
-  // ===== PHÂN TRANG =====
   const totalPages = Math.ceil(withdrawals.length / ITEMS_PER_PAGE)
   const startIndex = (currentPage - 1) * ITEMS_PER_PAGE
   const currentItems = withdrawals.slice(startIndex, startIndex + ITEMS_PER_PAGE)
@@ -179,7 +176,6 @@ export default function AdminWithdrawalsPage() {
         </div>
       )}
 
-      {/* FILTER */}
       <div
         style={{
           display: 'flex',
@@ -214,7 +210,6 @@ export default function AdminWithdrawalsPage() {
         ))}
       </div>
 
-      {/* LIST */}
       {loading ? (
         <p
           style={{
@@ -241,143 +236,165 @@ export default function AdminWithdrawalsPage() {
       ) : (
         <>
           <div>
-            {currentItems.map((w) => (
-              <div
-                key={w.id}
-                style={{
-                  padding: '24px',
-                  marginBottom: '16px',
-                  background: 'var(--kem-dam)',
-                  border: '1px solid rgba(15,14,12,0.15)',
-                }}
-              >
+            {currentItems.map((w) => {
+              const fee = w.fee || 0
+              const netAmount = w.netAmount || w.amount
+              const hasFee = fee > 0
+
+              return (
                 <div
+                  key={w.id}
                   style={{
-                    display: 'flex',
-                    justifyContent: 'space-between',
-                    alignItems: 'flex-start',
+                    padding: '24px',
                     marginBottom: '16px',
+                    background: 'var(--kem-dam)',
+                    border: '1px solid rgba(15,14,12,0.15)',
                   }}
                 >
-                  <div>
-                    <div
-                      style={{
-                        fontFamily: 'var(--mono)',
-                        fontSize: '11px',
-                        letterSpacing: '2px',
-                        color: 'var(--muc-mo)',
-                        marginBottom: '8px',
-                      }}
-                    >
-                      Yêu cầu #{w.id} · Owner #{w.ownerId} · {formatDate(w.createdAt)}
-                    </div>
-                    <div
-                      style={{
-                        fontFamily: 'var(--serif)',
-                        fontSize: '36px',
-                        fontWeight: 900,
-                        color: 'var(--do)',
-                        letterSpacing: '-1px',
-                      }}
-                    >
-                      {formatPrice(w.amount)}đ
-                    </div>
-                  </div>
-                  <div
-                    style={{
-                      padding: '6px 14px',
-                      border: `1px solid ${statusMap[w.status]?.color || 'var(--muc-mo)'}`,
-                      color: statusMap[w.status]?.color || 'var(--muc-mo)',
-                      fontFamily: 'var(--mono)',
-                      fontSize: '10px',
-                      letterSpacing: '2px',
-                      textTransform: 'uppercase',
-                      whiteSpace: 'nowrap',
-                    }}
-                  >
-                    {statusMap[w.status]?.label || w.status}
-                  </div>
-                </div>
-
-                <div
-                  style={{
-                    display: 'grid',
-                    gridTemplateColumns: 'repeat(3, 1fr)',
-                    gap: '16px',
-                    padding: '16px',
-                    background: 'var(--kem)',
-                    borderLeft: '3px solid var(--dong)',
-                    marginBottom: '16px',
-                  }}
-                >
-                  <InfoRow label="Ngân hàng" value={w.bankName} />
-                  <InfoRow label="Số TK" value={w.bankAccount} />
-                  <InfoRow label="Chủ TK" value={w.accountHolder} />
-                </div>
-
-                {w.status === 'COMPLETED' && (
-                  <div
-                    style={{
-                      padding: '12px 16px',
-                      background: 'rgba(74,93,63,0.08)',
-                      borderLeft: '3px solid var(--xanh-reu)',
-                      fontFamily: 'var(--mono)',
-                      fontSize: '12px',
-                      color: 'var(--xanh-reu)',
-                      marginBottom: '16px',
-                    }}
-                  >
-                    ✓ Đã duyệt lúc {formatDate(w.processedAt)}
-                    {w.transactionId && ` · Mã GD: ${w.transactionId}`}
-                  </div>
-                )}
-
-                {w.status === 'REJECTED' && (
-                  <div
-                    style={{
-                      padding: '12px 16px',
-                      background: 'rgba(139,44,44,0.1)',
-                      borderLeft: '3px solid var(--do)',
-                      fontFamily: 'var(--serif-2)',
-                      fontStyle: 'italic',
-                      fontSize: '14px',
-                      color: 'var(--do)',
-                      marginBottom: '16px',
-                    }}
-                  >
-                    <strong>Lý do:</strong> {w.rejectReason || 'Không có'}
-                  </div>
-                )}
-
-                {w.status === 'PENDING' && (
                   <div
                     style={{
                       display: 'flex',
-                      gap: '12px',
-                      justifyContent: 'flex-end',
-                      paddingTop: '16px',
-                      borderTop: '1px solid rgba(15,14,12,0.1)',
+                      justifyContent: 'space-between',
+                      alignItems: 'flex-start',
+                      marginBottom: '16px',
                     }}
                   >
-                    <button
-                      onClick={() => handleApprove(w)}
-                      style={btnStyle('var(--xanh-reu)', 'var(--kem)')}
+                    <div>
+                      <div
+                        style={{
+                          fontFamily: 'var(--mono)',
+                          fontSize: '11px',
+                          letterSpacing: '2px',
+                          color: 'var(--muc-mo)',
+                          marginBottom: '8px',
+                        }}
+                      >
+                        Yêu cầu #{w.id} · Owner #{w.ownerId} · {formatDate(w.createdAt)}
+                      </div>
+                      <div
+                        style={{
+                          fontFamily: 'var(--serif)',
+                          fontSize: '36px',
+                          fontWeight: 900,
+                          color: 'var(--do)',
+                          letterSpacing: '-1px',
+                        }}
+                      >
+                        {formatPrice(w.amount)}đ
+                      </div>
+                      {hasFee && (
+                        <div
+                          style={{
+                            fontFamily: 'var(--mono)',
+                            fontSize: '11px',
+                            letterSpacing: '1px',
+                            color: 'var(--muc-mo)',
+                            marginTop: '6px',
+                          }}
+                        >
+                          Phí: {formatPrice(fee)}đ →{' '}
+                          <strong style={{ color: 'var(--xanh-reu)' }}>
+                            Chuyển khoản: {formatPrice(netAmount)}đ
+                          </strong>
+                        </div>
+                      )}
+                    </div>
+                    <div
+                      style={{
+                        padding: '6px 14px',
+                        border: `1px solid ${statusMap[w.status]?.color || 'var(--muc-mo)'}`,
+                        color: statusMap[w.status]?.color || 'var(--muc-mo)',
+                        fontFamily: 'var(--mono)',
+                        fontSize: '10px',
+                        letterSpacing: '2px',
+                        textTransform: 'uppercase',
+                        whiteSpace: 'nowrap',
+                      }}
                     >
-                      ✓ Duyệt & Chuyển khoản
-                    </button>
-                    <button
-                      onClick={() => openRejectModal(w)}
-                      style={btnStyle('var(--do)', 'var(--kem)')}
-                    >
-                      ✕ Từ chối
-                    </button>
+                      {statusMap[w.status]?.label || w.status}
+                    </div>
                   </div>
-                )}
-              </div>
-            ))}
+
+                  <div
+                    style={{
+                      display: 'grid',
+                      gridTemplateColumns: 'repeat(3, 1fr)',
+                      gap: '16px',
+                      padding: '16px',
+                      background: 'var(--kem)',
+                      borderLeft: '3px solid var(--dong)',
+                      marginBottom: '16px',
+                    }}
+                  >
+                    <InfoRow label="Ngân hàng" value={w.bankName} />
+                    <InfoRow label="Số TK" value={w.bankAccount} />
+                    <InfoRow label="Chủ TK" value={w.accountHolder} />
+                  </div>
+
+                  {w.status === 'COMPLETED' && (
+                    <div
+                      style={{
+                        padding: '12px 16px',
+                        background: 'rgba(74,93,63,0.08)',
+                        borderLeft: '3px solid var(--xanh-reu)',
+                        fontFamily: 'var(--mono)',
+                        fontSize: '12px',
+                        color: 'var(--xanh-reu)',
+                        marginBottom: '16px',
+                      }}
+                    >
+                      ✓ Đã duyệt lúc {formatDate(w.processedAt)}
+                      {w.transactionId && ` · Mã GD: ${w.transactionId}`}
+                      {hasFee && ` · Đã chuyển: ${formatPrice(netAmount)}đ`}
+                    </div>
+                  )}
+
+                  {w.status === 'REJECTED' && (
+                    <div
+                      style={{
+                        padding: '12px 16px',
+                        background: 'rgba(139,44,44,0.1)',
+                        borderLeft: '3px solid var(--do)',
+                        fontFamily: 'var(--serif-2)',
+                        fontStyle: 'italic',
+                        fontSize: '14px',
+                        color: 'var(--do)',
+                        marginBottom: '16px',
+                      }}
+                    >
+                      <strong>Lý do:</strong> {w.rejectReason || 'Không có'}
+                    </div>
+                  )}
+
+                  {w.status === 'PENDING' && (
+                    <div
+                      style={{
+                        display: 'flex',
+                        gap: '12px',
+                        justifyContent: 'flex-end',
+                        paddingTop: '16px',
+                        borderTop: '1px solid rgba(15,14,12,0.1)',
+                      }}
+                    >
+                      <button
+                        onClick={() => handleApprove(w)}
+                        style={btnStyle('var(--xanh-reu)', 'var(--kem)')}
+                      >
+                        ✓ Duyệt & Chuyển {formatPrice(netAmount)}đ
+                      </button>
+                      <button
+                        onClick={() => openRejectModal(w)}
+                        style={btnStyle('var(--do)', 'var(--kem)')}
+                      >
+                        ✕ Từ chối
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )
+            })}
           </div>
 
-          {/* PHÂN TRANG */}
           {totalPages > 1 && (
             <>
               <div
@@ -430,7 +447,6 @@ export default function AdminWithdrawalsPage() {
         </>
       )}
 
-      {/* ===== MODAL TỪ CHỐI ===== */}
       {rejectModal && rejectingItem && (
         <div
           style={{

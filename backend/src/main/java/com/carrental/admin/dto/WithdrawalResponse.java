@@ -17,7 +17,15 @@ public class WithdrawalResponse {
 
     Long id;
     Long ownerId;
+
+    /** Số tiền YÊU CẦU rút */
     BigDecimal amount;
+
+    /** Phí rút tiền */
+    BigDecimal fee;
+
+    /** Số tiền THỰC NHẬN = amount - fee */
+    BigDecimal netAmount;
 
     String bankName;
     String bankAccount;

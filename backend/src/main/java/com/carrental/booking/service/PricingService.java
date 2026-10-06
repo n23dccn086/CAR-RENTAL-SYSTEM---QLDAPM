@@ -1,23 +1,33 @@
 package com.carrental.booking.service;
 
+import com.carrental.admin.service.ConfigHelper;
 import com.carrental.booking.dto.BookingRequest;
 import com.carrental.booking.entity.BookingDetail;
 import com.carrental.car.entity.Car;
 import com.carrental.car.entity.RentalMode;
+import lombok.AccessLevel;
+import lombok.RequiredArgsConstructor;
+import lombok.experimental.FieldDefaults;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
+import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.Duration;
 import java.time.LocalDateTime;
 
 @Service
+@RequiredArgsConstructor
+@FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
 @Slf4j
 public class PricingService {
 
-    // Giá bảo hiểm mỗi ngày (VND)
+    ConfigHelper configHelper;      // ← THÊM: inject helper đọc config
+
+    // Giá bảo hiểm mỗi ngày (VND) — vẫn hardcode, chưa có config
     private static final long INSURANCE_FEE_PER_DAY = 100_000L;
 
-    // Phí tài xế mỗi ngày (VND)
+    // Phí tài xế mỗi ngày (VND) — vẫn hardcode
     private static final long DRIVER_FEE_PER_DAY = 500_000L;
 
     // Số ngày tối thiểu
@@ -30,24 +40,19 @@ public class PricingService {
         log.info("Calculating pricing for car: {}, from {} to {}",
                 car.getId(), request.getStartDate(), request.getEndDate());
 
-        // Tính số ngày thuê
         int rentalDays = calculateRentalDays(request.getStartDate(), request.getEndDate());
 
-        // Giá thuê cơ bản
         long pricePerDay = getPricePerDay(car, request.getStartDate());
         long rentalFee = pricePerDay * rentalDays;
 
-        // Phí giao xe
         long deliveryFee = Boolean.TRUE.equals(request.getDeliveryRequired())
                 ? (car.getDeliveryFee() != null ? car.getDeliveryFee() : 0L)
                 : 0L;
 
-        // Phí bảo hiểm
         long insuranceFee = Boolean.TRUE.equals(request.getHasInsurance())
                 ? INSURANCE_FEE_PER_DAY * rentalDays
                 : 0L;
 
-        // Phí tài xế (chỉ khi thuê có tài xế)
         long driverFee = 0L;
         if (request.getRentalMode() == RentalMode.WITH_DRIVER
                 || request.getRentalMode() == RentalMode.BOTH) {
@@ -56,10 +61,7 @@ public class PricingService {
             }
         }
 
-        // Discount (chưa áp dụng voucher)
         long discount = 0L;
-
-        // Extra fee (chưa có phát sinh)
         long extraFee = 0L;
 
         log.info("Pricing calculated: {} days, rentalFee: {}, total: {}",
@@ -91,10 +93,20 @@ public class PricingService {
     }
 
     /**
-     * Tính tiền cọc (30% tổng tiền)
+     * Tính tiền cọc — ĐỌC % TỪ CONFIG (default_deposit_percent).
+     * VD: config=30 → cọc = totalPrice × 30%
      */
     public long calculateDeposit(long totalPrice) {
-        return (long) (totalPrice * 0.3);
+        BigDecimal depositPercent = configHelper.getDefaultDepositPercent();
+
+        BigDecimal deposit = BigDecimal.valueOf(totalPrice)
+                .multiply(depositPercent)
+                .divide(new BigDecimal("100"), 0, RoundingMode.HALF_UP);
+
+        log.info("Deposit calculated: total={}, percent={}%, deposit={}",
+                totalPrice, depositPercent, deposit);
+
+        return deposit.longValue();
     }
 
     /**
@@ -104,12 +116,10 @@ public class PricingService {
         Duration duration = Duration.between(start, end);
         long hours = duration.toHours();
 
-        // Nếu thuê dưới 24h → tính 1 ngày
         if (hours <= 24) {
             return MIN_RENTAL_DAYS;
         }
 
-        // Làm tròn lên
         int days = (int) Math.ceil(hours / 24.0);
         return Math.max(days, MIN_RENTAL_DAYS);
     }
@@ -118,7 +128,6 @@ public class PricingService {
      * Lấy giá thuê theo ngày (xử lý giá cuối tuần, lễ)
      */
     private long getPricePerDay(Car car, LocalDateTime startDate) {
-        // Check cuối tuần (Saturday=6, Sunday=7)
         int dayOfWeek = startDate.getDayOfWeek().getValue();
         boolean isWeekend = dayOfWeek == 6 || dayOfWeek == 7;
 

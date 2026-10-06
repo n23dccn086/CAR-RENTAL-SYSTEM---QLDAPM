@@ -32,8 +32,18 @@ public class Withdrawal {
     @Column(name = "owner_id", nullable = false)
     Long ownerId;
 
+    /** Số tiền owner YÊU CẦU rút (gross) */
     @Column(nullable = false, precision = 12, scale = 0)
     BigDecimal amount;
+
+    /** Phí rút tiền tại thời điểm tạo yêu cầu */
+    @Column(precision = 12, scale = 0)
+    @Builder.Default
+    BigDecimal fee = BigDecimal.ZERO;
+
+    /** Số tiền THỰC NHẬN = amount - fee */
+    @Column(name = "net_amount", nullable = false, precision = 12, scale = 0)
+    BigDecimal netAmount;
 
     @Column(name = "bank_name", nullable = false, length = 100)
     String bankName;
@@ -70,4 +80,18 @@ public class Withdrawal {
 
     @Column(name = "deleted_at")
     LocalDateTime deletedAt;
+
+    // ===== HELPER =====
+
+    /**
+     * Pre-persist: đảm bảo netAmount luôn được set.
+     */
+    @PrePersist
+    @PreUpdate
+    public void ensureNetAmount() {
+        if (fee == null) fee = BigDecimal.ZERO;
+        if (amount != null) {
+            netAmount = amount.subtract(fee);
+        }
+    }
 }

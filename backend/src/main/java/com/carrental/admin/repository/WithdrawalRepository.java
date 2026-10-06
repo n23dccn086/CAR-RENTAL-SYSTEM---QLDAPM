@@ -18,7 +18,21 @@ public interface WithdrawalRepository extends JpaRepository<Withdrawal, Long> {
 
     long countByStatus(String status);
 
+    /**
+     * Tổng tiền ĐANG CHỜ rút (chưa chuyển khoản xong).
+     * Chỉ tính PENDING / APPROVED / PROCESSING.
+     */
     @Query("SELECT COALESCE(SUM(w.amount), 0) FROM Withdrawal w " +
            "WHERE w.ownerId = :ownerId AND w.status IN ('PENDING', 'APPROVED', 'PROCESSING')")
     BigDecimal sumPendingAmountByOwner(@Param("ownerId") Long ownerId);
+
+    /**
+     * Tổng tiền ĐÃ RÚT (bao gồm cả COMPLETED).
+     * Dùng để tính availableBalance = totalIncome - totalWithdrawn.
+     * Bao gồm: PENDING + APPROVED + PROCESSING + COMPLETED (không tính REJECTED).
+     */
+    @Query("SELECT COALESCE(SUM(w.amount), 0) FROM Withdrawal w " +
+           "WHERE w.ownerId = :ownerId " +
+           "AND w.status IN ('PENDING', 'APPROVED', 'PROCESSING', 'COMPLETED')")
+    BigDecimal sumWithdrawnAmountByOwner(@Param("ownerId") Long ownerId);
 }
