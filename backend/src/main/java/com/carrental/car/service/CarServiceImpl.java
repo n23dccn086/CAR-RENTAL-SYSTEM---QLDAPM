@@ -19,6 +19,8 @@ import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
@@ -59,11 +61,16 @@ public class CarServiceImpl implements CarService {
         car.setOwnerId(ownerId);
         car.setStatus(CarStatus.PENDING);
 
-        if (car.getCurrentKm() == null) car.setCurrentKm(0);
-        if (car.getExtraKmPrice() == null) car.setExtraKmPrice(5000L);
-        if (car.getDeliveryFee() == null) car.setDeliveryFee(100000L);
-        if (car.getCleaningFee() == null) car.setCleaningFee(0L);
-        if (car.getDeliveryRadius() == null) car.setDeliveryRadius(20);
+        if (car.getCurrentKm() == null)
+            car.setCurrentKm(0);
+        if (car.getExtraKmPrice() == null)
+            car.setExtraKmPrice(5000L);
+        if (car.getDeliveryFee() == null)
+            car.setDeliveryFee(100000L);
+        if (car.getCleaningFee() == null)
+            car.setCleaningFee(0L);
+        if (car.getDeliveryRadius() == null)
+            car.setDeliveryRadius(20);
 
         Car saved = carRepository.save(car);
         log.info("Car created with id: {}", saved.getId());
@@ -192,6 +199,36 @@ public class CarServiceImpl implements CarService {
         return carMapper.toResponseList(cars);
     }
 
+    // ============================================================
+    // SEARCH XE AVAILABLE VỚI 3 FILTER + SORT + PHÂN TRANG
+    // ============================================================
+
+    @Override
+    @Transactional(readOnly = true)
+    public Page<CarResponse> searchAvailableCars(
+            String location,
+            List<Integer> seats,
+            String carType,
+            Pageable pageable) {
+
+        List<Integer> seatsParam = (seats != null && !seats.isEmpty()) ? seats : null;
+        String typeParam = (carType != null && !carType.isBlank()) ? carType.trim() : null;
+        String locParam = (location != null && !location.isBlank()) ? location.trim() : null;
+
+        log.info("Search available cars: location={}, seats={}, carType={}",
+                locParam, seatsParam, typeParam);
+
+        Page<Car> cars;
+        if (seatsParam != null) {
+            // Có filter seats
+            cars = carRepository.searchWithSeats(locParam, seatsParam, typeParam, pageable);
+        } else {
+            // Không có filter seats
+            cars = carRepository.searchWithoutSeats(locParam, typeParam, pageable);
+        }
+
+        return cars.map(carMapper::toResponse);
+    }
     // ===== ADMIN =====
 
     @Override
@@ -222,7 +259,7 @@ public class CarServiceImpl implements CarService {
     }
 
     // ============================================================
-    // ===== ẢNH XE — UPLOAD / GET / DELETE =====
+    // ẢNH XE — UPLOAD / GET / DELETE
     // ============================================================
 
     @Override
@@ -240,7 +277,8 @@ public class CarServiceImpl implements CarService {
         long existing = carImageRepository.countByCarId(carId);
 
         for (MultipartFile file : files) {
-            if (file.isEmpty()) continue;
+            if (file.isEmpty())
+                continue;
             if (existing + urls.size() >= 10) {
                 log.warn("Vượt quá 10 ảnh cho car {}", carId);
                 break;

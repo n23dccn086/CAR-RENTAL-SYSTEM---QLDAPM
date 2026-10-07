@@ -15,6 +15,10 @@ import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
@@ -52,12 +56,54 @@ public class CarController {
         return ApiResponse.success(carService.getAvailableCars());
     }
 
+    /**
+     * SEARCH: 3 filter + sort + phân trang (native query)
+     */
     @GetMapping("/search")
-    public ApiResponse<List<CarResponse>> searchCars(
-            @RequestParam(required = false) CarStatus status,
-            @RequestParam(required = false) CarType type) {
-        log.info("REST request to search cars: status={}, type={}", status, type);
-        return ApiResponse.success(carService.searchCars(status, type));
+    public ApiResponse<Page<CarResponse>> searchCars(
+            @RequestParam(required = false) String location,
+            @RequestParam(required = false) List<Integer> seats,
+            @RequestParam(required = false) String carType,
+            @RequestParam(defaultValue = "pricePerDay,asc") String sort,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size) {
+
+        log.info("REST search cars: location={}, seats={}, carType={}, sort={}, page={}, size={}",
+                location, seats, carType, sort, page, size);
+
+        String[] sortParts = sort.split(",");
+        Sort.Direction direction = sortParts.length > 1 && sortParts[1].equalsIgnoreCase("desc")
+                ? Sort.Direction.DESC : Sort.Direction.ASC;
+
+        // ★ MAP JPA property → DB column (native query cần DB column)
+        String sortField = mapSortField(sortParts[0]);
+
+        Pageable pageable = PageRequest.of(page, size, Sort.by(direction, sortField));
+
+        Page<CarResponse> result = carService.searchAvailableCars(
+                location, seats, carType, pageable);
+
+        return ApiResponse.success(result);
+    }
+
+    /**
+     * Map JPA property name → DB column name (cho native query)
+     */
+    private String mapSortField(String jpaField) {
+        return switch (jpaField) {
+            case "pricePerDay" -> "price_per_day";
+            case "priceWeekend" -> "price_weekend";
+            case "priceHoliday" -> "price_holiday";
+            case "createdAt" -> "created_at";
+            case "updatedAt" -> "updated_at";
+            case "currentKm" -> "current_km";
+            case "extraKmPrice" -> "extra_km_price";
+            case "deliveryFee" -> "delivery_fee";
+            case "cleaningFee" -> "cleaning_fee";
+            case "rentalMode" -> "rental_mode";
+            case "carType" -> "car_type";
+            default -> jpaField;  // year, brand, model, seats, plate... giữ nguyên
+        };
     }
 
     @GetMapping("/{id}/images")
@@ -66,7 +112,7 @@ public class CarController {
         return ApiResponse.success(carService.getCarImages(id));
     }
 
-    // ===== PROTECTED ENDPOINTS (cần OWNER hoặc ADMIN) =====
+    // ===== PROTECTED ENDPOINTS =====
 
     @PostMapping
     @PreAuthorize("hasAnyRole('OWNER', 'ADMIN')")
@@ -117,7 +163,7 @@ public class CarController {
         return ApiResponse.success(carService.getCarsByOwner(ownerId));
     }
 
-    // ===== ẢNH XE — UPLOAD + DELETE (cần OWNER hoặc ADMIN) =====
+    // ===== ẢNH XE =====
 
     @PostMapping("/{id}/images")
     @PreAuthorize("hasAnyRole('OWNER', 'ADMIN')")
@@ -147,7 +193,7 @@ public class CarController {
         return ApiResponse.success("Xóa ảnh thành công", null);
     }
 
-    // ===== ADMIN ENDPOINTS =====
+    // ===== ADMIN =====
 
     @PutMapping("/{id}/approve")
     @PreAuthorize("hasRole('ADMIN')")
@@ -164,8 +210,6 @@ public class CarController {
         log.info("REST request to reject car: {}, reason: {}", id, reason);
         return ApiResponse.success("Từ chối xe thành công", carService.rejectCar(id, reason));
     }
-
-    // ===== HELPER =====
 
     private Long extractUserId(HttpServletRequest request) {
         String authHeader = request.getHeader("Authorization");

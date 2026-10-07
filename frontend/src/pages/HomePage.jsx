@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom'
 import CarCard from '../components/CarCard'
 import Reveal from '../components/Reveal'
 import HeroCarArt from '../components/HeroCarArt'
-import { getCars } from '../services/carService'
+import { searchCars } from '../services/carService'
 
 export default function HomePage() {
   const [cars, setCars] = useState([])
@@ -12,8 +12,15 @@ export default function HomePage() {
   useEffect(() => {
     const fetchCars = async () => {
       try {
-        const data = await getCars({ limit: 4 })
-        setCars(data.data?.cars || data.data || [])
+        // ★ ĐỔI: getCars() → searchCars() để chỉ hiện xe AVAILABLE
+        // Sort mới nhất (createdAt,desc) → lấy 4 xe mới nhất
+        const data = await searchCars({
+          sort: 'createdAt,desc',
+          page: 0,
+          size: 4,
+        })
+        // Response là Page<CarResponse> → data.data.content
+        setCars(data.data?.content || [])
       } catch (err) {
         console.error('Lỗi tải xe:', err)
       } finally {
@@ -50,14 +57,11 @@ export default function HomePage() {
             </div>
           </div>
 
-          {/* ============ HERO VISUAL — ĐÃ THAY ============ */}
           <div className="hero-visual">
             <div className="hero-frame" style={{ padding: 0 }}>
               <HeroCarArt />
             </div>
           </div>
-          {/* ============================================ */}
-
         </div>
       </section>
 

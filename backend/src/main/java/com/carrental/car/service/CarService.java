@@ -5,6 +5,8 @@ import com.carrental.car.dto.CarResponse;
 import com.carrental.car.entity.Car;
 import com.carrental.car.entity.CarStatus;
 import com.carrental.car.entity.CarType;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
@@ -34,10 +36,18 @@ public interface CarService {
 
     CarResponse rejectCar(Long id, String reason);
 
-    // ===== ẢNH XE =====
     List<String> uploadImages(Long carId, Long ownerId, MultipartFile[] files) throws IOException;
 
     List<String> getCarImages(Long carId);
 
     void deleteImage(Long carId, Long ownerId, String imageUrl);
+
+    // ============================================================
+    // SEARCH XE AVAILABLE VỚI 3 FILTER + SORT + PHÂN TRANG
+    // ============================================================
+    Page<CarResponse> searchAvailableCars(
+            String location,
+            List<Integer> seats,
+            String carType,
+            Pageable pageable);
 }
