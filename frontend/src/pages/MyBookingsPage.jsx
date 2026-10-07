@@ -373,6 +373,11 @@ export default function MyBookingsPage() {
                             (trả muộn: {formatPrice(b.lateFee)}đ)
                           </span>
                         )}
+                        {b.kmOverageFee > 0 && (
+                          <span style={{ marginLeft: "8px", opacity: 0.7 }}>
+                            (vượt km: {formatPrice(b.kmOverageFee)}đ)
+                          </span>
+                        )}
                       </div>
                     )}
                   </Link>

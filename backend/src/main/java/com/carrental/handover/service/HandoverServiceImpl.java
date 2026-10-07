@@ -5,6 +5,7 @@ import com.carrental.booking.entity.Booking;
 import com.carrental.booking.entity.BookingStatus;
 import com.carrental.booking.repository.BookingRepository;
 import com.carrental.car.entity.Car;
+import com.carrental.car.entity.RentalMode;
 import com.carrental.car.repository.CarRepository;
 import com.carrental.common.constant.ErrorCode;
 import com.carrental.common.exception.BadRequestException;
@@ -51,13 +52,12 @@ public class HandoverServiceImpl implements HandoverService {
     NotificationService notificationService;
     ConfigHelper configHelper;
 
-    // ===== BẢNG PHÍ VƯỢT GIỜ (theo spec UC-C12) =====
-    private static final long FREE_MINUTES = 15L;           // < 15p: miễn
-    private static final long HOURLY_THRESHOLD = 60L;       // 15p-1h: 100k/h
-    private static final long HALF_DAY_THRESHOLD = 240L;    // 1h-4h: 50% giá ngày
-    private static final long FULL_DAY_THRESHOLD = 1440L;   // 4h-24h: 100% giá ngày
+    // ===== BẢNG PHÍ VƯỢT GIỜ (UC-C12) =====
+    private static final long FREE_MINUTES = 15L;
+    private static final long HOURLY_THRESHOLD = 60L;
+    private static final long HALF_DAY_THRESHOLD = 240L;
+    private static final long FULL_DAY_THRESHOLD = 1440L;
 
-    // Timezone constants
     private static final ZoneId VN_ZONE = ZoneId.of("Asia/Ho_Chi_Minh");
 
     // ===== CREATE =====
@@ -71,13 +71,11 @@ public class HandoverServiceImpl implements HandoverService {
         Booking booking = bookingRepository.findById(request.getBookingId())
                 .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.BOOKING_NOT_FOUND));
 
-        // ===== CHECK QUYỀN: Chỉ OWNER tạo =====
         if (!booking.getOwnerId().equals(userId)) {
             throw new UnauthorizedException(ErrorCode.PERMISSION_DENIED,
                     "Chỉ chủ xe mới có thể tạo biên bản");
         }
 
-        // ===== CHECK TRẠNG THÁI BOOKING =====
         String type = request.getHandoverType();
         if ("PICKUP".equalsIgnoreCase(type)) {
             if (booking.getStatus() != BookingStatus.APPROVED) {
@@ -94,43 +92,65 @@ public class HandoverServiceImpl implements HandoverService {
                     "Loại biên bản phải là PICKUP hoặc RETURN");
         }
 
-        // ===== CHECK ĐÃ TỒN TẠI CHƯA =====
         if (handoverRepository.existsByBookingIdAndHandoverType(
                 request.getBookingId(), type)) {
             throw new BadRequestException(ErrorCode.VALIDATION_ERROR,
                     "Biên bản loại này đã tồn tại cho đơn này");
         }
 
-        // ===== VALIDATE KM =====
         if (request.getKmReading() == null || request.getKmReading() < 0) {
             throw new BadRequestException(ErrorCode.VALIDATION_ERROR,
                     "Số km không hợp lệ");
         }
 
-        // ===== VALIDATE FUEL LEVEL =====
         if (request.getFuelLevel() != null
                 && (request.getFuelLevel() < 0 || request.getFuelLevel() > 100)) {
             throw new BadRequestException(ErrorCode.VALIDATION_ERROR,
                     "Mức xăng phải từ 0 đến 100");
         }
 
-        // ===== UC-C12: TÍNH PHÍ VƯỢT GIỜ (chỉ RETURN) =====
+        // ===== UC-C12: PHÍ VƯỢT GIỜ =====
         LocalDateTime actualReturnTime = null;
         BigDecimal lateFee = BigDecimal.ZERO;
         int lateMinutes = 0;
 
+        // ===== ★ UC-C13: PHÍ VƯỢT KM (chỉ RETURN + Tự lái) =====
+        Integer kmDriven = null;
+        Integer kmAllowed = null;
+        int kmOverage = 0;
+        BigDecimal kmOverageFee = BigDecimal.ZERO;
+
         if ("RETURN".equalsIgnoreCase(type)) {
-            // Nếu owner không nhập → dùng thời điểm hiện tại
+            // UC-C12
             actualReturnTime = request.getActualReturnTime() != null
                     ? request.getActualReturnTime()
                     : LocalDateTime.now();
-
             LateFeeResult result = calculateLateFee(booking, actualReturnTime);
             lateFee = result.fee;
             lateMinutes = result.minutesLate;
 
-            log.info("Late fee calculated for booking {}: {} minutes late → {}đ",
+            log.info("Late fee calculated for booking {}: {} minutes → {}đ",
                     booking.getId(), lateMinutes, lateFee);
+
+            // ★ UC-C13: CHỈ TÍNH KM VƯỢT KHI TỰ LÁI
+            if (booking.getRentalMode() == RentalMode.SELF_DRIVE) {
+                HandoverRecord pickupRecord = handoverRepository
+                        .findByBookingIdAndHandoverType(booking.getId(), "PICKUP")
+                        .orElse(null);
+
+                if (pickupRecord != null && pickupRecord.getKmReading() != null) {
+                    KmOverageResult kmResult = calculateKmOverage(
+                            booking, pickupRecord.getKmReading(), request.getKmReading());
+
+                    kmDriven = kmResult.kmDriven;
+                    kmAllowed = kmResult.kmAllowed;
+                    kmOverage = kmResult.kmOverage;
+                    kmOverageFee = kmResult.fee;
+
+                    log.info("Km overage for booking {}: driven={}, allowed={}, over={}, fee={}đ",
+                            booking.getId(), kmDriven, kmAllowed, kmOverage, kmOverageFee);
+                }
+            }
         }
 
         // ===== TẠO RECORD =====
@@ -147,11 +167,16 @@ public class HandoverServiceImpl implements HandoverService {
                 .actualReturnTime(actualReturnTime)
                 .lateFee(lateFee)
                 .lateMinutes(lateMinutes)
+                .kmDriven(kmDriven)
+                .kmAllowed(kmAllowed)
+                .kmOverage(kmOverage)
+                .kmOverageFee(kmOverageFee)
                 .status(HandoverStatus.PENDING)
                 .build();
 
         HandoverRecord saved = handoverRepository.save(record);
-        log.info("Handover created: id={}, lateFee={}", saved.getId(), saved.getLateFee());
+        log.info("Handover created: id={}, lateFee={}, kmOverageFee={}",
+                saved.getId(), saved.getLateFee(), saved.getKmOverageFee());
 
         // ===== LƯU ẢNH =====
         if (request.getImages() != null && !request.getImages().isEmpty()) {
@@ -169,16 +194,21 @@ public class HandoverServiceImpl implements HandoverService {
         // ===== THÔNG BÁO CHO KHÁCH =====
         try {
             String typeLabel = "PICKUP".equals(type) ? "giao xe" : "nhận xe";
-            String lateNote = lateFee.compareTo(BigDecimal.ZERO) > 0
-                    ? String.format(" (có phí trả muộn %sđ)", formatMoney(lateFee))
-                    : "";
+            StringBuilder feeMsg = new StringBuilder();
+            if (lateFee.compareTo(BigDecimal.ZERO) > 0) {
+                feeMsg.append(String.format(" (phí trả muộn %sđ)", formatMoney(lateFee)));
+            }
+            if (kmOverageFee.compareTo(BigDecimal.ZERO) > 0) {
+                feeMsg.append(String.format(" (phí vượt %d km: %sđ)",
+                        kmOverage, formatMoney(kmOverageFee)));
+            }
 
             notificationService.createNotification(
                     booking.getCustomerId(),
                     NotificationType.SYSTEM,
                     "Có biên bản " + typeLabel + " cần ký",
                     String.format("Chủ xe đã tạo biên bản %s cho đơn #%d%s. Vui lòng vào ký xác nhận.",
-                            typeLabel, booking.getId(), lateNote),
+                            typeLabel, booking.getId(), feeMsg.toString()),
                     saved.getId()
             );
         } catch (Exception e) {
@@ -200,11 +230,8 @@ public class HandoverServiceImpl implements HandoverService {
     @Override
     public List<HandoverResponse> getHandoversByBooking(Long bookingId, Long userId) {
         checkUserInBooking(bookingId, userId);
-
         List<HandoverRecord> records = handoverRepository.findByBookingId(bookingId);
-        return records.stream()
-                .map(r -> buildResponse(r, userId))
-                .toList();
+        return records.stream().map(r -> buildResponse(r, userId)).toList();
     }
 
     // ===== SIGN =====
@@ -226,44 +253,35 @@ public class HandoverServiceImpl implements HandoverService {
             throw new BadRequestException(ErrorCode.VALIDATION_ERROR, "Biên bản đã bị hủy");
         }
 
-        // ===== CHECK QUYỀN + GÁN CHỮ KÝ =====
         if ("OWNER".equalsIgnoreCase(role)) {
             if (!booking.getOwnerId().equals(userId)) {
-                throw new UnauthorizedException(ErrorCode.PERMISSION_DENIED,
-                        "Bạn không phải chủ xe của đơn này");
+                throw new UnauthorizedException(ErrorCode.PERMISSION_DENIED);
             }
             if (record.getOwnerSignature() != null) {
-                throw new BadRequestException(ErrorCode.VALIDATION_ERROR,
-                        "Bạn đã ký rồi");
+                throw new BadRequestException(ErrorCode.VALIDATION_ERROR, "Bạn đã ký rồi");
             }
             record.setOwnerSignature(signatureUrl);
             record.setOwnerSignedAt(LocalDateTime.now());
-
         } else if ("CUSTOMER".equalsIgnoreCase(role)) {
             if (!booking.getCustomerId().equals(userId)) {
-                throw new UnauthorizedException(ErrorCode.PERMISSION_DENIED,
-                        "Bạn không phải khách thuê của đơn này");
+                throw new UnauthorizedException(ErrorCode.PERMISSION_DENIED);
             }
             if (record.getCustomerSignature() != null) {
-                throw new BadRequestException(ErrorCode.VALIDATION_ERROR,
-                        "Bạn đã ký rồi");
+                throw new BadRequestException(ErrorCode.VALIDATION_ERROR, "Bạn đã ký rồi");
             }
             record.setCustomerSignature(signatureUrl);
             record.setCustomerSignedAt(LocalDateTime.now());
-
         } else {
             throw new BadRequestException(ErrorCode.VALIDATION_ERROR, "Role không hợp lệ");
         }
 
-        // ===== NẾU ĐỦ 2 CHỮ KÝ → HOÀN TẤT =====
         if (record.getOwnerSignature() != null && record.getCustomerSignature() != null) {
             record.setStatus(HandoverStatus.SIGNED);
             record.setRecordHash(generateHash(record));
 
-            // ===== UPDATE BOOKING STATUS =====
             if ("PICKUP".equals(record.getHandoverType())) {
                 booking.setStatus(BookingStatus.RENTED);
-                log.info("Booking {} status updated to RENTED", booking.getId());
+                log.info("Booking {} → RENTED", booking.getId());
             } else if ("RETURN".equals(record.getHandoverType())) {
                 booking.setStatus(BookingStatus.RETURNED);
                 booking.setActualReturnDate(record.getActualReturnTime());
@@ -272,14 +290,19 @@ public class HandoverServiceImpl implements HandoverService {
                 long newTotal = oldTotal;
                 StringBuilder feeLog = new StringBuilder();
 
-                // ===== UC-C12: Cộng phí vượt giờ =====
                 if (record.getLateFee() != null
                         && record.getLateFee().compareTo(BigDecimal.ZERO) > 0) {
                     newTotal += record.getLateFee().longValue();
                     feeLog.append("+late:").append(record.getLateFee()).append(" ");
                 }
 
-                // ===== Cộng phí phát sinh (vệ sinh, xăng, ...) =====
+                // ★ UC-C13: Cộng phí vượt km
+                if (record.getKmOverageFee() != null
+                        && record.getKmOverageFee().compareTo(BigDecimal.ZERO) > 0) {
+                    newTotal += record.getKmOverageFee().longValue();
+                    feeLog.append("+km:").append(record.getKmOverageFee()).append(" ");
+                }
+
                 if (record.getExtraFees() != null
                         && record.getExtraFees().compareTo(BigDecimal.ZERO) > 0) {
                     newTotal += record.getExtraFees().longValue();
@@ -288,19 +311,19 @@ public class HandoverServiceImpl implements HandoverService {
 
                 if (newTotal != oldTotal) {
                     booking.setTotalPrice(newTotal);
+                    booking.setRemainingAmount(newTotal - booking.getDepositAmount());
                     log.info("Booking {} total updated: {} → {} ({})",
                             booking.getId(), oldTotal, newTotal, feeLog.toString().trim());
                 }
 
-                log.info("Booking {} status updated to RETURNED, actualReturnDate={}",
+                log.info("Booking {} → RETURNED, actualReturnDate={}",
                         booking.getId(), booking.getActualReturnDate());
             }
             bookingRepository.save(booking);
 
-            // ===== THÔNG BÁO 2 BÊN =====
+            // Thông báo 2 bên
             try {
-                String typeLabel = "PICKUP".equals(record.getHandoverType())
-                        ? "giao xe" : "nhận xe";
+                String typeLabel = "PICKUP".equals(record.getHandoverType()) ? "giao xe" : "nhận xe";
                 StringBuilder msgBuilder = new StringBuilder();
                 msgBuilder.append(String.format("Biên bản %s đơn #%d đã được 2 bên ký.",
                         typeLabel, booking.getId()));
@@ -309,6 +332,11 @@ public class HandoverServiceImpl implements HandoverService {
                         && record.getLateFee().compareTo(BigDecimal.ZERO) > 0) {
                     msgBuilder.append(String.format(" Phí trả muộn: %sđ.",
                             formatMoney(record.getLateFee())));
+                }
+                if (record.getKmOverageFee() != null
+                        && record.getKmOverageFee().compareTo(BigDecimal.ZERO) > 0) {
+                    msgBuilder.append(String.format(" Phí vượt km (%d km): %sđ.",
+                            record.getKmOverage(), formatMoney(record.getKmOverageFee())));
                 }
                 if (record.getExtraFees() != null
                         && record.getExtraFees().compareTo(BigDecimal.ZERO) > 0) {
@@ -319,30 +347,22 @@ public class HandoverServiceImpl implements HandoverService {
                 String msg = msgBuilder.toString();
 
                 notificationService.createNotification(
-                        booking.getOwnerId(),
-                        NotificationType.SYSTEM,
-                        "Biên bản đã hoàn tất",
-                        msg, record.getId()
-                );
+                        booking.getOwnerId(), NotificationType.SYSTEM,
+                        "Biên bản đã hoàn tất", msg, record.getId());
                 notificationService.createNotification(
-                        booking.getCustomerId(),
-                        NotificationType.SYSTEM,
-                        "Biên bản đã hoàn tất",
-                        msg, record.getId()
-                );
+                        booking.getCustomerId(), NotificationType.SYSTEM,
+                        "Biên bản đã hoàn tất", msg, record.getId());
             } catch (Exception e) {
                 log.warn("Failed to send notification: {}", e.getMessage());
             }
         } else {
-            // ===== CHỈ 1 BÊN KÝ → THÔNG BÁO BÊN CÒN LẠI =====
             try {
                 Long notifyUserId = "OWNER".equalsIgnoreCase(role)
                         ? booking.getCustomerId()
                         : booking.getOwnerId();
 
                 notificationService.createNotification(
-                        notifyUserId,
-                        NotificationType.SYSTEM,
+                        notifyUserId, NotificationType.SYSTEM,
                         "Đối phương đã ký biên bản",
                         String.format("Đối phương đã ký biên bản đơn #%d. Vui lòng ký xác nhận.",
                                 booking.getId()),
@@ -357,32 +377,17 @@ public class HandoverServiceImpl implements HandoverService {
         return buildResponse(updated, userId);
     }
 
-    // ===== UC-C12: HELPER TÍNH PHÍ VƯỢT GIỜ =====
+    // ===== UC-C12: PHÍ VƯỢT GIỜ =====
 
-    /**
-     * Tính phí vượt giờ theo bảng 5 mức:
-     *   <15 phút           → miễn
-     *   15 phút - 1 giờ    → 100.000đ/giờ (config)
-     *   1h - 4h            → 50% giá thuê 1 ngày
-     *   4h - 24h           → 100% giá thuê 1 ngày
-     *   > 24h              → giá thuê 1 ngày + 20% phạt
-     *
-     * FIX TIMEZONE: DB lưu UTC (PostgreSQL default), Java đọc LocalDateTime
-     * → Convert endDate từ UTC sang VN trước khi so sánh với actualReturnTime.
-     */
     private LateFeeResult calculateLateFee(Booking booking, LocalDateTime actualReturnTime) {
         if (actualReturnTime == null || booking.getEndDate() == null) {
             return new LateFeeResult(BigDecimal.ZERO, 0);
         }
 
-        // ⚠️ FIX TIMEZONE: end_date trong DB lưu UTC → convert sang VN
         LocalDateTime endDateVN = booking.getEndDate()
                 .atZone(ZoneOffset.UTC)
                 .withZoneSameInstant(VN_ZONE)
                 .toLocalDateTime();
-
-        log.info("TZ FIX: endDate(raw/UTC)={}, endDate(VN)={}, actual={}",
-                booking.getEndDate(), endDateVN, actualReturnTime);
 
         long minutesLate = Duration.between(endDateVN, actualReturnTime).toMinutes();
         if (minutesLate <= 0) {
@@ -390,43 +395,92 @@ public class HandoverServiceImpl implements HandoverService {
         }
 
         int minutes = (int) minutesLate;
-
         long pricePerDay = getPricePerDay(booking);
         BigDecimal feePerHour = configHelper.getLateFeePerHour();
 
-        // ===== ÁP DỤNG BẢNG PHÍ =====
-
-        // 1. < 15 phút: miễn
         if (minutes < FREE_MINUTES) {
             return new LateFeeResult(BigDecimal.ZERO, minutes);
         }
-
-        // 2. 15 phút - 1 giờ: feePerHour
         if (minutes < HOURLY_THRESHOLD) {
             return new LateFeeResult(feePerHour, minutes);
         }
-
-        // 3. 1h - 4h: 50% giá ngày
         if (minutes < HALF_DAY_THRESHOLD) {
             long fee = pricePerDay / 2;
             return new LateFeeResult(BigDecimal.valueOf(fee), minutes);
         }
-
-        // 4. 4h - 24h: 100% giá ngày
         if (minutes < FULL_DAY_THRESHOLD) {
             return new LateFeeResult(BigDecimal.valueOf(pricePerDay), minutes);
         }
 
-        // 5. > 24h: giá ngày + 20% phạt
         long fee = pricePerDay + (pricePerDay * 20 / 100);
         return new LateFeeResult(BigDecimal.valueOf(fee), minutes);
     }
 
+    // ===== ★ UC-C13: PHÍ VƯỢT KM =====
+
+    /**
+     * Tính phí vượt km theo 3 bậc config.
+     * Chỉ áp dụng cho SELF_DRIVE.
+     * Ví dụ: 2 ngày, chạy 750km, km_per_day=300 → allowed=600, over=150
+     *   - Bậc 1: 50km × 5000 = 250.000
+     *   - Bậc 2: 50km × 8000 = 400.000
+     *   - Bậc 3: 50km × 12000 = 600.000
+     *   - Tổng: 1.250.000đ
+     */
+    private KmOverageResult calculateKmOverage(
+            Booking booking, int pickupKm, int returnKm) {
+
+        int kmDriven = returnKm - pickupKm;
+        if (kmDriven <= 0) {
+            return new KmOverageResult(0, 0, 0, BigDecimal.ZERO);
+        }
+
+        int rentalDays = calculateRentalDays(booking);
+        int kmPerDay = configHelper.getDefaultKmPerDay();
+        int kmAllowed = kmPerDay * rentalDays;
+
+        if (kmDriven <= kmAllowed) {
+            return new KmOverageResult(kmDriven, kmAllowed, 0, BigDecimal.ZERO);
+        }
+
+        int kmOver = kmDriven - kmAllowed;
+
+        int limit1 = configHelper.getKmOverageBracket1Limit();
+        BigDecimal price1 = configHelper.getKmOverageBracket1Price();
+
+        int limit2 = configHelper.getKmOverageBracket2Limit();
+        BigDecimal price2 = configHelper.getKmOverageBracket2Price();
+
+        BigDecimal price3 = configHelper.getKmOverageBracket3Price();
+
+        BigDecimal totalFee;
+
+        if (kmOver <= limit1) {
+            // Chỉ vượt trong bậc 1
+            totalFee = BigDecimal.valueOf(kmOver).multiply(price1);
+        } else if (kmOver <= limit2) {
+            // Vượt qua bậc 1, còn lại ở bậc 2
+            totalFee = BigDecimal.valueOf(limit1).multiply(price1)
+                    .add(BigDecimal.valueOf(kmOver - limit1).multiply(price2));
+        } else {
+            // Vượt cả 3 bậc
+            totalFee = BigDecimal.valueOf(limit1).multiply(price1)
+                    .add(BigDecimal.valueOf(limit2 - limit1).multiply(price2))
+                    .add(BigDecimal.valueOf(kmOver - limit2).multiply(price3));
+        }
+
+        return new KmOverageResult(kmDriven, kmAllowed, kmOver, totalFee);
+    }
+
+    private int calculateRentalDays(Booking booking) {
+        long hours = Duration.between(
+                booking.getStartDate(), booking.getEndDate()).toHours();
+        return Math.max(1, (int) Math.ceil(hours / 24.0));
+    }
+
     private long getPricePerDay(Booking booking) {
         Car car = carRepository.findById(booking.getCarId()).orElse(null);
-        if (car == null) {
-            return 1_000_000L;
-        }
+        if (car == null) return 1_000_000L;
         if (booking.getStartDate() != null && car.getPriceWeekend() != null
                 && car.getPriceWeekend() > 0) {
             int dow = booking.getStartDate().getDayOfWeek().getValue();
@@ -461,11 +515,20 @@ public class HandoverServiceImpl implements HandoverService {
         List<HandoverImage> images = imageRepository.findByHandoverId(record.getId());
         HandoverResponse response = handoverMapper.toResponse(record, images);
 
+        // ★ Set km overage fields (không có trong mapper)
+        response.setKmDriven(record.getKmDriven());
+        response.setKmAllowed(record.getKmAllowed());
+        response.setKmOverage(record.getKmOverage());
+        response.setKmOverageFee(record.getKmOverageFee());
+
+        if (record.getKmOverage() != null && record.getKmOverage() > 0) {
+            response.setKmOverageBreakdown(buildKmOverageBreakdown(record));
+        }
+
         Booking booking = bookingRepository.findById(record.getBookingId()).orElse(null);
         if (booking != null) {
             response.setBookingStatus(booking.getStatus().name());
 
-            // ===== NẾU LÀ RETURN, LẤY KM LÚC PICKUP =====
             if ("RETURN".equals(record.getHandoverType())) {
                 handoverRepository.findByBookingIdAndHandoverType(
                         record.getBookingId(), "PICKUP"
@@ -476,18 +539,13 @@ public class HandoverServiceImpl implements HandoverService {
                     }
                 });
 
-                // ===== UC-C12: MÔ TẢ PHÍ VƯỢT GIỜ =====
                 if (record.getLateMinutes() != null && record.getLateMinutes() > 0
                         && record.getLateFee() != null
                         && record.getLateFee().compareTo(BigDecimal.ZERO) > 0) {
-                    response.setLateFee(record.getLateFee());
-                    response.setLateMinutes(record.getLateMinutes());
-                    response.setActualReturnTime(record.getActualReturnTime());
                     response.setLateFeeBreakdown(buildLateFeeBreakdown(record));
                 }
             }
 
-            // ===== QUYỀN CỦA USER HIỆN TẠI =====
             boolean isOwner = booking.getOwnerId().equals(userId);
             boolean isCustomer = booking.getCustomerId().equals(userId);
 
@@ -517,6 +575,60 @@ public class HandoverServiceImpl implements HandoverService {
         return String.format("Trả muộn %s → Phí: %sđ", timeStr, formatMoney(record.getLateFee()));
     }
 
+    private String buildKmOverageBreakdown(HandoverRecord record) {
+        int kmOver = record.getKmOverage() != null ? record.getKmOverage() : 0;
+        int kmDriven = record.getKmDriven() != null ? record.getKmDriven() : 0;
+        int kmAllowed = record.getKmAllowed() != null ? record.getKmAllowed() : 0;
+
+        int limit1 = configHelper.getKmOverageBracket1Limit();
+        int limit2 = configHelper.getKmOverageBracket2Limit();
+
+        StringBuilder sb = new StringBuilder();
+        sb.append(String.format("Đã chạy %d km, được phép %d km, vượt %d km:\n",
+                kmDriven, kmAllowed, kmOver));
+
+        if (kmOver <= limit1) {
+            sb.append(String.format("  • %d km × %sđ = %sđ",
+                    kmOver,
+                    formatMoney(configHelper.getKmOverageBracket1Price()),
+                    formatMoney(record.getKmOverageFee())));
+        } else if (kmOver <= limit2) {
+            BigDecimal fee1 = BigDecimal.valueOf(limit1)
+                    .multiply(configHelper.getKmOverageBracket1Price());
+            BigDecimal fee2 = BigDecimal.valueOf(kmOver - limit1)
+                    .multiply(configHelper.getKmOverageBracket2Price());
+            sb.append(String.format("  • Bậc 1: %d km × %sđ = %sđ\n",
+                    limit1,
+                    formatMoney(configHelper.getKmOverageBracket1Price()),
+                    formatMoney(fee1)));
+            sb.append(String.format("  • Bậc 2: %d km × %sđ = %sđ",
+                    kmOver - limit1,
+                    formatMoney(configHelper.getKmOverageBracket2Price()),
+                    formatMoney(fee2)));
+        } else {
+            BigDecimal fee1 = BigDecimal.valueOf(limit1)
+                    .multiply(configHelper.getKmOverageBracket1Price());
+            BigDecimal fee2 = BigDecimal.valueOf(limit2 - limit1)
+                    .multiply(configHelper.getKmOverageBracket2Price());
+            BigDecimal fee3 = BigDecimal.valueOf(kmOver - limit2)
+                    .multiply(configHelper.getKmOverageBracket3Price());
+            sb.append(String.format("  • Bậc 1: %d km × %sđ = %sđ\n",
+                    limit1,
+                    formatMoney(configHelper.getKmOverageBracket1Price()),
+                    formatMoney(fee1)));
+            sb.append(String.format("  • Bậc 2: %d km × %sđ = %sđ\n",
+                    limit2 - limit1,
+                    formatMoney(configHelper.getKmOverageBracket2Price()),
+                    formatMoney(fee2)));
+            sb.append(String.format("  • Bậc 3: %d km × %sđ = %sđ",
+                    kmOver - limit2,
+                    formatMoney(configHelper.getKmOverageBracket3Price()),
+                    formatMoney(fee3)));
+        }
+
+        return sb.toString();
+    }
+
     private String formatMoney(BigDecimal amount) {
         if (amount == null) return "0";
         return String.format("%,d", amount.setScale(0, RoundingMode.DOWN).longValue());
@@ -537,7 +649,8 @@ public class HandoverServiceImpl implements HandoverService {
         }
     }
 
-    // ===== INNER CLASS =====
+    // ===== INNER CLASSES =====
 
     private record LateFeeResult(BigDecimal fee, int minutesLate) {}
+    private record KmOverageResult(int kmDriven, int kmAllowed, int kmOverage, BigDecimal fee) {}
 }

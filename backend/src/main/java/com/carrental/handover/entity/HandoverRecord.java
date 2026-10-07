@@ -9,9 +9,6 @@ import org.hibernate.annotations.UpdateTimestamp;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
-/**
- * Entity: Biên bản giao/nhận xe.
- */
 @Entity
 @Table(name = "handover_records", indexes = {
         @Index(name = "idx_handover_booking", columnList = "booking_id"),
@@ -49,7 +46,7 @@ public class HandoverRecord {
     String interiorNote;
 
     @Column(columnDefinition = "TEXT")
-    String damages;              // JSON string
+    String damages;
 
     @Column(name = "extra_fees", precision = 12, scale = 0)
     @Builder.Default
@@ -58,7 +55,7 @@ public class HandoverRecord {
     @Column(name = "extra_fees_note", columnDefinition = "TEXT")
     String extraFeesNote;
 
-// ===== UC-C12: Phí vượt giờ (chỉ RETURN) =====
+    // ===== UC-C12: Phí vượt giờ =====
     @Column(name = "actual_return_time")
     LocalDateTime actualReturnTime;
 
@@ -70,7 +67,22 @@ public class HandoverRecord {
     @Builder.Default
     Integer lateMinutes = 0;
 
-    // ===== Chữ ký (lưu URL ảnh) =====
+    // ===== ★ MỚI UC-C13: Phí vượt km =====
+    @Column(name = "km_driven")
+    Integer kmDriven;              // Số km đã chạy
+
+    @Column(name = "km_allowed")
+    Integer kmAllowed;             // Số km được phép
+
+    @Column(name = "km_overage")
+    @Builder.Default
+    Integer kmOverage = 0;         // Số km vượt
+
+    @Column(name = "km_overage_fee", precision = 12, scale = 0)
+    @Builder.Default
+    BigDecimal kmOverageFee = BigDecimal.ZERO;   // Phí vượt km
+
+    // ===== Chữ ký =====
     @Column(name = "owner_signature", columnDefinition = "TEXT")
     String ownerSignature;
 
@@ -83,7 +95,6 @@ public class HandoverRecord {
     @Column(name = "customer_signed_at")
     LocalDateTime customerSignedAt;
 
-    // ===== Trạng thái biên bản =====
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 20)
     @Builder.Default

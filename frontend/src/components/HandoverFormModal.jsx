@@ -4,6 +4,7 @@ import {
   createHandover,
   uploadImage,
 } from '../services/handoverService'
+import api from '../services/api'
 
 /**
  * Modal tạo biên bản giao/nhận xe.
@@ -22,7 +23,6 @@ export default function HandoverFormModal({
   handoverType,
   onSuccess,
 }) {
-  // ===== STATE FORM =====
   const [form, setForm] = useState({
     kmReading: '',
     fuelLevel: 80,
@@ -34,12 +34,11 @@ export default function HandoverFormModal({
     actualReturnTime: '',
   })
 
-  const [images, setImages] = useState([])       // [{url, imageType, note}]
+  const [images, setImages] = useState([])
   const [uploading, setUploading] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState('')
 
-  // ===== RESET KHI MỞ =====
   useEffect(() => {
     if (open) {
       setForm({
@@ -103,7 +102,6 @@ export default function HandoverFormModal({
     e.preventDefault()
     setError('')
 
-    // Validate
     if (!form.kmReading && form.kmReading !== 0) {
       return setError('Vui lòng nhập số km')
     }
@@ -127,7 +125,7 @@ export default function HandoverFormModal({
         damages: form.damages?.trim() || null,
         extraFees: form.extraFees ? parseInt(form.extraFees) : 0,
         extraFeesNote: form.extraFeesNote?.trim() || null,
-         actualReturnTime: form.actualReturnTime || null, 
+        actualReturnTime: form.actualReturnTime || null,
         images: images.map(img => ({
           imageUrl: img.url,
           imageType: img.imageType,
@@ -277,6 +275,14 @@ export default function HandoverFormModal({
             </div>
           </div>
 
+          {/* ===== ★ UC-C13: PREVIEW PHÍ VƯỢT KM (chỉ RETURN) ===== */}
+          {!isPickup && form.kmReading && (
+            <KmOveragePreview
+              booking={booking}
+              returnKm={parseInt(form.kmReading)}
+            />
+          )}
+
           {/* ===== UC-C12: Thời gian trả thực tế (chỉ RETURN) ===== */}
           {!isPickup && (
             <div style={{ marginBottom: '24px' }}>
@@ -328,7 +334,7 @@ export default function HandoverFormModal({
             />
           </div>
 
-          {/* ===== DAMAGES (chỉ RETURN) ===== */}
+          {/* ===== DAMAGES + EXTRA FEES (chỉ RETURN) ===== */}
           {!isPickup && (
             <>
               <div style={{ marginBottom: '24px' }}>
@@ -345,7 +351,7 @@ export default function HandoverFormModal({
 
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 2fr', gap: '20px', marginBottom: '24px' }}>
                 <div>
-                  <label style={labelStyle}>Phí phát sinh (VNĐ)</label>
+                  <label style={labelStyle}>Phí phát sinh khác (VNĐ)</label>
                   <input
                     type="number"
                     value={form.extraFees}
@@ -524,6 +530,196 @@ export default function HandoverFormModal({
   )
 }
 
+// ============================================================
+// ★ UC-C13: COMPONENT PREVIEW PHÍ VƯỢT KM
+// ============================================================
+function KmOveragePreview({ booking, returnKm }) {
+  const [config, setConfig] = useState(null)
+  const [pickupKm, setPickupKm] = useState(null)
+
+  // Load config từ admin
+  useEffect(() => {
+    const keys = [
+      'default_km_per_day',
+      'km_overage_bracket_1_limit',
+      'km_overage_bracket_1_price',
+      'km_overage_bracket_2_limit',
+      'km_overage_bracket_2_price',
+      'km_overage_bracket_3_price',
+    ]
+    Promise.all(
+      keys.map(k =>
+        api.get(`/admin/config/${k}`)
+          .then(r => r.data.data?.configValue)
+          .catch(() => null)
+      )
+    ).then(values => {
+      const cfg = {}
+      keys.forEach((k, i) => { cfg[k] = values[i] })
+      setConfig(cfg)
+    })
+  }, [])
+
+  // Load km PICKUP của booking
+  useEffect(() => {
+    api.get(`/handovers/booking/${booking.id}`)
+      .then(res => {
+        const list = res.data.data || []
+        const pickup = list.find(h => h.handoverType === 'PICKUP')
+        if (pickup) setPickupKm(pickup.kmReading)
+      })
+      .catch(() => {})
+  }, [booking.id])
+
+  if (!config || pickupKm == null || !returnKm) return null
+
+  const kmDriven = returnKm - pickupKm
+  if (kmDriven <= 0) {
+    return (
+      <div style={{
+        marginBottom: '24px',
+        padding: '12px 16px',
+        background: 'rgba(139,44,44,0.08)',
+        borderLeft: '3px solid var(--do)',
+        fontFamily: 'var(--serif-2)',
+        fontStyle: 'italic',
+        fontSize: '14px',
+        color: 'var(--do)',
+      }}>
+        ⚠️ Số km không hợp lệ (return &lt; pickup)
+      </div>
+    )
+  }
+
+  // Tính số ngày thuê
+  const start = new Date(booking.startDate)
+  const end = new Date(booking.endDate)
+  const hours = (end - start) / (1000 * 60 * 60)
+  const days = Math.max(1, Math.ceil(hours / 24))
+
+  const kmPerDay = parseInt(config.default_km_per_day) || 300
+  const kmAllowed = kmPerDay * days
+  const kmOver = kmDriven - kmAllowed
+
+  // Chưa vượt → hiển thị màu xanh
+  if (kmOver <= 0) {
+    return (
+      <div style={{
+        marginBottom: '24px',
+        padding: '12px 16px',
+        background: 'rgba(74,93,63,0.08)',
+        borderLeft: '3px solid var(--xanh-reu)',
+        fontFamily: 'var(--serif-2)',
+        fontStyle: 'italic',
+        fontSize: '14px',
+      }}>
+        ✓ Đã chạy <strong>{kmDriven.toLocaleString('vi-VN')} km</strong> / {kmAllowed.toLocaleString('vi-VN')} km — Chưa vượt định mức
+      </div>
+    )
+  }
+
+  // Vượt → tính phí
+  const limit1 = parseInt(config.km_overage_bracket_1_limit) || 50
+  const price1 = parseInt(config.km_overage_bracket_1_price) || 5000
+  const limit2 = parseInt(config.km_overage_bracket_2_limit) || 100
+  const price2 = parseInt(config.km_overage_bracket_2_price) || 8000
+  const price3 = parseInt(config.km_overage_bracket_3_price) || 12000
+
+  let fee = 0
+  const breakdown = []
+
+  if (kmOver <= limit1) {
+    fee = kmOver * price1
+    breakdown.push(`${kmOver} km × ${price1.toLocaleString('vi-VN')}đ = ${fee.toLocaleString('vi-VN')}đ`)
+  } else if (kmOver <= limit2) {
+    const f1 = limit1 * price1
+    const f2 = (kmOver - limit1) * price2
+    fee = f1 + f2
+    breakdown.push(`Bậc 1: ${limit1} km × ${price1.toLocaleString('vi-VN')}đ = ${f1.toLocaleString('vi-VN')}đ`)
+    breakdown.push(`Bậc 2: ${kmOver - limit1} km × ${price2.toLocaleString('vi-VN')}đ = ${f2.toLocaleString('vi-VN')}đ`)
+  } else {
+    const f1 = limit1 * price1
+    const f2 = (limit2 - limit1) * price2
+    const f3 = (kmOver - limit2) * price3
+    fee = f1 + f2 + f3
+    breakdown.push(`Bậc 1: ${limit1} km × ${price1.toLocaleString('vi-VN')}đ = ${f1.toLocaleString('vi-VN')}đ`)
+    breakdown.push(`Bậc 2: ${limit2 - limit1} km × ${price2.toLocaleString('vi-VN')}đ = ${f2.toLocaleString('vi-VN')}đ`)
+    breakdown.push(`Bậc 3: ${kmOver - limit2} km × ${price3.toLocaleString('vi-VN')}đ = ${f3.toLocaleString('vi-VN')}đ`)
+  }
+
+  return (
+    <div style={{
+      marginBottom: '24px',
+      padding: '16px',
+      background: 'rgba(139,44,44,0.08)',
+      borderLeft: '4px solid var(--do)',
+    }}>
+      <div style={{
+        fontFamily: 'var(--mono)',
+        fontSize: '10px',
+        letterSpacing: '2px',
+        color: 'var(--do)',
+        marginBottom: '10px',
+        textTransform: 'uppercase',
+      }}>
+        ⚠️ Vượt định mức km
+      </div>
+
+      <div style={{
+        fontFamily: 'var(--serif-2)',
+        fontStyle: 'italic',
+        fontSize: '14px',
+        lineHeight: 1.6,
+        marginBottom: '10px',
+      }}>
+        Đã chạy <strong>{kmDriven.toLocaleString('vi-VN')} km</strong>,
+        định mức <strong>{kmAllowed.toLocaleString('vi-VN')} km</strong>
+        {' '}({days} ngày × {kmPerDay} km/ngày).
+        <br />
+        Vượt <strong style={{ color: 'var(--do)' }}>{kmOver.toLocaleString('vi-VN')} km</strong>.
+      </div>
+
+      {breakdown.map((line, i) => (
+        <div key={i} style={{
+          fontFamily: 'var(--mono)',
+          fontSize: '12px',
+          color: 'var(--muc-mo)',
+          marginBottom: '4px',
+        }}>
+          • {line}
+        </div>
+      ))}
+
+      <div style={{
+        marginTop: '12px',
+        paddingTop: '12px',
+        borderTop: '1px solid rgba(139,44,44,0.2)',
+        display: 'flex',
+        justifyContent: 'space-between',
+        alignItems: 'baseline',
+      }}>
+        <span style={{
+          fontFamily: 'var(--mono)',
+          fontSize: '11px',
+          letterSpacing: '2px',
+          textTransform: 'uppercase',
+        }}>
+          Phí vượt km
+        </span>
+        <span style={{
+          fontFamily: 'var(--serif)',
+          fontSize: '28px',
+          fontWeight: 900,
+          color: 'var(--do)',
+        }}>
+          +{fee.toLocaleString('vi-VN')}đ
+        </span>
+      </div>
+    </div>
+  )
+}
+
+// ===== STYLES =====
 const labelStyle = {
   display: 'block',
   fontFamily: 'var(--mono)',

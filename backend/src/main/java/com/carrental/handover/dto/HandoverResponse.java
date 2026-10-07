@@ -18,7 +18,7 @@ public class HandoverResponse {
 
     Long id;
     Long bookingId;
-    String handoverType;         // PICKUP, RETURN
+    String handoverType;
 
     Integer kmReading;
     Short fuelLevel;
@@ -28,27 +28,31 @@ public class HandoverResponse {
     BigDecimal extraFees;
     String extraFeesNote;
 
+    // ===== UC-C12: Phí vượt giờ =====
     LocalDateTime actualReturnTime;
     BigDecimal lateFee;
     Integer lateMinutes;
     String lateFeeBreakdown;
+
+    // ===== ★ MỚI UC-C13: Phí vượt km =====
+    Integer kmDriven;
+    Integer kmAllowed;
+    Integer kmOverage;
+    BigDecimal kmOverageFee;
+    String kmOverageBreakdown;
 
     String ownerSignature;
     String customerSignature;
     LocalDateTime ownerSignedAt;
     LocalDateTime customerSignedAt;
 
-    // ===== Trạng thái =====
-    String status;               // PENDING, SIGNED, CANCELLED
-    String bookingStatus;        // Trạng thái booking hiện tại
+    String status;
+    String bookingStatus;
 
-    // ===== Thông tin để so sánh (chỉ có khi RETURN) =====
-    Integer pickupKmReading;     // Km lúc PICKUP
-    Integer kmDriven;            // Số km đã chạy
+    Integer pickupKmReading;
 
-    // ===== Quyền của user hiện tại =====
-    Boolean canSign;             // User hiện tại có được ký không
-    Boolean canCreate;           // User hiện tại có được tạo không
+    Boolean canSign;
+    Boolean canCreate;
 
     String recordHash;
 
