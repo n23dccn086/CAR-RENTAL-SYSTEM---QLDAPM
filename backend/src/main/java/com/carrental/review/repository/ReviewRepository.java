@@ -27,5 +27,12 @@ public interface ReviewRepository extends JpaRepository<Review, Long> {
     @Query("SELECT AVG(r.ownerRating) FROM Review r WHERE r.ownerId = :ownerId")
     Double getAverageOwnerRating(@Param("ownerId") Long ownerId);
 
+    // ★ THÊM: Average toàn hệ thống (cho Admin Dashboard)
+    @Query("SELECT AVG(r.carRating) FROM Review r")
+    Double getAverageCarRatingAll();
+
+    @Query("SELECT AVG(r.ownerRating) FROM Review r")
+    Double getAverageOwnerRatingAll();
+
     long countByCarId(Long carId);
 }

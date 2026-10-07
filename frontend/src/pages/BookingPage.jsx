@@ -4,14 +4,23 @@ import { getCarById } from '../services/carService'
 import { createBooking } from '../services/bookingService'
 import { useAuth } from '../hooks/useAuth'
 import FormInput from '../components/FormInput'
+import api from '../services/api'
 
 export default function BookingPage() {
   const { carId } = useParams()
   const navigate = useNavigate()
   const { user } = useAuth()
   const [car, setCar] = useState(null)
+  const [drivers, setDrivers] = useState([])
+  const [loadingDrivers, setLoadingDrivers] = useState(false)
+
   const [form, setForm] = useState({
-    startDate: '', endDate: '', pickupAddress: '', rentalMode: 'SELF_DRIVE', note: ''
+    startDate: '',
+    endDate: '',
+    pickupAddress: '',
+    rentalMode: 'SELF_DRIVE',
+    driverId: '',
+    note: ''
   })
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
@@ -19,6 +28,28 @@ export default function BookingPage() {
   useEffect(() => {
     getCarById(carId).then(res => setCar(res.data)).catch(console.error)
   }, [carId])
+
+  // Load drivers khi WITH_DRIVER
+  useEffect(() => {
+    if (form.rentalMode === 'WITH_DRIVER' && car?.ownerId) {
+      setLoadingDrivers(true)
+      api.get('/drivers/available')
+        .then(res => {
+          const allDrivers = res.data.data || []
+          // Chỉ lấy driver thuộc cùng Owner với xe
+          const sameOwnerDrivers = allDrivers.filter(d => d.ownerId === car.ownerId)
+          setDrivers(sameOwnerDrivers)
+        })
+        .catch(err => {
+          console.error('Failed to load drivers:', err)
+          setDrivers([])
+        })
+        .finally(() => setLoadingDrivers(false))
+    } else {
+      setDrivers([])
+      setForm(prev => ({ ...prev, driverId: '' }))
+    }
+  }, [form.rentalMode, car])
 
   const handleChange = (e) => setForm({ ...form, [e.target.name]: e.target.value })
 
@@ -30,7 +61,6 @@ export default function BookingPage() {
 
   const formatPrice = (p) => new Intl.NumberFormat('vi-VN').format(p)
 
-  // ===== UC-C03: Check trước khi submit =====
   const needsVerification =
     form.rentalMode === 'SELF_DRIVE' &&
     user?.verificationStatus !== 'VERIFIED'
@@ -39,23 +69,42 @@ export default function BookingPage() {
     e.preventDefault()
     setError('')
 
+    if (!form.startDate) return setError('Vui lòng chọn ngày nhận xe')
+    if (!form.endDate) return setError('Vui lòng chọn ngày trả xe')
+
+    const start = new Date(form.startDate)
+    const end = new Date(form.endDate)
+    const now = new Date()
+
+    if (start <= now) return setError('Ngày nhận xe phải sau ngày hiện tại')
+    if (end <= start) return setError('Ngày trả xe phải SAU ngày nhận xe')
+
+    const hours = (end - start) / (1000 * 60 * 60)
+    if (hours < 24) return setError('Thời gian thuê tối thiểu 1 ngày (24 giờ)')
+
     if (needsVerification) {
-      setError(
-        'Bạn cần xác thực GPLX/CCCD trước khi thuê xe tự lái. Vui lòng vào mục "Xác thực tài khoản".'
-      )
-      return
+      return setError('Bạn cần xác thực GPLX/CCCD trước khi thuê xe tự lái. Vui lòng vào mục "Xác thực tài khoản".')
+    }
+
+    if (form.rentalMode === 'WITH_DRIVER' && !form.driverId) {
+      return setError('Vui lòng chọn tài xế cho đơn thuê có tài xế.')
     }
 
     setLoading(true)
     try {
-      const res = await createBooking({
+      const payload = {
         carId: parseInt(carId),
         startDate: form.startDate,
         endDate: form.endDate,
         pickupAddress: form.pickupAddress,
         rentalMode: form.rentalMode,
         customerNote: form.note,
-      })
+      }
+      if (form.rentalMode === 'WITH_DRIVER' && form.driverId) {
+        payload.driverId = parseInt(form.driverId)
+      }
+
+      const res = await createBooking(payload)
       const bookingId = res.data?.id
       navigate(`/payment/${bookingId}`)
     } catch (err) {
@@ -66,6 +115,7 @@ export default function BookingPage() {
   }
 
   const total = calcTotal()
+  const noDriverAvailable = form.rentalMode === 'WITH_DRIVER' && !loadingDrivers && drivers.length === 0
 
   return (
     <div style={{ maxWidth: '1200px', margin: '0 auto', padding: '60px 48px' }}>
@@ -76,7 +126,6 @@ export default function BookingPage() {
 
       <div style={{ display: 'grid', gridTemplateColumns: '1.5fr 1fr', gap: '48px' }}>
         <form onSubmit={handleSubmit}>
-          {/* ===== UC-C03: Cảnh báo chưa xác thực ===== */}
           {needsVerification && (
             <div style={{
               padding: '16px 20px',
@@ -95,26 +144,119 @@ export default function BookingPage() {
             </div>
           )}
 
-          {error && <div style={{ background: 'rgba(139,44,44,0.1)', border: '1px solid var(--do)', padding: '12px 16px', marginBottom: '24px', color: 'var(--do)' }}>{error}</div>}
+          {error && (
+            <div style={{ background: 'rgba(139,44,44,0.1)', border: '1px solid var(--do)', padding: '12px 16px', marginBottom: '24px', color: 'var(--do)' }}>
+              {error}
+            </div>
+          )}
 
-          <FormInput label="Ngày nhận xe" name="startDate" type="datetime-local" value={form.startDate} onChange={handleChange} required />
-          <FormInput label="Ngày trả xe" name="endDate" type="datetime-local" value={form.endDate} onChange={handleChange} required />
-          <FormInput label="Địa chỉ nhận xe" name="pickupAddress" value={form.pickupAddress} onChange={handleChange} placeholder="123 Nguyễn Huệ, Q1" required />
+          <FormInput
+            label="Ngày nhận xe"
+            name="startDate"
+            type="datetime-local"
+            value={form.startDate}
+            onChange={handleChange}
+            min={new Date(Date.now() + 60 * 60 * 1000).toISOString().slice(0, 16)}
+            required
+          />
+          <FormInput
+            label="Ngày trả xe"
+            name="endDate"
+            type="datetime-local"
+            value={form.endDate}
+            onChange={handleChange}
+            min={form.startDate || ''}
+            required
+          />
+          <FormInput
+            label="Địa chỉ nhận xe"
+            name="pickupAddress"
+            value={form.pickupAddress}
+            onChange={handleChange}
+            placeholder="123 Nguyễn Huệ, Q1"
+            required
+          />
 
           <div style={{ marginBottom: '24px' }}>
-            <label style={{ fontFamily: 'var(--mono)', fontSize: '10px', letterSpacing: '3px', textTransform: 'uppercase', color: 'var(--muc-mo)', display: 'block', marginBottom: '8px' }}>Hình thức thuê</label>
-            <select name="rentalMode" value={form.rentalMode} onChange={handleChange} style={{ width: '100%', padding: '14px 16px', background: 'var(--kem-dam)', border: '1px solid rgba(15,14,12,0.2)', fontFamily: 'var(--serif-2)', fontSize: '16px' }}>
+            <label style={{ fontFamily: 'var(--mono)', fontSize: '10px', letterSpacing: '3px', textTransform: 'uppercase', color: 'var(--muc-mo)', display: 'block', marginBottom: '8px' }}>
+              Hình thức thuê
+            </label>
+            <select
+              name="rentalMode"
+              value={form.rentalMode}
+              onChange={handleChange}
+              style={{ width: '100%', padding: '14px 16px', background: 'var(--kem-dam)', border: '1px solid rgba(15,14,12,0.2)', fontFamily: 'var(--serif-2)', fontSize: '16px' }}
+            >
               <option value="SELF_DRIVE">Tự lái</option>
               <option value="WITH_DRIVER">Có tài xế</option>
             </select>
           </div>
 
+          {/* ★ COMBOBOX CHỌN TÀI XẾ */}
+          {form.rentalMode === 'WITH_DRIVER' && (
+            <div style={{ marginBottom: '24px' }}>
+              <label style={{ fontFamily: 'var(--mono)', fontSize: '10px', letterSpacing: '3px', textTransform: 'uppercase', color: 'var(--muc-mo)', display: 'block', marginBottom: '8px' }}>
+                Chọn tài xế *
+              </label>
+
+              {loadingDrivers ? (
+                <div style={{ padding: '14px', background: 'var(--kem-dam)', border: '1px solid rgba(15,14,12,0.2)', fontFamily: 'var(--serif-2)', fontStyle: 'italic', color: 'var(--muc-mo)' }}>
+                  Đang tải danh sách tài xế...
+                </div>
+              ) : drivers.length === 0 ? (
+                <div style={{ padding: '14px', background: 'rgba(139,44,44,0.05)', border: '1px solid var(--do)', fontFamily: 'var(--serif-2)', fontStyle: 'italic', color: 'var(--do)' }}>
+                  ⚠️ Chủ xe hiện không có tài xế nào khả dụng. Vui lòng chọn hình thức Tự lái hoặc liên hệ chủ xe.
+                </div>
+              ) : (
+                <select
+                  name="driverId"
+                  value={form.driverId}
+                  onChange={handleChange}
+                  required
+                  style={{ width: '100%', padding: '14px 16px', background: 'var(--kem-dam)', border: '1px solid rgba(15,14,12,0.2)', fontFamily: 'var(--serif-2)', fontSize: '16px' }}
+                >
+                  <option value="">-- Chọn tài xế --</option>
+                  {drivers.map(d => (
+                    <option key={d.id} value={d.id}>
+                      {d.name} — {d.rating?.toFixed(1) || '0.0'}★ — Đang hoạt động
+                    </option>
+                  ))}
+                </select>
+              )}
+
+              {drivers.length > 0 && (
+                <div style={{ fontFamily: 'var(--serif-2)', fontStyle: 'italic', fontSize: '12px', color: 'var(--muc-mo)', marginTop: '6px' }}>
+                  💡 Chỉ hiển thị tài xế đang hoạt động của chủ xe này.
+                </div>
+              )}
+            </div>
+          )}
+
           <div style={{ marginBottom: '32px' }}>
-            <label style={{ fontFamily: 'var(--mono)', fontSize: '10px', letterSpacing: '3px', textTransform: 'uppercase', color: 'var(--muc-mo)', display: 'block', marginBottom: '8px' }}>Ghi chú</label>
-            <textarea name="note" value={form.note} onChange={handleChange} rows="3" style={{ width: '100%', padding: '14px 16px', background: 'var(--kem-dam)', border: '1px solid rgba(15,14,12,0.2)', fontFamily: 'var(--serif-2)', fontSize: '16px', resize: 'vertical' }} />
+            <label style={{ fontFamily: 'var(--mono)', fontSize: '10px', letterSpacing: '3px', textTransform: 'uppercase', color: 'var(--muc-mo)', display: 'block', marginBottom: '8px' }}>
+              Ghi chú
+            </label>
+            <textarea
+              name="note"
+              value={form.note}
+              onChange={handleChange}
+              rows="3"
+              style={{ width: '100%', padding: '14px 16px', background: 'var(--kem-dam)', border: '1px solid rgba(15,14,12,0.2)', fontFamily: 'var(--serif-2)', fontSize: '16px', resize: 'vertical' }}
+            />
           </div>
 
-          <button type="submit" className="btn-login" disabled={loading || needsVerification} style={{ width: '100%', justifyContent: 'center', padding: '18px', opacity: needsVerification ? 0.5 : 1, cursor: needsVerification ? 'not-allowed' : 'pointer' }}>
+          <button
+            type="submit"
+            className="btn-login"
+            disabled={loading || needsVerification || noDriverAvailable}
+            style={{
+              width: '100%',
+              justifyContent: 'center',
+              padding: '18px',
+              opacity: (needsVerification || noDriverAvailable) ? 0.5 : 1,
+              cursor: (needsVerification || noDriverAvailable) ? 'not-allowed' : 'pointer'
+            }}
+          >
             <span>{loading ? 'Đang xử lý...' : 'Xác nhận đặt xe'}</span>
           </button>
         </form>
@@ -134,7 +276,9 @@ export default function BookingPage() {
               <div style={{ height: '1px', background: 'rgba(15,14,12,0.15)', margin: '24px 0' }}></div>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
                 <span style={{ fontFamily: 'var(--mono)', fontSize: '11px', letterSpacing: '2px', textTransform: 'uppercase' }}>Tổng</span>
-                <span style={{ fontFamily: 'var(--serif)', fontSize: '32px', fontWeight: 900, color: 'var(--do)' }}>{formatPrice(total)}<span style={{ fontSize: '14px', fontFamily: 'var(--mono)', fontWeight: 400, marginLeft: '4px' }}>đ</span></span>
+                <span style={{ fontFamily: 'var(--serif)', fontSize: '32px', fontWeight: 900, color: 'var(--do)' }}>
+                  {formatPrice(total)}<span style={{ fontSize: '14px', fontFamily: 'var(--mono)', fontWeight: 400, marginLeft: '4px' }}>đ</span>
+                </span>
               </div>
             </>
           )}

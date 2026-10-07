@@ -1,13 +1,13 @@
 import { useState, useEffect } from "react";
 import { getMyCars } from "../services/carService";
-import { getOwnerDashboard } from "../services/bookingService";
+import { getBalanceInfo } from "../services/withdrawalService";
 import { Link } from 'react-router-dom'
 
 export default function OwnerDashboard() {
   const [stats, setStats] = useState({
-    totalIncome: 15000000,
-    totalBookings: 12,
-    availableBalance: 8500000,
+    totalIncome: 0,
+    totalBookings: 0,
+    availableBalance: 0,
     pendingWithdrawal: 0,
   });
   const [cars, setCars] = useState([]);
@@ -16,11 +16,19 @@ export default function OwnerDashboard() {
   useEffect(() => {
     Promise.all([
       getMyCars().catch(() => ({ data: [] })),
-      getOwnerDashboard().catch(() => ({ data: null })),
+      getBalanceInfo().catch(() => ({ data: null })),
     ])
       .then(([carsRes, statsRes]) => {
         setCars(carsRes.data || []);
-        if (statsRes.data) setStats(statsRes.data);
+        if (statsRes.data) {
+          const d = statsRes.data;
+          setStats({
+            totalIncome: d.totalIncome || 0,
+            totalBookings: d.totalBookings || 0,
+            availableBalance: d.availableBalance || 0,
+            pendingWithdrawal: d.pendingWithdrawal || 0,
+          });
+        }
       })
       .finally(() => setLoading(false));
   }, []);
@@ -57,15 +65,22 @@ export default function OwnerDashboard() {
           {
             label: "Tổng thu nhập",
             value: formatPrice(stats.totalIncome) + "đ",
+            hint: "Sau khi trừ hoa hồng nền tảng",
           },
-          { label: "Số lượt thuê", value: stats.totalBookings },
+          {
+            label: "Số lượt thuê",
+            value: stats.totalBookings,
+            hint: "Đơn đã hoàn tất",
+          },
           {
             label: "Số dư khả dụng",
             value: formatPrice(stats.availableBalance) + "đ",
+            hint: "Có thể rút ngay",
           },
           {
             label: "Đang chờ rút",
             value: formatPrice(stats.pendingWithdrawal) + "đ",
+            hint: "Chờ Admin duyệt",
           },
         ].map((s, i) => (
           <div
@@ -98,6 +113,19 @@ export default function OwnerDashboard() {
             >
               {s.value}
             </div>
+            {s.hint && (
+              <div
+                style={{
+                  fontFamily: "var(--serif-2)",
+                  fontStyle: "italic",
+                  fontSize: "12px",
+                  color: "var(--muc-mo)",
+                  marginTop: "8px",
+                }}
+              >
+                {s.hint}
+              </div>
+            )}
           </div>
         ))}
       </div>
@@ -210,7 +238,7 @@ export default function OwnerDashboard() {
                     color: "var(--muc-mo)",
                   }}
                 >
-                  {car.plateNumber}
+                  {car.plate}
                 </div>
               </div>
               <div

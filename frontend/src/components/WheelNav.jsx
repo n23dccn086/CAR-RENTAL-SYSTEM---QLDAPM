@@ -30,11 +30,13 @@ export default function WheelNav() {
   };
 
   const navItems = [
-    { path: "/", label: "Trang chủ", icon: "⌂" },
-    ...(!isLoggedIn || user?.role !== "OWNER"
+    ...(!isLoggedIn || user?.role !== "ADMIN"
+      ? [{ path: "/", label: "Trang chủ", icon: "⌂" }]
+      : []),
+    ...(!isLoggedIn || (user?.role !== "OWNER" && user?.role !== "ADMIN")
       ? [{ path: "/search", label: "Bộ sưu tập", icon: "⚲" }]
       : []),
-    ...(isLoggedIn && user?.role !== "OWNER"
+    ...(isLoggedIn && user?.role !== "OWNER" && user?.role !== "ADMIN"
       ? [{ path: "/my-bookings", label: "Chuyến đi", icon: "✦" }]
       : []),
     ...(isLoggedIn
@@ -82,7 +84,7 @@ export default function WheelNav() {
     ...(isLoggedIn && user?.role === "ADMIN"
       ? [{ path: "/admin/withdrawals", label: "Duyệt rút tiền", icon: "₫" }]
       : []),
-      ...(isLoggedIn && user?.role === "ADMIN"
+    ...(isLoggedIn && user?.role === "ADMIN"
       ? [{ path: "/admin/config", label: "Cấu hình", icon: "⌬" }]
       : []),
   ];

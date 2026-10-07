@@ -34,7 +34,9 @@ import VerificationPage from "./pages/VerificationPage";
 import HandoverPage from "./pages/HandoverPage";
 import OwnerWithdrawalsPage from "./pages/OwnerWithdrawalsPage";
 import AdminWithdrawalsPage from "./pages/AdminWithdrawalsPage";
-import AdminConfigPage from "./pages/AdminConfigPage";              // ★ MỚI: UC-AD03
+import AdminConfigPage from "./pages/AdminConfigPage"; // ★ MỚI: UC-AD03
+import BookingDetailPage from "./pages/BookingDetailPage";
+import PaymentFinalPage from "./pages/PaymentFinalPage";
 
 function App() {
   return (
@@ -141,6 +143,23 @@ function App() {
             element={
               <ProtectedRoute allowedRoles={["CUSTOMER", "ADMIN"]}>
                 <ReviewPage />
+              </ProtectedRoute>
+            }
+          />
+
+          <Route
+            path="/bookings/:id"
+            element={
+              <ProtectedRoute allowedRoles={["CUSTOMER", "OWNER", "ADMIN"]}>
+                <BookingDetailPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/payment-final/:bookingId"
+            element={
+              <ProtectedRoute allowedRoles={["CUSTOMER", "ADMIN"]}>
+                <PaymentFinalPage />
               </ProtectedRoute>
             }
           />

@@ -9,17 +9,20 @@ export default function OwnerBookingsPage() {
   const [loading, setLoading] = useState(true)
   const [filter, setFilter] = useState('ALL')
   const [assignments, setAssignments] = useState({})
-  const [handovers, setHandovers] = useState({})   // ★ NEW: map[bookingId] = { PICKUP: {...}, RETURN: {...} }
+  const [handovers, setHandovers] = useState({})
   const [message, setMessage] = useState('')
 
-  // ===== HANDOVER MODAL STATE =====
   const [handoverModal, setHandoverModal] = useState({
     open: false,
     booking: null,
-    type: null, // 'PICKUP' | 'RETURN'
+    type: null,
   })
 
-  // ===== PHÂN TRANG =====
+  const [cancelModal, setCancelModal] = useState(false)
+  const [cancellingBooking, setCancellingBooking] = useState(null)
+  const [cancelReason, setCancelReason] = useState('')
+  const [cancelSubmitting, setCancelSubmitting] = useState(false)
+
   const [currentPage, setCurrentPage] = useState(1)
   const ITEMS_PER_PAGE = 10
 
@@ -31,11 +34,11 @@ export default function OwnerBookingsPage() {
       setBookings(data)
 
       const assignMap = {}
-      const handoverMap = {}   // ★ NEW
+      const handoverMap = {}
 
       for (const b of data) {
-        // Fetch assignments (chỉ nếu có tài xế)
-        if (b.rentalMode !== 'SELF_DRIVE') {
+        // Chỉ fetch assignment khi có driverId (khách đã chọn tài xế)
+        if (b.driverId) {
           try {
             const aRes = await api.get(`/driver/assignments/booking/${b.id}`)
             const list = aRes.data.data || []
@@ -43,13 +46,12 @@ export default function OwnerBookingsPage() {
           } catch (e) {}
         }
 
-        // ★ NEW: Fetch handovers cho từng booking
         try {
           const hRes = await api.get(`/handovers/booking/${b.id}`)
           const handoversList = hRes.data.data || []
           handoverMap[b.id] = {}
           handoversList.forEach(h => {
-            handoverMap[b.id][h.handoverType] = h  // PICKUP / RETURN
+            handoverMap[b.id][h.handoverType] = h
           })
         } catch (e) {
           handoverMap[b.id] = {}
@@ -57,7 +59,7 @@ export default function OwnerBookingsPage() {
       }
 
       setAssignments(assignMap)
-      setHandovers(handoverMap)   // ★ NEW
+      setHandovers(handoverMap)
     } catch (err) {
       console.error(err)
     } finally {
@@ -65,34 +67,11 @@ export default function OwnerBookingsPage() {
     }
   }
 
-  useEffect(() => {
-    fetchBookings()
-  }, [])
+  useEffect(() => { fetchBookings() }, [])
+  useEffect(() => { setCurrentPage(1) }, [filter])
 
-  // Reset page khi filter đổi
-  useEffect(() => {
-    setCurrentPage(1)
-  }, [filter])
-
-  const triggerAutoAssign = async (bookingId) => {
-    if (!window.confirm(`Gán tài xế tự động cho đơn #${bookingId}?`)) return
-    try {
-      await api.post(`/driver/assignments/booking/${bookingId}/auto-assign`)
-      setMessage(`Đã gán tài xế cho đơn #${bookingId}`)
-      fetchBookings()
-      setTimeout(() => setMessage(''), 5000)
-    } catch (err) {
-      alert('Lỗi: ' + (err.response?.data?.message || err.message))
-    }
-  }
-
-  // ===== MỞ HANDOVER MODAL =====
   const openHandoverModal = (booking, type) => {
-    setHandoverModal({
-      open: true,
-      booking,
-      type,
-    })
+    setHandoverModal({ open: true, booking, type })
   }
 
   const handleHandoverSuccess = () => {
@@ -101,9 +80,33 @@ export default function OwnerBookingsPage() {
     setTimeout(() => setMessage(''), 5000)
   }
 
-  // ===== XEM BIÊN BẢN — BÂY GIỜ ĐÃ CÓ DATA =====
   const viewHandover = (handoverId) => {
     navigate(`/handover/${handoverId}`)
+  }
+
+  const openCancelModal = (booking) => {
+    setCancellingBooking(booking)
+    setCancelReason('')
+    setCancelModal(true)
+  }
+
+  const handleOwnerCancel = async () => {
+    if (!cancelReason.trim()) {
+      alert('Vui lòng nhập lý do hủy và lời xin lỗi khách')
+      return
+    }
+    setCancelSubmitting(true)
+    try {
+      await api.put(`/bookings/${cancellingBooking.id}/reject?reason=${encodeURIComponent(cancelReason.trim())}`)
+      setMessage(`Đã hủy đơn #${cancellingBooking.id}. Hoàn 100% cọc cho khách.`)
+      setCancelModal(false)
+      fetchBookings()
+      setTimeout(() => setMessage(''), 5000)
+    } catch (err) {
+      alert('Lỗi: ' + (err.response?.data?.message || err.message))
+    } finally {
+      setCancelSubmitting(false)
+    }
   }
 
   const statusMap = {
@@ -117,16 +120,17 @@ export default function OwnerBookingsPage() {
   }
 
   const assignmentStatusColors = {
-    PENDING: 'var(--dong)', ACCEPTED: 'var(--xanh-reu)',
-    REJECTED: 'var(--do)', EXPIRED: 'var(--muc-mo)', CANCELLED: 'var(--muc-mo)',
+    PENDING: 'var(--dong)',
+    ACCEPTED: 'var(--xanh-reu)',
+    REJECTED: 'var(--do)',
+    EXPIRED: 'var(--muc-mo)',
+    CANCELLED: 'var(--muc-mo)',
   }
 
   const formatPrice = (p) => new Intl.NumberFormat('vi-VN').format(p || 0)
   const formatDate = (d) => d ? new Date(d).toLocaleDateString('vi-VN') : '—'
 
   const filtered = filter === 'ALL' ? bookings : bookings.filter(b => b.status === filter)
-
-  // ===== TÍNH TOÁN PHÂN TRANG =====
   const totalPages = Math.ceil(filtered.length / ITEMS_PER_PAGE)
   const startIndex = (currentPage - 1) * ITEMS_PER_PAGE
   const currentBookings = filtered.slice(startIndex, startIndex + ITEMS_PER_PAGE)
@@ -144,7 +148,6 @@ export default function OwnerBookingsPage() {
         </div>
       )}
 
-      {/* FILTER */}
       <div style={{ display: 'flex', gap: '12px', marginBottom: '40px', flexWrap: 'wrap' }}>
         {['ALL', 'PENDING', 'PAID', 'APPROVED', 'RENTED', 'RETURNED', 'COMPLETED', 'CANCELLED'].map(s => (
           <button key={s} onClick={() => setFilter(s)} style={{
@@ -173,16 +176,14 @@ export default function OwnerBookingsPage() {
           <div>
             {currentBookings.map(b => {
               const assignment = assignments[b.id]
-              const needsDriver = b.rentalMode !== 'SELF_DRIVE' && !b.driverId
 
-              // ★ NEW: Lấy handovers của booking này
               const bookingHandovers = handovers[b.id] || {}
               const pickupHandover = bookingHandovers.PICKUP
               const returnHandover = bookingHandovers.RETURN
 
-              // ★ NEW LOGIC: Chỉ tạo nếu CHƯA có biên bản
               const canCreatePickup = b.status === 'APPROVED' && !pickupHandover
               const canCreateReturn = b.status === 'RENTED' && !returnHandover
+              const canCancel = ['PENDING', 'PAID', 'APPROVED'].includes(b.status)
 
               return (
                 <div key={b.id} style={{
@@ -197,7 +198,7 @@ export default function OwnerBookingsPage() {
                     <div style={{ fontFamily: 'var(--serif)', fontSize: '22px', fontWeight: 700, marginBottom: '6px' }}>
                       {b.carName || 'Cỗ xe'} {b.carPlate && `— ${b.carPlate}`}
                     </div>
-                                        <div style={{ fontFamily: 'var(--serif-2)', fontStyle: 'italic', color: 'var(--muc-mo)' }}>
+                    <div style={{ fontFamily: 'var(--serif-2)', fontStyle: 'italic', color: 'var(--muc-mo)' }}>
                       {formatDate(b.startDate)} → {formatDate(b.endDate)} · Khách: {b.customerName || 'Khách'}
                     </div>
                     {b.rentalMode !== 'SELF_DRIVE' && (
@@ -206,26 +207,15 @@ export default function OwnerBookingsPage() {
                       </div>
                     )}
 
-                    {/* ===== MỚI: Hiển thị phí phát sinh ===== */}
                     {b.totalExtraFees > 0 && (
-                      <div
-                        style={{
-                          marginTop: "8px",
-                          padding: "8px 12px",
-                          background: "rgba(139,44,44,0.08)",
-                          borderLeft: "3px solid var(--do)",
-                          fontFamily: "var(--mono)",
-                          fontSize: "11px",
-                          letterSpacing: "1px",
-                          color: "var(--do)",
-                        }}
-                      >
+                      <div style={{
+                        marginTop: '8px', padding: '8px 12px',
+                        background: 'rgba(139,44,44,0.08)',
+                        borderLeft: '3px solid var(--do)',
+                        fontFamily: 'var(--mono)', fontSize: '11px',
+                        letterSpacing: '1px', color: 'var(--do)',
+                      }}>
                         ⚠️ Phí phát sinh: {formatPrice(b.totalExtraFees)}đ
-                        {b.lateFee > 0 && (
-                          <span style={{ marginLeft: "8px", opacity: 0.7 }}>
-                            (trả muộn: {formatPrice(b.lateFee)}đ)
-                          </span>
-                        )}
                       </div>
                     )}
                   </Link>
@@ -245,7 +235,6 @@ export default function OwnerBookingsPage() {
                   </div>
 
                   <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', justifyContent: 'flex-end' }}>
-                    {/* Nút Tạo biên bản PICKUP — chỉ khi chưa có */}
                     {canCreatePickup && (
                       <button onClick={() => openHandoverModal(b, 'PICKUP')} style={{
                         padding: '10px 18px', background: 'var(--do)',
@@ -257,7 +246,6 @@ export default function OwnerBookingsPage() {
                       </button>
                     )}
 
-                    {/* Nút Tạo biên bản RETURN — chỉ khi chưa có */}
                     {canCreateReturn && (
                       <button onClick={() => openHandoverModal(b, 'RETURN')} style={{
                         padding: '10px 18px', background: 'var(--do)',
@@ -269,7 +257,6 @@ export default function OwnerBookingsPage() {
                       </button>
                     )}
 
-                    {/* ★ NEW: Nút Xem biên bản PICKUP — chỉ khi ĐÃ CÓ */}
                     {pickupHandover && (
                       <button onClick={() => viewHandover(pickupHandover.id)} style={{
                         padding: '10px 18px', background: 'transparent',
@@ -281,7 +268,6 @@ export default function OwnerBookingsPage() {
                       </button>
                     )}
 
-                    {/* ★ NEW: Nút Xem biên bản RETURN — chỉ khi ĐÃ CÓ */}
                     {returnHandover && (
                       <button onClick={() => viewHandover(returnHandover.id)} style={{
                         padding: '10px 18px', background: 'transparent',
@@ -293,20 +279,8 @@ export default function OwnerBookingsPage() {
                       </button>
                     )}
 
-                    {/* Nút gán tài xế */}
-                    {needsDriver && (
-                      <button onClick={() => triggerAutoAssign(b.id)} style={{
-                        padding: '10px 18px', background: 'transparent',
-                        border: '1px solid var(--xanh-reu)', color: 'var(--xanh-reu)',
-                        fontFamily: 'var(--mono)', fontSize: '10px', letterSpacing: '2px',
-                        textTransform: 'uppercase', cursor: 'pointer', whiteSpace: 'nowrap'
-                      }}>
-                        ⚡ Gán tài xế
-                      </button>
-                    )}
-
-                    {/* Badge driver */}
-                    {b.driverId && !needsDriver && (
+                    {/* Badge hiển thị tài xế mà Khách đã chọn */}
+                    {b.driverId && (
                       <div style={{
                         padding: '10px 18px',
                         border: `1px solid ${assignmentStatusColors[assignment?.status] || 'var(--muc-mo)'}`,
@@ -314,8 +288,19 @@ export default function OwnerBookingsPage() {
                         fontFamily: 'var(--mono)', fontSize: '10px', letterSpacing: '1px',
                         textTransform: 'uppercase', textAlign: 'center', whiteSpace: 'nowrap'
                       }}>
-                        {assignment?.driverName || 'Tài xế'} · {assignment?.status || 'OK'}
+                        {assignment?.driverName || 'Tài xế'} · {assignment?.status || 'Chờ xác nhận'}
                       </div>
+                    )}
+
+                    {canCancel && (
+                      <button onClick={() => openCancelModal(b)} style={{
+                        padding: '10px 18px', background: 'transparent',
+                        border: '1px solid var(--do)', color: 'var(--do)',
+                        fontFamily: 'var(--mono)', fontSize: '10px', letterSpacing: '1.5px',
+                        textTransform: 'uppercase', cursor: 'pointer', whiteSpace: 'nowrap'
+                      }}>
+                        ✕ Hủy đơn
+                      </button>
                     )}
                   </div>
                 </div>
@@ -323,7 +308,6 @@ export default function OwnerBookingsPage() {
             })}
           </div>
 
-          {/* PHÂN TRANG */}
           {totalPages > 1 && (
             <>
               <div style={{ display: 'flex', justifyContent: 'center', gap: '8px', marginTop: '32px', flexWrap: 'wrap' }}>
@@ -341,7 +325,6 @@ export default function OwnerBookingsPage() {
         </>
       )}
 
-      {/* ===== HANDOVER MODAL ===== */}
       <HandoverFormModal
         open={handoverModal.open}
         booking={handoverModal.booking}
@@ -349,14 +332,128 @@ export default function OwnerBookingsPage() {
         onClose={() => setHandoverModal({ open: false, booking: null, type: null })}
         onSuccess={handleHandoverSuccess}
       />
+
+      {cancelModal && cancellingBooking && (
+        <div style={{
+          position: 'fixed', inset: 0, background: 'rgba(15,14,12,0.7)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          zIndex: 1000, padding: '20px'
+        }} onClick={() => setCancelModal(false)}>
+          <div style={{
+            background: 'var(--kem)', border: '1px solid var(--muc)',
+            maxWidth: '520px', width: '100%', padding: '48px', position: 'relative'
+          }} onClick={e => e.stopPropagation()}>
+            <button type="button" onClick={() => setCancelModal(false)} style={{
+              position: 'absolute', top: '16px', right: '16px',
+              width: '40px', height: '40px', background: 'transparent',
+              border: '1px solid var(--muc)', color: 'var(--muc)',
+              fontFamily: 'var(--mono)', fontSize: '18px', cursor: 'pointer'
+            }}>✕</button>
+
+            <h2 style={{
+              fontFamily: 'var(--serif)', fontSize: '28px', fontWeight: 900,
+              marginBottom: '8px', paddingRight: '48px'
+            }}>Hủy đơn hàng.</h2>
+            <p style={{
+              fontFamily: 'var(--mono)', fontSize: '11px', letterSpacing: '2px',
+              color: 'var(--muc-mo)', marginBottom: '24px'
+            }}>
+              Đơn #{cancellingBooking.id} · {cancellingBooking.carName}
+            </p>
+
+            <div style={{
+              padding: '16px 20px', background: 'rgba(139,44,44,0.1)',
+              border: '1px solid var(--do)', borderLeft: '4px solid var(--do)',
+              marginBottom: '24px'
+            }}>
+              <div style={{
+                fontFamily: 'var(--mono)', fontSize: '10px', letterSpacing: '2px',
+                color: 'var(--do)', marginBottom: '8px'
+              }}>
+                ⚠️ LƯU Ý QUAN TRỌNG
+              </div>
+              <div style={{
+                fontFamily: 'var(--serif-2)', fontStyle: 'italic',
+                fontSize: '15px', lineHeight: 1.6
+              }}>
+                Khi bạn hủy đơn này, hệ thống sẽ <strong>hoàn 100% tiền cọc</strong> lại cho khách
+                ({new Intl.NumberFormat('vi-VN').format(cancellingBooking.depositAmount || 0)}đ).
+                <br /><br />
+                Hãy nhập lý do hủy và lời xin lỗi để gửi đến khách hàng.
+              </div>
+            </div>
+
+            <label style={{
+              display: 'block', fontFamily: 'var(--mono)', fontSize: '10px',
+              letterSpacing: '3px', textTransform: 'uppercase',
+              color: 'var(--muc-mo)', marginBottom: '8px'
+            }}>
+              Lý do hủy + Lời xin lỗi *
+            </label>
+            <textarea
+              value={cancelReason}
+              onChange={(e) => setCancelReason(e.target.value)}
+              rows={5}
+              maxLength={500}
+              placeholder="VD: Xin lỗi quý khách, xe của tôi gặp sự cố đột xuất..."
+              style={{
+                width: '100%', padding: '14px', background: 'var(--kem-dam)',
+                border: '1px solid rgba(15,14,12,0.2)',
+                fontFamily: 'var(--serif-2)', fontSize: '15px',
+                resize: 'vertical', outline: 'none', boxSizing: 'border-box',
+                minHeight: '120px'
+              }}
+            />
+            <div style={{
+              textAlign: 'right', fontFamily: 'var(--mono)', fontSize: '10px',
+              color: 'var(--muc-mo)', marginTop: '4px'
+            }}>
+              {cancelReason.length}/500
+            </div>
+
+            <div style={{ display: 'flex', gap: '12px', marginTop: '24px' }}>
+              <button type="button" onClick={() => setCancelModal(false)} style={{
+                flex: 1, padding: '16px', background: 'transparent',
+                border: '1px solid var(--muc)', color: 'var(--muc)',
+                fontFamily: 'var(--mono)', fontSize: '11px', letterSpacing: '2px',
+                textTransform: 'uppercase', cursor: 'pointer'
+              }}>Đóng</button>
+              <button type="button" onClick={handleOwnerCancel} disabled={cancelSubmitting} style={{
+                flex: 2, padding: '16px', background: 'var(--do)',
+                border: 'none', color: 'var(--kem)',
+                fontFamily: 'var(--mono)', fontSize: '11px', letterSpacing: '2px',
+                textTransform: 'uppercase',
+                cursor: cancelSubmitting ? 'wait' : 'pointer'
+              }}>
+                {cancelSubmitting ? 'Đang xử lý...' : 'Xác nhận hủy + Hoàn 100%'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
 
 function paginationBtnStyle(disabled) {
-  return { padding: '8px 16px', background: 'transparent', border: '1px solid var(--muc)', color: disabled ? 'var(--muc-mo)' : 'var(--muc)', fontFamily: 'var(--mono)', fontSize: '11px', letterSpacing: '2px', textTransform: 'uppercase', cursor: disabled ? 'not-allowed' : 'pointer', opacity: disabled ? 0.4 : 1 }
+  return {
+    padding: '8px 16px', background: 'transparent',
+    border: '1px solid var(--muc)',
+    color: disabled ? 'var(--muc-mo)' : 'var(--muc)',
+    fontFamily: 'var(--mono)', fontSize: '11px', letterSpacing: '2px',
+    textTransform: 'uppercase',
+    cursor: disabled ? 'not-allowed' : 'pointer',
+    opacity: disabled ? 0.4 : 1
+  }
 }
 
 function paginationNumStyle(active) {
-  return { padding: '8px 14px', background: active ? 'var(--muc)' : 'transparent', color: active ? 'var(--kem)' : 'var(--muc)', border: '1px solid var(--muc)', fontFamily: 'var(--mono)', fontSize: '11px', cursor: 'pointer', minWidth: '40px' }
+  return {
+    padding: '8px 14px',
+    background: active ? 'var(--muc)' : 'transparent',
+    color: active ? 'var(--kem)' : 'var(--muc)',
+    border: '1px solid var(--muc)',
+    fontFamily: 'var(--mono)', fontSize: '11px',
+    cursor: 'pointer', minWidth: '40px'
+  }
 }

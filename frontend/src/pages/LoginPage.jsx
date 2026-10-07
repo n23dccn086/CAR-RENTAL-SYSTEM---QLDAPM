@@ -41,9 +41,17 @@ export default function LoginPage() {
     setLoading(true)
     try {
       const res = await login(form.phone, form.password)
-      // ← SỬA: dùng setAuth thay vì set localStorage thủ công
       setAuth(res.data.accessToken, res.data.user)
-      navigate('/')
+
+      // ★ Redirect theo role
+      const userRole = res.data.user?.role
+      if (userRole === 'ADMIN') {
+        navigate('/admin/dashboard')
+      } else if (userRole === 'OWNER') {
+        navigate('/owner/dashboard')
+      } else {
+        navigate('/')
+      }
     } catch (err) {
       setError(err.response?.data?.message || 'Số điện thoại hoặc mật khẩu không đúng')
     } finally {

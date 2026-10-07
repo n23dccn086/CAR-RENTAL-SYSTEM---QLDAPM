@@ -35,11 +35,12 @@ public class BookingRequest {
     @NotNull(message = "Hình thức thuê không được để trống")
     RentalMode rentalMode;
 
-    Boolean hasDriver;              // Có thuê tài xế không
+    // ★ MỚI: Driver ID khi Khách chọn tài xế (rentalMode = WITH_DRIVER)
+    Long driverId;
 
-    Boolean hasInsurance;           // Có mua bảo hiểm không
-
-    Boolean deliveryRequired;       // Có giao xe tận nơi không
+    Boolean hasDriver;
+    Boolean hasInsurance;
+    Boolean deliveryRequired;
 
     @Size(max = 500, message = "Ghi chú không quá 500 ký tự")
     String customerNote;

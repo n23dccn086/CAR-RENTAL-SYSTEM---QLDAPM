@@ -1,5 +1,6 @@
 package com.carrental.booking.service;
 
+import com.carrental.admin.service.ConfigHelper;
 import com.carrental.booking.dto.BookingMapper;
 import com.carrental.booking.dto.BookingRequest;
 import com.carrental.booking.dto.BookingResponse;
@@ -16,7 +17,10 @@ import com.carrental.common.constant.ErrorCode;
 import com.carrental.common.exception.BadRequestException;
 import com.carrental.common.exception.ResourceNotFoundException;
 import com.carrental.common.exception.UnauthorizedException;
-import com.carrental.handover.entity.HandoverRecord;
+import com.carrental.driver.entity.Driver;
+import com.carrental.driver.entity.DriverStatus;
+import com.carrental.driver.repository.DriverRepository;
+import com.carrental.driver.service.DriverAssignmentService;
 import com.carrental.handover.repository.HandoverRecordRepository;
 import com.carrental.notification.entity.NotificationType;
 import com.carrental.notification.service.NotificationService;
@@ -36,6 +40,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.List;
@@ -50,12 +55,15 @@ public class BookingServiceImpl implements BookingService {
     BookingDetailRepository bookingDetailRepository;
     CarRepository carRepository;
     UserRepository userRepository;
+    DriverRepository driverRepository;
     BookingMapper bookingMapper;
     PricingService pricingService;
     PaymentRepository paymentRepository;
     RefundRepository refundRepository;
     NotificationService notificationService;
-    HandoverRecordRepository handoverRepository;  // ← MỚI: để query phí
+    HandoverRecordRepository handoverRepository;
+    ConfigHelper configHelper;
+    DriverAssignmentService driverAssignmentService;
 
     // ===== CREATE =====
 
@@ -70,8 +78,7 @@ public class BookingServiceImpl implements BookingService {
         if (request.getRentalMode() == RentalMode.SELF_DRIVE
                 && customer.getVerificationStatus() != VerificationStatus.VERIFIED) {
             throw new BadRequestException(ErrorCode.VALIDATION_ERROR,
-                    "Bạn cần xác thực GPLX/CCCD trước khi thuê xe tự lái. "
-                    + "Vui lòng vào mục 'Xác thực tài khoản'.");
+                    "Bạn cần xác thực GPLX/CCCD trước khi thuê xe tự lái.");
         }
 
         Car car = carRepository.findById(request.getCarId())
@@ -91,6 +98,30 @@ public class BookingServiceImpl implements BookingService {
             throw new BadRequestException(ErrorCode.BOOKING_ALREADY_EXISTS);
         }
 
+        // ★ VALIDATE DRIVER khi WITH_DRIVER
+        Long driverId = request.getDriverId();
+        if (request.getRentalMode() == RentalMode.WITH_DRIVER) {
+            if (driverId == null) {
+                throw new BadRequestException(ErrorCode.VALIDATION_ERROR,
+                        "Vui lòng chọn tài xế cho đơn thuê có tài xế.");
+            }
+
+            Driver driver = driverRepository.findById(driverId)
+                    .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.DRIVER_NOT_FOUND));
+
+            if (!driver.getOwnerId().equals(car.getOwnerId())) {
+                throw new BadRequestException(ErrorCode.VALIDATION_ERROR,
+                        "Tài xế được chọn không thuộc chủ xe của cỗ xe này.");
+            }
+
+            if (driver.getStatus() != DriverStatus.ACTIVE) {
+                throw new BadRequestException(ErrorCode.VALIDATION_ERROR,
+                        "Tài xế được chọn hiện không hoạt động.");
+            }
+        } else {
+            driverId = null;
+        }
+
         BookingDetail detail = pricingService.calculatePricing(car, request);
         long totalPrice = pricingService.calculateTotal(detail);
         long depositAmount = pricingService.calculateDeposit(totalPrice);
@@ -105,6 +136,7 @@ public class BookingServiceImpl implements BookingService {
                 .pickupAddress(request.getPickupAddress())
                 .returnAddress(request.getReturnAddress())
                 .rentalMode(request.getRentalMode())
+                .driverId(driverId)
                 .totalPrice(totalPrice)
                 .depositAmount(depositAmount)
                 .remainingAmount(remainingAmount)
@@ -117,7 +149,8 @@ public class BookingServiceImpl implements BookingService {
         detail.setBookingId(savedBooking.getId());
         BookingDetail savedDetail = bookingDetailRepository.save(detail);
 
-        log.info("Booking created: id={}, total={}", savedBooking.getId(), totalPrice);
+        log.info("Booking created: id={}, total={}, driverId={}",
+                savedBooking.getId(), totalPrice, driverId);
 
         return buildResponse(savedBooking, savedDetail);
     }
@@ -140,25 +173,19 @@ public class BookingServiceImpl implements BookingService {
     @Override
     public List<BookingResponse> getMyBookings(Long customerId) {
         List<Booking> bookings = bookingRepository.findByCustomerIdOrderByCreatedAtDesc(customerId);
-        return bookings.stream()
-                .map(b -> buildResponse(b, null))
-                .toList();
+        return bookings.stream().map(b -> buildResponse(b, null)).toList();
     }
 
     @Override
     public List<BookingResponse> getOwnerBookings(Long ownerId) {
         List<Booking> bookings = bookingRepository.findByOwnerIdOrderByCreatedAtDesc(ownerId);
-        return bookings.stream()
-                .map(b -> buildResponse(b, null))
-                .toList();
+        return bookings.stream().map(b -> buildResponse(b, null)).toList();
     }
 
     @Override
     public List<BookingResponse> getBookingsByStatus(BookingStatus status) {
         List<Booking> bookings = bookingRepository.findByStatus(status);
-        return bookings.stream()
-                .map(b -> buildResponse(b, null))
-                .toList();
+        return bookings.stream().map(b -> buildResponse(b, null)).toList();
     }
 
     // ===== ACTIONS =====
@@ -174,19 +201,18 @@ public class BookingServiceImpl implements BookingService {
             throw new UnauthorizedException(ErrorCode.UNAUTHORIZED);
         }
 
-        if (booking.getStatus() == BookingStatus.RENTED
-                || booking.getStatus() == BookingStatus.COMPLETED
-                || booking.getStatus() == BookingStatus.CANCELLED) {
+        if (booking.getStatus() != BookingStatus.PENDING
+                && booking.getStatus() != BookingStatus.PAID
+                && booking.getStatus() != BookingStatus.APPROVED) {
             throw new BadRequestException(ErrorCode.BOOKING_CANNOT_CANCEL,
-                    "Không thể hủy đơn ở trạng thái này");
+                    "Chỉ có thể hủy đơn khi đơn ở trạng thái Chưa cọc / Đã cọc / Đã duyệt. "
+                    + "Đơn đã nhận xe không thể hủy.");
         }
 
         long refundAmount = calculateRefundAmount(booking);
         long depositPaid = booking.getDepositAmount();
-        long lostAmount = depositPaid - refundAmount;
 
-        log.info("Refund calculation: deposit={}, refund={}, lost={}",
-                depositPaid, refundAmount, lostAmount);
+        log.info("Refund calculation: deposit={}, refund={}", depositPaid, refundAmount);
 
         if (refundAmount > 0) {
             Payment payment = paymentRepository
@@ -248,6 +274,17 @@ public class BookingServiceImpl implements BookingService {
 
         Booking updated = bookingRepository.save(booking);
 
+        // ★ NẾU KHÁCH ĐÃ CHỌN DRIVER → TẠO ASSIGNMENT + GỬI MAGIC LINK
+        if (updated.getDriverId() != null) {
+            try {
+                driverAssignmentService.assignSelectedDriver(updated);
+                log.info("Driver assignment created for booking {} with driver {}",
+                        updated.getId(), updated.getDriverId());
+            } catch (Exception e) {
+                log.warn("Failed to create driver assignment: {}", e.getMessage());
+            }
+        }
+
         log.info("Booking approved: id={}", id);
         return buildResponse(updated, null);
     }
@@ -263,7 +300,15 @@ public class BookingServiceImpl implements BookingService {
             throw new UnauthorizedException(ErrorCode.UNAUTHORIZED);
         }
 
+        if (booking.getStatus() != BookingStatus.PENDING
+                && booking.getStatus() != BookingStatus.PAID
+                && booking.getStatus() != BookingStatus.APPROVED) {
+            throw new BadRequestException(ErrorCode.BOOKING_CANNOT_CANCEL,
+                    "Chủ xe chỉ có thể hủy đơn khi đơn ở trạng thái Chưa cọc / Đã cọc / Đã duyệt.");
+        }
+
         long refundAmount = 0;
+
         if (booking.getStatus() == BookingStatus.PAID
                 || booking.getStatus() == BookingStatus.APPROVED) {
             refundAmount = booking.getDepositAmount();
@@ -277,16 +322,16 @@ public class BookingServiceImpl implements BookingService {
                         .paymentId(payment.getId())
                         .bookingId(id)
                         .amount(refundAmount)
-                        .reason("Chủ xe từ chối: " + reason)
+                        .reason("Chủ xe hủy đơn. Lý do: " + reason)
                         .status(PaymentStatus.PENDING)
                         .build();
                 refundRepository.save(refund);
-                log.info("Refund created for owner rejection: amount={}", refundAmount);
+                log.info("Refund created for owner cancel: amount={}", refundAmount);
             }
         }
 
         booking.setStatus(BookingStatus.CANCELLED);
-        booking.setCancelReason("Chủ xe từ chối: " + reason);
+        booking.setCancelReason("Chủ xe hủy: " + reason);
         booking.setCancelledAt(LocalDateTime.now());
 
         Booking updated = bookingRepository.save(booking);
@@ -294,9 +339,11 @@ public class BookingServiceImpl implements BookingService {
         try {
             notificationService.createNotification(
                     booking.getCustomerId(),
-                    NotificationType.BOOKING_REJECTED,
-                    "Đơn bị từ chối",
-                    String.format("Đơn #%d đã bị chủ xe từ chối. Hoàn cọc: %dđ. Lý do: %s",
+                    NotificationType.BOOKING_CANCELLED,
+                    "Chủ xe đã hủy đơn của bạn",
+                    String.format(
+                            "Đơn #%d đã bị chủ xe hủy. Bạn sẽ được HOÀN 100%% cọc (%dđ). "
+                            + "Lý do từ chủ xe: %s. Chúng tôi xin lỗi vì sự bất tiện này.",
                             id, refundAmount, reason),
                     id
             );
@@ -392,15 +439,21 @@ public class BookingServiceImpl implements BookingService {
                 booking.getStartDate()
         ).toHours();
 
+        BigDecimal percent;
         if (hoursUntilStart >= 24) {
-            return deposit;
+            percent = configHelper.getRefundBefore24hPercent();
         } else if (hoursUntilStart >= 4) {
-            return (long)(deposit * 0.7);
+            percent = configHelper.getRefund4To24hPercent();
         } else if (hoursUntilStart > 0) {
-            return (long)(deposit * 0.5);
+            percent = configHelper.getRefundBefore4hPercent();
         } else {
-            return 0;
+            percent = configHelper.getRefundAfterPickupPercent();
         }
+
+        return BigDecimal.valueOf(deposit)
+                .multiply(percent)
+                .divide(new BigDecimal("100"), 0, RoundingMode.DOWN)
+                .longValue();
     }
 
     private BookingResponse buildResponse(Booking booking, BookingDetail detail) {
@@ -413,20 +466,15 @@ public class BookingServiceImpl implements BookingService {
         }
 
         User customer = userRepository.findById(booking.getCustomerId()).orElse(null);
-        if (customer != null) {
-            response.setCustomerName(customer.getName());
-        }
+        if (customer != null) response.setCustomerName(customer.getName());
 
         User owner = userRepository.findById(booking.getOwnerId()).orElse(null);
-        if (owner != null) {
-            response.setOwnerName(owner.getName());
-        }
+        if (owner != null) response.setOwnerName(owner.getName());
 
         if (detail != null) {
             response.setDetails(bookingMapper.toDetailResponse(detail));
         }
 
-        // ===== MỚI: Lấy phí từ handover RETURN =====
         try {
             handoverRepository.findReturnHandoverByBookingId(booking.getId())
                     .ifPresent(handover -> {
