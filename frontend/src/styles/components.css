@@ -38,6 +38,7 @@
   text-transform: uppercase;
   border-bottom: 1px solid var(--dong);
   position: relative;
+   z-index: 1; 
 }
 .ticker-inner {
   display: inline-flex;

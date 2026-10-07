@@ -37,6 +37,8 @@ import AdminWithdrawalsPage from "./pages/AdminWithdrawalsPage";
 import AdminConfigPage from "./pages/AdminConfigPage"; // ★ MỚI: UC-AD03
 import BookingDetailPage from "./pages/BookingDetailPage";
 import PaymentFinalPage from "./pages/PaymentFinalPage";
+import OwnerRegisterPage from "./pages/OwnerRegisterPage";
+import AdminOwnerRequestsPage from "./pages/AdminOwnerRequestsPage";
 
 function App() {
   return (
@@ -87,6 +89,16 @@ function App() {
             element={
               <ProtectedRoute allowedRoles={["CUSTOMER", "ADMIN"]}>
                 <MyBookingsPage />
+              </ProtectedRoute>
+            }
+          />
+
+          {/* ===== CUSTOMER ĐĂNG KÝ CHỦ XE ===== */}
+          <Route
+            path="/owner-register"
+            element={
+              <ProtectedRoute allowedRoles={["CUSTOMER"]}>
+                <OwnerRegisterPage />
               </ProtectedRoute>
             }
           />
@@ -282,6 +294,16 @@ function App() {
             element={
               <ProtectedRoute allowedRoles={["ADMIN"]}>
                 <AdminConfigPage />
+              </ProtectedRoute>
+            }
+          />
+
+          {/* ★ MỚI: Admin duyệt chủ xe */}
+          <Route
+            path="/admin/owner-requests"
+            element={
+              <ProtectedRoute allowedRoles={["ADMIN"]}>
+                <AdminOwnerRequestsPage />
               </ProtectedRoute>
             }
           />

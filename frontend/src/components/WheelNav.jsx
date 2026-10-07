@@ -37,25 +37,32 @@ export default function WheelNav() {
       ? [{ path: "/search", label: "Bộ sưu tập", icon: "⚲" }]
       : []),
     ...(isLoggedIn && user?.role !== "OWNER" && user?.role !== "ADMIN"
-      ? [{ path: "/my-bookings", label: "Chuyến đi", icon: "✦" }]
+      ? [{ path: "/my-bookings", label: "Chuyến đi", icon: "➤" }]
       : []),
     ...(isLoggedIn
-      ? [{ path: "/notifications", label: "Thông báo", icon: "◎" }]
+      ? [{ path: "/notifications", label: "Thông báo", icon: "✉" }]
       : []),
     ...(isLoggedIn && user?.role !== "ADMIN"
       ? [{ path: "/disputes", label: "Tranh chấp", icon: "⚖" }]
       : []),
     ...(isLoggedIn &&
-    user?.verificationStatus !== "VERIFIED" &&
-    user?.role !== "ADMIN"
-      ? [{ path: "/verification", label: "Xác thực tài khoản", icon: "☑" }]
+    user?.role === "CUSTOMER" &&
+    user?.verificationStatus !== "VERIFIED"
+      ? [{ path: "/verification", label: "Xác thực tài khoản", icon: "⛨" }]
       : []),
     ...(isLoggedIn ? [{ path: "/profile", label: "Hồ sơ", icon: "❦" }] : []),
+
+    // ★ MỚI: Customer đăng ký làm chủ xe
+    ...(isLoggedIn && user?.role === "CUSTOMER"
+      ? [{ path: "/owner-register", label: "Đăng ký làm chủ xe", icon: "⬆" }]
+      : []),
+
+    // ===== OWNER =====
     ...(isLoggedIn && user?.role === "OWNER"
-      ? [{ path: "/owner/dashboard", label: "Quản lý xe", icon: "⚙" }]
+      ? [{ path: "/owner/dashboard", label: "Quản lý xe", icon: "▦" }]
       : []),
     ...(isLoggedIn && user?.role === "OWNER"
-      ? [{ path: "/owner/drivers", label: "Quản lý tài xế", icon: "◉" }]
+      ? [{ path: "/owner/drivers", label: "Quản lý tài xế", icon: "◍" }]
       : []),
     ...(isLoggedIn && user?.role === "OWNER"
       ? [{ path: "/owner/bookings", label: "Đơn hàng", icon: "▤" }]
@@ -66,11 +73,13 @@ export default function WheelNav() {
     ...(isLoggedIn && user?.role === "OWNER"
       ? [{ path: "/owner/withdrawals", label: "Rút tiền", icon: "₫" }]
       : []),
+
+    // ===== ADMIN =====
     ...(isLoggedIn && user?.role === "ADMIN"
       ? [{ path: "/admin/dashboard", label: "Quản trị", icon: "⚙" }]
       : []),
     ...(isLoggedIn && user?.role === "ADMIN"
-      ? [{ path: "/admin/approvals", label: "Duyệt xe", icon: "☑" }]
+      ? [{ path: "/admin/approvals", label: "Duyệt xe", icon: "⊚" }]
       : []),
     ...(isLoggedIn && user?.role === "ADMIN"
       ? [{ path: "/admin/disputes", label: "Tranh chấp", icon: "⚖" }]
@@ -82,10 +91,15 @@ export default function WheelNav() {
       ? [{ path: "/admin/refunds", label: "Hoàn tiền", icon: "❖" }]
       : []),
     ...(isLoggedIn && user?.role === "ADMIN"
-      ? [{ path: "/admin/withdrawals", label: "Duyệt rút tiền", icon: "₫" }]
+      ? [{ path: "/admin/withdrawals", label: "Duyệt rút tiền", icon: "⊛" }]
       : []),
     ...(isLoggedIn && user?.role === "ADMIN"
       ? [{ path: "/admin/config", label: "Cấu hình", icon: "⌬" }]
+      : []),
+
+    // ★ MỚI: Admin duyệt chủ xe
+    ...(isLoggedIn && user?.role === "ADMIN"
+      ? [{ path: "/admin/owner-requests", label: "Duyệt chủ xe", icon: "☑" }]
       : []),
   ];
 
