@@ -5,17 +5,20 @@ import api from '../services/api'
 export default function AdminDashboard() {
   const [stats, setStats] = useState(null)
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
 
   useEffect(() => {
     fetchStats()
   }, [])
 
   const fetchStats = async () => {
+    setLoading(true)
     try {
       const res = await api.get('/admin/dashboard/stats')
       setStats(res.data.data)
     } catch (err) {
       console.error('Failed to load stats:', err)
+      setError(err.response?.data?.message || 'Không tải được số liệu')
     } finally {
       setLoading(false)
     }
@@ -33,6 +36,16 @@ export default function AdminDashboard() {
     )
   }
 
+  if (error) {
+    return (
+      <div style={{ maxWidth: '1400px', margin: '0 auto', padding: '60px 48px' }}>
+        <div style={{ padding: '24px', background: 'rgba(139,44,44,0.1)', border: '1px solid var(--do)', color: 'var(--do)', fontFamily: 'var(--serif-2)', fontStyle: 'italic' }}>
+          {error}
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div style={{ maxWidth: '1400px', margin: '0 auto', padding: '60px 48px' }}>
       <div className="chapter-num" style={{ marginBottom: '24px' }}>Chương Quản Trị</div>
@@ -40,12 +53,12 @@ export default function AdminDashboard() {
         Tổng <em style={{ fontStyle: 'italic', color: 'var(--do)' }}>quan.</em>
       </h1>
 
-      {/* 5 thẻ số liệu */}
+      {/* ===== 5 THẺ CHÍNH ===== */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: '20px', marginBottom: '48px' }}>
         <StatCard
           label="Doanh thu sàn"
           value={`${formatPrice(stats?.totalRevenue)}đ`}
-          hint="Tổng doanh thu đơn hoàn tất (chưa trích hoa hồng)"
+          hint="Tổng doanh thu đơn hoàn tất"
         />
         <StatCard
           label={`Nền tảng thực nhận (${stats?.commissionRate}%)`}
@@ -62,7 +75,7 @@ export default function AdminDashboard() {
         <StatCard
           label="CSAT tổng"
           value={`${stats?.csat}★`}
-          hint={`Xe ${stats?.csatCar}★ · Chủ xe ${stats?.csatOwner}★ (${stats?.totalReviews} đánh giá)`}
+          hint={`Xe ${stats?.csatCar}★ · Chủ xe ${stats?.csatOwner}★`}
         />
         <StatCard
           label="Tổng đơn"
@@ -71,7 +84,10 @@ export default function AdminDashboard() {
         />
       </div>
 
-      {/* 3 thẻ CSAT chi tiết */}
+      {/* ===== CSAT CHI TIẾT ===== */}
+      <h2 style={{ fontFamily: 'var(--serif)', fontSize: '24px', fontWeight: 900, marginBottom: '20px', paddingBottom: '12px', borderBottom: '2px solid var(--muc)' }}>
+        CSAT chi tiết ({stats?.totalReviews} đánh giá)
+      </h2>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '20px', marginBottom: '48px' }}>
         <StatCard
           label="CSAT — Cỗ xe"
@@ -91,15 +107,52 @@ export default function AdminDashboard() {
         />
       </div>
 
-      {/* Pending */}
-      {stats?.pendingCars > 0 && (
-        <div style={{ background: 'var(--do)', color: 'var(--kem)', padding: '24px 32px', marginBottom: '48px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+      {/* ===== PENDING APPROVALS ===== */}
+      <h2 style={{ fontFamily: 'var(--serif)', fontSize: '24px', fontWeight: 900, marginBottom: '20px', paddingBottom: '12px', borderBottom: '2px solid var(--muc)' }}>
+        Hồ sơ đang chờ duyệt
+      </h2>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '20px', marginBottom: '48px' }}>
+        <PendingCard
+          label="Xe chờ duyệt"
+          count={stats?.pendingCars || 0}
+          link="/admin/approvals"
+        />
+        <PendingCard
+          label="Xác thực GPLX/CCCD"
+          count={stats?.pendingVerifications || 0}
+          link="/admin/users"
+        />
+        <PendingCard
+          label="Đăng ký chủ xe"
+          count={stats?.pendingOwnerRequests || 0}
+          link="/admin/owner-requests"
+          disabled
+        />
+        <PendingCard
+          label="Tranh chấp"
+          count={stats?.pendingDisputes || 0}
+          link="/admin/disputes"
+        />
+      </div>
+
+      {/* ===== BANNER DUYỆT NGAY ===== */}
+      {(stats?.pendingCars > 0 || stats?.pendingVerifications > 0) && (
+        <div style={{ background: 'var(--do)', color: 'var(--kem)', padding: '24px 32px', marginBottom: '48px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '16px' }}>
           <div style={{ fontFamily: 'var(--serif)', fontSize: '22px', fontWeight: 700 }}>
-            Có <em style={{ fontStyle: 'italic' }}>{stats.pendingCars}</em> hồ sơ xe đang chờ duyệt
+            Có <em style={{ fontStyle: 'italic' }}>{(stats?.pendingCars || 0) + (stats?.pendingVerifications || 0)}</em> hồ sơ đang chờ duyệt
           </div>
-          <Link to="/admin/approvals" className="btn-login" style={{ background: 'var(--kem)', color: 'var(--do)', padding: '12px 24px', textDecoration: 'none', display: 'inline-flex' }}>
-            <span>Duyệt ngay</span>
-          </Link>
+          <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
+            {stats?.pendingCars > 0 && (
+              <Link to="/admin/approvals" className="btn-login" style={{ background: 'var(--kem)', color: 'var(--do)', padding: '12px 24px', textDecoration: 'none', display: 'inline-flex' }}>
+                <span>Duyệt xe ({stats.pendingCars})</span>
+              </Link>
+            )}
+            {stats?.pendingVerifications > 0 && (
+              <Link to="/admin/users" className="btn-login" style={{ background: 'var(--dong)', color: 'var(--muc)', padding: '12px 24px', textDecoration: 'none', display: 'inline-flex' }}>
+                <span>Duyệt xác thực ({stats.pendingVerifications})</span>
+              </Link>
+            )}
+          </div>
         </div>
       )}
     </div>
@@ -122,4 +175,26 @@ function StatCard({ label, value, hint, color = 'var(--muc)' }) {
       )}
     </div>
   )
+}
+
+function PendingCard({ label, count, link, disabled = false }) {
+  const content = (
+    <div style={{
+      background: count > 0 ? 'rgba(139,44,44,0.05)' : 'var(--kem-dam)',
+      border: `1px solid ${count > 0 ? 'var(--do)' : 'rgba(15,14,12,0.15)'}`,
+      padding: '24px',
+      opacity: disabled ? 0.5 : 1,
+      cursor: disabled ? 'not-allowed' : 'pointer',
+    }}>
+      <div style={{ fontFamily: 'var(--mono)', fontSize: '10px', letterSpacing: '2px', textTransform: 'uppercase', color: 'var(--muc-mo)', marginBottom: '12px' }}>
+        {label}
+      </div>
+      <div style={{ fontFamily: 'var(--serif)', fontSize: '36px', fontWeight: 900, letterSpacing: '-1px', color: count > 0 ? 'var(--do)' : 'var(--muc-mo)', lineHeight: 1 }}>
+        {count}
+      </div>
+    </div>
+  )
+
+  if (disabled || count === 0) return content
+  return <Link to={link} style={{ textDecoration: 'none' }}>{content}</Link>
 }

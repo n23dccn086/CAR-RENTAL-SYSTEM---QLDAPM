@@ -4,7 +4,6 @@ import com.carrental.admin.dto.DashboardStatsResponse;
 import com.carrental.booking.entity.Booking;
 import com.carrental.booking.entity.BookingStatus;
 import com.carrental.booking.repository.BookingRepository;
-import com.carrental.car.entity.Car;
 import com.carrental.car.entity.CarStatus;
 import com.carrental.car.repository.CarRepository;
 import com.carrental.review.repository.ReviewRepository;
@@ -47,7 +46,7 @@ public class AdminDashboardServiceImpl implements AdminDashboardService {
                 .filter(b -> b.getStatus() == BookingStatus.CANCELLED)
                 .count();
 
-        // Doanh thu sàn = TỔNG doanh thu của đơn COMPLETED (chưa trích hoa hồng)
+        // Doanh thu sàn = TỔNG totalPrice của đơn COMPLETED (chưa trích hoa hồng)
         long totalRevenue = allBookings.stream()
                 .filter(b -> b.getStatus() == BookingStatus.COMPLETED)
                 .mapToLong(b -> b.getTotalPrice() != null ? b.getTotalPrice() : 0L)
@@ -68,13 +67,16 @@ public class AdminDashboardServiceImpl implements AdminDashboardService {
                 : 0.0;
 
         // ===== 2. CSAT =====
-        // CSAT_xe = AVG(carRating) — dùng query có sẵn trong ReviewRepository
         Double avgCarRating = reviewRepository.getAverageCarRatingAll();
         Double avgOwnerRating = reviewRepository.getAverageOwnerRatingAll();
         long totalReviews = reviewRepository.count();
 
-        double csatCar = avgCarRating != null ? Math.round(avgCarRating * 10.0) / 10.0 : 0.0;
-        double csatOwner = avgOwnerRating != null ? Math.round(avgOwnerRating * 10.0) / 10.0 : 0.0;
+        double csatCar = avgCarRating != null
+                ? Math.round(avgCarRating * 10.0) / 10.0
+                : 0.0;
+        double csatOwner = avgOwnerRating != null
+                ? Math.round(avgOwnerRating * 10.0) / 10.0
+                : 0.0;
 
         // CSAT_tổng = (CSAT_xe + CSAT_chủ_xe) / 2
         double csat = Math.round(((csatCar + csatOwner) / 2.0) * 10.0) / 10.0;
@@ -84,9 +86,10 @@ public class AdminDashboardServiceImpl implements AdminDashboardService {
         long pendingVerifications = userRepository
                 .findByVerificationStatus(VerificationStatus.PENDING).size();
 
-        // TODO: nếu có OwnerRequestRepository thì thêm
+        // TODO: Nếu đã làm UC-OWNER-REGISTER, thêm count OwnerRequest PENDING
         long pendingOwnerRequests = 0;
-        // TODO: nếu có DisputeRepository count by status PENDING thì thêm
+
+        // TODO: Nếu đã làm UC Dispute count, thêm
         long pendingDisputes = 0;
 
         return DashboardStatsResponse.builder()

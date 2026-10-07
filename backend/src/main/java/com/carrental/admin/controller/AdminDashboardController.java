@@ -12,6 +12,10 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+/**
+ * Controller cho Admin Dashboard — Số liệu tổng quan.
+ * Base path: /api/v1/admin/dashboard
+ */
 @RestController
 @RequestMapping("/admin/dashboard")
 @RequiredArgsConstructor
@@ -28,6 +32,7 @@ public class AdminDashboardController {
      */
     @GetMapping("/stats")
     public ApiResponse<DashboardStatsResponse> getStats() {
+        log.info("REST: Admin get dashboard stats");
         return ApiResponse.success(dashboardService.getStats());
     }
 }
