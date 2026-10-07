@@ -5,13 +5,60 @@ from app.models.schemas import (
 )
 from app.services.llm_service import generate_reply, detect_intent
 from app.services.backend_client import get_my_bookings, search_cars
-from app.services.rag_service import retrieve_context, index_documents, get_stats
+from app.services.rag_service import (
+    retrieve_context,
+    retrieve_by_source,
+    index_documents,
+    get_stats,
+)
 from datetime import datetime
 from uuid import uuid4
 
 router = APIRouter(prefix="/ai", tags=["AI Chatbot"])
 
 _sessions: dict = {}
+
+
+# ============================================================
+# SOURCE FILTER MAP — map keyword → tên file .md
+# ============================================================
+SOURCE_FILTER_MAP = {
+    "04-quy-trinh-dat-xe": [
+        "quy trình đặt xe", "các bước đặt xe", "thủ tục đặt xe",
+        "đặt xe như thế nào", "đặt xe gồm mấy bước", "quy trình thuê xe",
+        "các bước thuê xe",
+    ],
+    "01-chinh-sach-hoan-coc": [
+        "hoàn cọc", "hủy cọc", "chính sách hủy", "chính sách hoàn",
+        "hủy đơn", "hoàn tiền cọc",
+    ],
+    "02-quy-dinh-vuot-km": [
+        "vượt km", "vượt kilomet", "km vượt", "phí vượt km",
+        "giới hạn km",
+    ],
+    "03-quy-dinh-vuot-thoi-gian": [
+        "vượt thời gian", "trả muộn", "vượt giờ", "phí muộn",
+        "trả xe muộn", "phí trả muộn",
+    ],
+    "05-cau-hoi-thuong-gap": [
+        "câu hỏi thường gặp", "faq", "giấy tờ cần", "cần giấy tờ gì",
+        "thủ tục cần", "yêu cầu giấy tờ",
+    ],
+    "06-chinh-sach-bao-mat": [
+        "bảo mật", "privacy", "dữ liệu cá nhân", "chính sách bảo mật",
+        "quyền riêng tư",
+    ],
+}
+
+
+def _detect_source_filter(message: str) -> str:
+    """Detect source filter từ message dựa trên SOURCE_FILTER_MAP."""
+    msg_lower = message.lower()
+    for source, keywords in SOURCE_FILTER_MAP.items():
+        for kw in keywords:
+            if kw in msg_lower:
+                return source
+    return None
 
 
 @router.post("/chat", response_model=ChatResponse)
@@ -33,26 +80,32 @@ async def chat(
     context = {}
 
     if intent == "check_booking" and token:
-        # User hỏi về đơn hàng → gọi backend lấy danh sách đơn
         bookings = await get_my_bookings(token)
         if bookings and not (isinstance(bookings, dict) and bookings.get("error")):
             context["bookings"] = bookings
 
     elif intent == "search_car":
-        # User tìm xe → gọi backend lấy danh sách xe (public)
         cars = await search_cars()
         if cars and not (isinstance(cars, dict) and cars.get("error")):
             context["cars"] = cars
 
     # ===== RAG: retrieve knowledge base cho policy / emergency / general =====
-    # (Không chạy cho check_booking vì intent đó cần data realtime từ backend)
     if intent in ("policy_inquiry", "emergency", "general"):
         try:
-            # ★ Tăng top_k lên 8 để cover đủ chunks của file dài
-            rag_context = retrieve_context(request.message, top_k=15)
+            # ★ Detect source filter từ message
+            source_filter = _detect_source_filter(request.message)
+
+            rag_context = retrieve_by_source(
+                request.message,
+                source_filter=source_filter,
+                top_k=30,
+            )
             if rag_context:
                 context["rag"] = rag_context
-                print(f"[Chat] RAG retrieved {len(rag_context)} chars for: {request.message[:50]}")
+                print(
+                    f"[Chat] RAG retrieved {len(rag_context)} chars "
+                    f"(source: {source_filter or 'similarity'})"
+                )
         except Exception as e:
             print(f"[Chat] RAG retrieve failed: {e}")
 
