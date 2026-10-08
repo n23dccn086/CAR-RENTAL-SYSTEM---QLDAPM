@@ -59,7 +59,10 @@ export default function WheelNav() {
 
     // ===== OWNER =====
     ...(isLoggedIn && user?.role === "OWNER"
-      ? [{ path: "/owner/dashboard", label: "Quản lý xe", icon: "▦" }]
+      ? [{ path: "/owner/dashboard", label: "Doanh thu", icon: "$" }]
+      : []),
+    ...(isLoggedIn && user?.role === "OWNER"
+      ? [{ path: "/owner/cars", label: "Quản lý xe", icon: "▦" }]
       : []),
     ...(isLoggedIn && user?.role === "OWNER"
       ? [{ path: "/owner/drivers", label: "Quản lý tài xế", icon: "◍" }]

@@ -30,7 +30,7 @@ export default function Footer() {
               <li><a href="#">Sedan</a></li>
               <li><a href="#">SUV</a></li>
               <li><a href="#">MPV</a></li>
-              <li><a href="#">Xe điện</a></li>
+              <li><a href="#">Luxury</a></li>
             </ul>
           </div>
           <div className="footer-col">
@@ -55,7 +55,7 @@ export default function Footer() {
                   {config.support_email}
                 </a>
               </li>
-              <li><a href="#">123 Nguyễn Huệ, Q1</a></li>
+              <li><a href="#">97, Man Thiện, Tăng Nhơn Phú, Hồ Chí Minh</a></li>
             </ul>
           </div>
         </div>

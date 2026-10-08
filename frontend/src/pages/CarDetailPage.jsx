@@ -24,8 +24,24 @@ export default function CarDetailPage() {
 
   const formatPrice = (p) => new Intl.NumberFormat('vi-VN').format(p || 0)
 
+  // ★ Icon xe theo loại (fallback khi không có ảnh)
+  const carIcons = {
+    SEDAN: '🚗',
+    SUV: '🚙',
+    MPV: '🚐',
+    HATCHBACK: '🚗',
+    PICKUP: '🛻',
+    VAN: '🚐',
+    LUXURY: '🏎️',
+  }
+
   if (loading) return <div style={{ padding: '120px 48px', textAlign: 'center', fontFamily: 'var(--serif-2)', fontStyle: 'italic' }}>Đang tải...</div>
   if (!car) return <div style={{ padding: '120px 48px', textAlign: 'center' }}><p>Không tìm thấy cỗ xe.</p><Link to="/search" style={{ color: 'var(--do)' }}>← Về bộ sưu tập</Link></div>
+
+  // ★ Lấy ảnh đầu tiên nếu có
+  const hasImage = car.imageUrls && car.imageUrls.length > 0
+  const imageUrl = hasImage ? car.imageUrls[0] : null
+  const carIcon = carIcons[car.carType] || '🚗'
 
   return (
     <div style={{ maxWidth: '1400px', margin: '0 auto', padding: '60px 48px' }}>
@@ -35,9 +51,68 @@ export default function CarDetailPage() {
 
       <div style={{ display: 'grid', gridTemplateColumns: '1.3fr 1fr', gap: '60px', alignItems: 'start' }}>
         <div>
-          <div style={{ background: 'var(--kem-dam)', border: '1px solid rgba(15,14,12,0.15)', aspectRatio: '4/3', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '160px', marginBottom: '24px' }}>
-            🚗
+          {/* ★ FIX: Hiện ẢNH THẬT nếu có, fallback icon nếu không */}
+          <div style={{
+            background: 'var(--kem-dam)',
+            border: '1px solid rgba(15,14,12,0.15)',
+            aspectRatio: '4/3',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            fontSize: '160px',
+            marginBottom: '24px',
+            overflow: 'hidden',
+            position: 'relative',
+          }}>
+            {imageUrl ? (
+              <img
+                src={imageUrl}
+                alt={`${car.brand} ${car.model}`}
+                style={{
+                  width: '100%',
+                  height: '100%',
+                  objectFit: 'cover',
+                  display: 'block',
+                }}
+                onError={(e) => {
+                  // Nếu ảnh lỗi → ẩn img, hiện icon fallback
+                  e.target.style.display = 'none'
+                  e.target.nextSibling.style.display = 'flex'
+                }}
+              />
+            ) : null}
+
+            {/* Fallback icon (hiện nếu không có ảnh HOẶC ảnh lỗi) */}
+            <div style={{
+              display: imageUrl ? 'none' : 'flex',
+              position: imageUrl ? 'absolute' : 'relative',
+              inset: 0,
+              alignItems: 'center',
+              justifyContent: 'center',
+              fontSize: '160px',
+            }}>
+              {carIcon}
+            </div>
+
+            {/* Badge số ảnh (nếu có > 1 ảnh) */}
+            {car.imageUrls && car.imageUrls.length > 1 && (
+              <div style={{
+                position: 'absolute',
+                bottom: '16px',
+                right: '16px',
+                padding: '6px 12px',
+                background: 'rgba(15,14,12,0.8)',
+                color: 'var(--kem)',
+                fontFamily: 'var(--mono)',
+                fontSize: '11px',
+                letterSpacing: '1px',
+                zIndex: 2,
+              }}>
+                📷 {car.imageUrls.length}
+              </div>
+            )}
           </div>
+
           <div className="chapter-num" style={{ marginBottom: '20px' }}>Chi tiết</div>
           <h1 style={{ fontFamily: 'var(--serif)', fontSize: 'clamp(36px, 4vw, 56px)', fontWeight: 900, letterSpacing: '-1.5px', marginBottom: '24px' }}>
             {car.brand} <em style={{ fontStyle: 'italic', color: 'var(--do)' }}>{car.model}</em>

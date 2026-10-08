@@ -43,11 +43,28 @@ public interface CarService {
     void deleteImage(Long carId, Long ownerId, String imageUrl);
 
     // ============================================================
-    // SEARCH XE AVAILABLE VỚI 3 FILTER + SORT + PHÂN TRANG
+    // PUBLIC SEARCH
     // ============================================================
     Page<CarResponse> searchAvailableCars(
             String location,
             List<Integer> seats,
             String carType,
             Pageable pageable);
+
+    // ============================================================
+    // OWNER — SEARCH XE CỦA MÌNH
+    // ============================================================
+    Page<CarResponse> searchOwnerCars(
+            Long ownerId,
+            String carType,
+            String status,
+            List<Integer> seats,
+            String search,
+            Pageable pageable);
+
+    // ============================================================
+    // ★ MỚI: OWNER — ĐỔI TRẠNG THÁI XE
+    // Chỉ cho phép: AVAILABLE, MAINTENANCE, BROKEN, INACTIVE
+    // ============================================================
+    CarResponse updateCarStatus(Long carId, Long ownerId, String newStatus);
 }

@@ -39,6 +39,8 @@ import BookingDetailPage from "./pages/BookingDetailPage";
 import PaymentFinalPage from "./pages/PaymentFinalPage";
 import OwnerRegisterPage from "./pages/OwnerRegisterPage";
 import AdminOwnerRequestsPage from "./pages/AdminOwnerRequestsPage";
+import OwnerCarsPage from "./pages/OwnerCarsPage";
+import CarEditPage from "./pages/CarEditPage";
 
 function App() {
   return (
@@ -187,6 +189,15 @@ function App() {
           />
 
           <Route
+            path="/cars/edit/:id"
+            element={
+              <ProtectedRoute allowedRoles={["OWNER", "ADMIN"]}>
+                <CarEditPage />
+              </ProtectedRoute>
+            }
+          />
+
+          <Route
             path="/owner/dashboard"
             element={
               <ProtectedRoute allowedRoles={["OWNER", "ADMIN"]}>
@@ -228,6 +239,15 @@ function App() {
             element={
               <ProtectedRoute allowedRoles={["OWNER", "ADMIN"]}>
                 <OwnerWithdrawalsPage />
+              </ProtectedRoute>
+            }
+          />
+
+          <Route
+            path="/owner/cars"
+            element={
+              <ProtectedRoute allowedRoles={["OWNER", "ADMIN"]}>
+                <OwnerCarsPage />
               </ProtectedRoute>
             }
           />

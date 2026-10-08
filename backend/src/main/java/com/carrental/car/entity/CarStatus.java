@@ -13,7 +13,8 @@ public enum CarStatus {
     RENTED("Đang được thuê"),
     MAINTENANCE("Đang bảo dưỡng"),
     BROKEN("Bị hỏng"),
-    INACTIVE("Ngừng hoạt động");
+    INACTIVE("Ngừng hoạt động"),
+    REJECTED("Bị từ chối");
 
     private final String description;
 }

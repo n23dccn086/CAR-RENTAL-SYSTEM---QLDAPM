@@ -4,6 +4,17 @@ import { searchCars } from '../services/carService'
 
 const SEAT_OPTIONS = [4, 5, 7]
 
+// ★ 7 loại xe cố định
+const CAR_TYPE_OPTIONS = [
+  { value: 'SEDAN', label: 'Sedan' },
+  { value: 'SUV', label: 'SUV' },
+  { value: 'MPV', label: 'MPV' },
+  { value: 'HATCHBACK', label: 'Hatchback' },
+  { value: 'PICKUP', label: 'Bán tải' },
+  { value: 'VAN', label: 'Van' },
+  { value: 'LUXURY', label: 'Xe cao cấp' },
+]
+
 export default function SearchPage() {
   const [cars, setCars] = useState([])
   const [loading, setLoading] = useState(true)
@@ -18,7 +29,6 @@ export default function SearchPage() {
   const SIZE = 20
 
   const [debouncedLocation, setDebouncedLocation] = useState('')
-  const [debouncedCarType, setDebouncedCarType] = useState('')
 
   useEffect(() => {
     const timer = setTimeout(() => setDebouncedLocation(location), 400)
@@ -26,24 +36,17 @@ export default function SearchPage() {
   }, [location])
 
   useEffect(() => {
-    const timer = setTimeout(() => setDebouncedCarType(carType), 400)
-    return () => clearTimeout(timer)
-  }, [carType])
-
-  // ★ FIX: Dùng URLSearchParams trực tiếp, KHÔNG qua Object.fromEntries
-  useEffect(() => {
     const fetchCars = async () => {
       setLoading(true)
       try {
         const params = new URLSearchParams()
         if (debouncedLocation.trim()) params.append('location', debouncedLocation.trim())
         seats.forEach(s => params.append('seats', s))
-        if (debouncedCarType.trim()) params.append('carType', debouncedCarType.trim())
+        if (carType) params.append('carType', carType)
         params.append('sort', sort)
         params.append('page', page)
         params.append('size', SIZE)
 
-        // ★ Truyền URLSearchParams trực tiếp — Axios tự serialize đúng
         const data = await searchCars(params)
         const pageData = data.data || {}
         setCars(pageData.content || [])
@@ -59,11 +62,11 @@ export default function SearchPage() {
       }
     }
     fetchCars()
-  }, [debouncedLocation, seats, debouncedCarType, sort, page])
+  }, [debouncedLocation, seats, carType, sort, page])
 
   useEffect(() => {
     setPage(0)
-  }, [debouncedLocation, seats, debouncedCarType, sort])
+  }, [debouncedLocation, seats, carType, sort])
 
   const toggleSeat = (seat) => {
     setSeats(prev =>
@@ -98,6 +101,7 @@ export default function SearchPage() {
         border: '1px solid rgba(15,14,12,0.15)',
         alignItems: 'start',
       }}>
+        {/* Địa điểm — text input */}
         <div>
           <label style={labelStyle}>Địa điểm</label>
           <input
@@ -108,6 +112,7 @@ export default function SearchPage() {
           />
         </div>
 
+        {/* Số chỗ — checkbox */}
         <div>
           <label style={labelStyle}>Số chỗ</label>
           <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', paddingTop: '10px' }}>
@@ -125,25 +130,22 @@ export default function SearchPage() {
           </div>
         </div>
 
+        {/* ★ Mẫu xe — DROPDOWN thay vì text input */}
         <div>
           <label style={labelStyle}>Mẫu xe</label>
-          <input
+          <select
             value={carType}
             onChange={e => setCarType(e.target.value)}
-            placeholder="Sedan, SUV, MPV..."
             style={inputStyle}
-          />
-          <div style={{
-            fontFamily: 'var(--serif-2)',
-            fontStyle: 'italic',
-            fontSize: '12px',
-            color: 'var(--muc-mo)',
-            marginTop: '6px'
-          }}>
-            Tìm tương đối — gõ "se" cũng ra Sedan
-          </div>
+          >
+            <option value="">Tất cả</option>
+            {CAR_TYPE_OPTIONS.map(o => (
+              <option key={o.value} value={o.value}>{o.label}</option>
+            ))}
+          </select>
         </div>
 
+        {/* Sort */}
         <div>
           <label style={labelStyle}>Sắp xếp</label>
           <select
@@ -158,6 +160,7 @@ export default function SearchPage() {
           </select>
         </div>
 
+        {/* Clear */}
         <div style={{ paddingTop: '22px' }}>
           {hasActiveFilters && (
             <button

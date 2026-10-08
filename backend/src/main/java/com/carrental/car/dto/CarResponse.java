@@ -50,6 +50,11 @@ public class CarResponse {
     Integer imageCount;
     Integer documentCount;
 
+    // ★ MỚI: Thống kê
+    Double averageRating;    // Số sao trung bình (0-5)
+    Long reviewCount;        // Số lượng đánh giá
+    Long rentalCount;        // Số lượt thuê (COMPLETED)
+
     LocalDateTime createdAt;
     LocalDateTime updatedAt;
 }

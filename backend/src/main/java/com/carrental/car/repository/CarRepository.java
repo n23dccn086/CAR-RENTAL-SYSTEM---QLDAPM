@@ -35,12 +35,9 @@ public interface CarRepository extends JpaRepository<Car, Long> {
     List<Car> findByStatusAndCarType(CarStatus status, CarType carType);
 
     // ============================================================
-    // SEARCH XE AVAILABLE — 2 QUERY TÁCH BIỆT
+    // PUBLIC: SEARCH XE AVAILABLE VỚI 3 FILTER
     // ============================================================
 
-    /**
-     * Query 1: KHI CÓ filter seats (không null, không rỗng)
-     */
     @Query(
         value = "SELECT * FROM cars c " +
                 "WHERE c.status = 'AVAILABLE' " +
@@ -62,9 +59,6 @@ public interface CarRepository extends JpaRepository<Car, Long> {
             @Param("carType") String carType,
             Pageable pageable);
 
-    /**
-     * Query 2: KHI KHÔNG có filter seats (null hoặc rỗng)
-     */
     @Query(
         value = "SELECT * FROM cars c " +
                 "WHERE c.status = 'AVAILABLE' " +
@@ -81,5 +75,43 @@ public interface CarRepository extends JpaRepository<Car, Long> {
     Page<Car> searchWithoutSeats(
             @Param("location") String location,
             @Param("carType") String carType,
+            Pageable pageable);
+
+    // ============================================================
+    // ★ OWNER: LẤY XE CỦA MÌNH VỚI FILTER + SEARCH
+    // ★ FIX: cast c.status::text để so sánh với :status
+    // ============================================================
+
+    @Query(
+        value = "SELECT * FROM cars c " +
+                "WHERE c.owner_id = :ownerId " +
+                "AND c.deleted_at IS NULL " +
+                "AND (CAST(:carType AS text) IS NULL OR LOWER(c.car_type::text) LIKE LOWER(CONCAT('%', CAST(:carType AS text), '%'))) " +
+                "AND (CAST(:status AS text) IS NULL OR c.status::text = CAST(:status AS text)) " +
+                "AND (CAST(:seats AS text) IS NULL OR c.seats IN (:seats)) " +
+                "AND (CAST(:search AS text) IS NULL OR " +
+                "     LOWER(c.plate) LIKE LOWER(CONCAT('%', CAST(:search AS text), '%')) OR " +
+                "     LOWER(c.brand) LIKE LOWER(CONCAT('%', CAST(:search AS text), '%')) OR " +
+                "     LOWER(c.model) LIKE LOWER(CONCAT('%', CAST(:search AS text), '%')) OR " +
+                "     CAST(c.year AS text) LIKE CONCAT('%', CAST(:search AS text), '%'))",
+        countQuery = "SELECT COUNT(*) FROM cars c " +
+                "WHERE c.owner_id = :ownerId " +
+                "AND c.deleted_at IS NULL " +
+                "AND (CAST(:carType AS text) IS NULL OR LOWER(c.car_type::text) LIKE LOWER(CONCAT('%', CAST(:carType AS text), '%'))) " +
+                "AND (CAST(:status AS text) IS NULL OR c.status::text = CAST(:status AS text)) " +
+                "AND (CAST(:seats AS text) IS NULL OR c.seats IN (:seats)) " +
+                "AND (CAST(:search AS text) IS NULL OR " +
+                "     LOWER(c.plate) LIKE LOWER(CONCAT('%', CAST(:search AS text), '%')) OR " +
+                "     LOWER(c.brand) LIKE LOWER(CONCAT('%', CAST(:search AS text), '%')) OR " +
+                "     LOWER(c.model) LIKE LOWER(CONCAT('%', CAST(:search AS text), '%')) OR " +
+                "     CAST(c.year AS text) LIKE CONCAT('%', CAST(:search AS text), '%'))",
+        nativeQuery = true
+    )
+    Page<Car> searchOwnerCars(
+            @Param("ownerId") Long ownerId,
+            @Param("carType") String carType,
+            @Param("status") String status,
+            @Param("seats") List<Integer> seats,
+            @Param("search") String search,
             Pageable pageable);
 }

@@ -1,5 +1,6 @@
 package com.carrental.car.service;
 
+import com.carrental.booking.repository.BookingRepository;
 import com.carrental.car.dto.CarMapper;
 import com.carrental.car.dto.CarRequest;
 import com.carrental.car.dto.CarResponse;
@@ -14,6 +15,7 @@ import com.carrental.common.exception.BadRequestException;
 import com.carrental.common.exception.ResourceNotFoundException;
 import com.carrental.common.exception.UnauthorizedException;
 import com.carrental.common.service.FileStorageService;
+import com.carrental.review.repository.ReviewRepository;
 import com.carrental.user.repository.UserRepository;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
@@ -29,6 +31,7 @@ import java.io.IOException;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Set;
 
 @Service
 @RequiredArgsConstructor
@@ -41,6 +44,15 @@ public class CarServiceImpl implements CarService {
     UserRepository userRepository;
     CarMapper carMapper;
     FileStorageService fileStorageService;
+    ReviewRepository reviewRepository;
+    BookingRepository bookingRepository;
+
+    // ★ Chỉ cho phép Owner đổi 4 trạng thái này
+    static final Set<CarStatus> OWNER_ALLOWED_STATUSES = Set.of(
+            CarStatus.AVAILABLE,
+            CarStatus.MAINTENANCE,
+            CarStatus.BROKEN,
+            CarStatus.INACTIVE);
 
     // ===== CREATE =====
 
@@ -199,9 +211,7 @@ public class CarServiceImpl implements CarService {
         return carMapper.toResponseList(cars);
     }
 
-    // ============================================================
-    // SEARCH XE AVAILABLE VỚI 3 FILTER + SORT + PHÂN TRANG
-    // ============================================================
+    // ===== PUBLIC SEARCH =====
 
     @Override
     @Transactional(readOnly = true)
@@ -220,15 +230,118 @@ public class CarServiceImpl implements CarService {
 
         Page<Car> cars;
         if (seatsParam != null) {
-            // Có filter seats
             cars = carRepository.searchWithSeats(locParam, seatsParam, typeParam, pageable);
         } else {
-            // Không có filter seats
             cars = carRepository.searchWithoutSeats(locParam, typeParam, pageable);
         }
 
         return cars.map(carMapper::toResponse);
     }
+
+    // ===== OWNER SEARCH =====
+
+    @Override
+    @Transactional(readOnly = true)
+    public Page<CarResponse> searchOwnerCars(
+            Long ownerId,
+            String carType,
+            String status,
+            List<Integer> seats,
+            String search,
+            Pageable pageable) {
+
+        List<Integer> seatsParam = (seats != null && !seats.isEmpty()) ? seats : null;
+        String typeParam = (carType != null && !carType.isBlank()) ? carType.trim() : null;
+        String statusParam = (status != null && !status.isBlank()) ? status.trim() : null;
+        String searchParam = (search != null && !search.isBlank()) ? search.trim() : null;
+
+        log.info("Search owner cars: ownerId={}, carType={}, status={}, seats={}, search={}",
+                ownerId, typeParam, statusParam, seatsParam, searchParam);
+
+        // Lấy Page<Car> → convert từng car → enrich stats
+        return carRepository.searchOwnerCars(ownerId, typeParam, statusParam, seatsParam, searchParam, pageable)
+                .map(this::enrichStats);
+    }
+
+    /**
+     * ★ Enrich CarResponse với stats: rating, reviewCount, rentalCount
+     */
+    private CarResponse enrichStats(Car car) {
+        CarResponse response = carMapper.toResponse(car);
+
+        try {
+            Double avg = reviewRepository.getAverageCarRating(car.getId());
+            response.setAverageRating(avg != null ? Math.round(avg * 10.0) / 10.0 : 0.0);
+
+            long reviewCount = reviewRepository.countByCarId(car.getId());
+            response.setReviewCount(reviewCount);
+
+            long rentalCount = bookingRepository.countCompletedByCarId(car.getId());
+            response.setRentalCount(rentalCount);
+        } catch (Exception e) {
+            log.warn("Failed to load stats for car {}: {}", car.getId(), e.getMessage());
+            response.setAverageRating(0.0);
+            response.setReviewCount(0L);
+            response.setRentalCount(0L);
+        }
+
+        return response;
+    }
+
+    // ============================================================
+    // ★ MỚI: OWNER — ĐỔI TRẠNG THÁI XE
+    // ============================================================
+
+    @Override
+    @Transactional
+    public CarResponse updateCarStatus(Long carId, Long ownerId, String newStatus) {
+        log.info("Owner {} update car {} status to {}", ownerId, carId, newStatus);
+
+        Car car = getCarEntityById(carId);
+
+        // 1. Check ownership
+        if (!car.getOwnerId().equals(ownerId)) {
+            throw new UnauthorizedException(ErrorCode.CAR_NOT_OWNED);
+        }
+
+        // 2. Parse status
+        CarStatus targetStatus;
+        try {
+            targetStatus = CarStatus.valueOf(newStatus.toUpperCase());
+        } catch (IllegalArgumentException e) {
+            throw new BadRequestException(ErrorCode.VALIDATION_ERROR,
+                    "Trạng thái không hợp lệ: " + newStatus);
+        }
+
+        // 3. Validate: Chỉ cho phép 4 trạng thái
+        if (!OWNER_ALLOWED_STATUSES.contains(targetStatus)) {
+            throw new BadRequestException(ErrorCode.VALIDATION_ERROR,
+                    "Bạn chỉ có thể đổi sang: Sẵn sàng, Bảo dưỡng, Hỏng, hoặc Đã khóa");
+        }
+
+        // 4. Không cho đổi nếu xe đang ở trạng thái hệ thống quản lý
+        CarStatus currentStatus = car.getStatus();
+        if (currentStatus == CarStatus.RENTED) {
+            throw new BadRequestException(ErrorCode.VALIDATION_ERROR,
+                    "Xe đang được thuê, không thể đổi trạng thái");
+        }
+        if (currentStatus == CarStatus.PENDING) {
+            throw new BadRequestException(ErrorCode.VALIDATION_ERROR,
+                    "Xe đang chờ Admin duyệt, không thể đổi trạng thái");
+        }
+        if (currentStatus == CarStatus.REJECTED) {
+            throw new BadRequestException(ErrorCode.VALIDATION_ERROR,
+                    "Xe đã bị Admin từ chối, không thể đổi trạng thái");
+        }
+
+        // 5. Set status + save
+        car.setStatus(targetStatus);
+        Car updated = carRepository.save(car);
+
+        log.info("Car {} status: {} → {}", carId, currentStatus, targetStatus);
+        return carMapper.toResponse(updated);
+    }
+
     // ===== ADMIN =====
 
     @Override
@@ -249,7 +362,7 @@ public class CarServiceImpl implements CarService {
         log.info("Reject car id: {}, reason: {}", id, reason);
 
         Car car = getCarEntityById(id);
-        car.setStatus(CarStatus.INACTIVE);
+        car.setStatus(CarStatus.REJECTED);
         if (reason != null) {
             car.setDescription(car.getDescription() + "\n[REJECT] " + reason);
         }
@@ -259,7 +372,7 @@ public class CarServiceImpl implements CarService {
     }
 
     // ============================================================
-    // ẢNH XE — UPLOAD / GET / DELETE
+    // ẢNH XE
     // ============================================================
 
     @Override
