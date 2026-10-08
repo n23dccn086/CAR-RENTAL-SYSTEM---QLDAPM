@@ -23,6 +23,12 @@ export default function OwnerBookingsPage() {
   const [cancelReason, setCancelReason] = useState('')
   const [cancelSubmitting, setCancelSubmitting] = useState(false)
 
+  // ★ MỚI: Approve modal
+  const [approveModal, setApproveModal] = useState(false)
+  const [approvingBooking, setApprovingBooking] = useState(null)
+  const [approveNote, setApproveNote] = useState('')
+  const [approveSubmitting, setApproveSubmitting] = useState(false)
+
   const [currentPage, setCurrentPage] = useState(1)
   const ITEMS_PER_PAGE = 10
 
@@ -37,7 +43,6 @@ export default function OwnerBookingsPage() {
       const handoverMap = {}
 
       for (const b of data) {
-        // Chỉ fetch assignment khi có driverId (khách đã chọn tài xế)
         if (b.driverId) {
           try {
             const aRes = await api.get(`/driver/assignments/booking/${b.id}`)
@@ -82,6 +87,31 @@ export default function OwnerBookingsPage() {
 
   const viewHandover = (handoverId) => {
     navigate(`/handover/${handoverId}`)
+  }
+
+  // ★ MỚI: Mở modal duyệt đơn
+  const openApproveModal = (booking) => {
+    setApprovingBooking(booking)
+    setApproveNote('')
+    setApproveModal(true)
+  }
+
+  // ★ MỚI: Submit duyệt đơn
+  const handleApprove = async () => {
+    setApproveSubmitting(true)
+    try {
+      await api.put(
+        `/bookings/${approvingBooking.id}/approve?note=${encodeURIComponent(approveNote.trim() || '')}`
+      )
+      setMessage(`Đã duyệt đơn #${approvingBooking.id}`)
+      setApproveModal(false)
+      fetchBookings()
+      setTimeout(() => setMessage(''), 5000)
+    } catch (err) {
+      alert('Lỗi: ' + (err.response?.data?.message || err.message))
+    } finally {
+      setApproveSubmitting(false)
+    }
   }
 
   const openCancelModal = (booking) => {
@@ -181,6 +211,7 @@ export default function OwnerBookingsPage() {
               const pickupHandover = bookingHandovers.PICKUP
               const returnHandover = bookingHandovers.RETURN
 
+              const canApprove = b.status === 'PAID'
               const canCreatePickup = b.status === 'APPROVED' && !pickupHandover
               const canCreateReturn = b.status === 'RENTED' && !returnHandover
               const canCancel = ['PENDING', 'PAID', 'APPROVED'].includes(b.status)
@@ -235,6 +266,18 @@ export default function OwnerBookingsPage() {
                   </div>
 
                   <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+                    {/* ★ MỚI: Nút DUYỆT ĐƠN khi PAID */}
+                    {canApprove && (
+                      <button onClick={() => openApproveModal(b)} style={{
+                        padding: '10px 18px', background: 'var(--xanh-reu)',
+                        border: '1px solid var(--xanh-reu)', color: 'var(--kem)',
+                        fontFamily: 'var(--mono)', fontSize: '10px', letterSpacing: '1.5px',
+                        textTransform: 'uppercase', cursor: 'pointer', whiteSpace: 'nowrap'
+                      }}>
+                        ✓ Duyệt đơn
+                      </button>
+                    )}
+
                     {canCreatePickup && (
                       <button onClick={() => openHandoverModal(b, 'PICKUP')} style={{
                         padding: '10px 18px', background: 'var(--do)',
@@ -279,7 +322,6 @@ export default function OwnerBookingsPage() {
                       </button>
                     )}
 
-                    {/* Badge hiển thị tài xế mà Khách đã chọn */}
                     {b.driverId && (
                       <div style={{
                         padding: '10px 18px',
@@ -332,6 +374,108 @@ export default function OwnerBookingsPage() {
         onClose={() => setHandoverModal({ open: false, booking: null, type: null })}
         onSuccess={handleHandoverSuccess}
       />
+
+      {/* ★ MỚI: Modal DUYỆT ĐƠN */}
+      {approveModal && approvingBooking && (
+        <div style={{
+          position: 'fixed', inset: 0, background: 'rgba(15,14,12,0.7)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          zIndex: 1000, padding: '20px'
+        }} onClick={() => setApproveModal(false)}>
+          <div style={{
+            background: 'var(--kem)', border: '1px solid var(--muc)',
+            maxWidth: '520px', width: '100%', padding: '48px', position: 'relative'
+          }} onClick={e => e.stopPropagation()}>
+            <button type="button" onClick={() => setApproveModal(false)} style={{
+              position: 'absolute', top: '16px', right: '16px',
+              width: '40px', height: '40px', background: 'transparent',
+              border: '1px solid var(--muc)', color: 'var(--muc)',
+              fontFamily: 'var(--mono)', fontSize: '18px', cursor: 'pointer'
+            }}>✕</button>
+
+            <h2 style={{
+              fontFamily: 'var(--serif)', fontSize: '28px', fontWeight: 900,
+              marginBottom: '8px', paddingRight: '48px'
+            }}>Duyệt đơn hàng.</h2>
+            <p style={{
+              fontFamily: 'var(--mono)', fontSize: '11px', letterSpacing: '2px',
+              color: 'var(--muc-mo)', marginBottom: '24px'
+            }}>
+              Đơn #{approvingBooking.id} · {approvingBooking.carName}
+            </p>
+
+            <div style={{
+              padding: '16px 20px', background: 'rgba(74,93,63,0.08)',
+              border: '1px solid var(--xanh-reu)', borderLeft: '4px solid var(--xanh-reu)',
+              marginBottom: '24px'
+            }}>
+              <div style={{
+                fontFamily: 'var(--mono)', fontSize: '10px', letterSpacing: '2px',
+                color: 'var(--xanh-reu)', marginBottom: '8px'
+              }}>
+                ✓ XÁC NHẬN DUYỆT
+              </div>
+              <div style={{
+                fontFamily: 'var(--serif-2)', fontStyle: 'italic',
+                fontSize: '15px', lineHeight: 1.6
+              }}>
+                Sau khi duyệt, đơn sẽ chuyển sang trạng thái <strong>"Đã duyệt"</strong>.
+                <br /><br />
+                {approvingBooking.driverId && (
+                  <>Hệ thống sẽ gửi yêu cầu cho tài xế đã chọn. </>
+                )}
+                Khách sẽ nhận thông báo và chuẩn bị nhận xe.
+              </div>
+            </div>
+
+            <label style={{
+              display: 'block', fontFamily: 'var(--mono)', fontSize: '10px',
+              letterSpacing: '3px', textTransform: 'uppercase',
+              color: 'var(--muc-mo)', marginBottom: '8px'
+            }}>
+              Ghi chú cho khách (tùy chọn)
+            </label>
+            <textarea
+              value={approveNote}
+              onChange={(e) => setApproveNote(e.target.value)}
+              rows={4}
+              maxLength={500}
+              placeholder="VD: Xe đã sẵn sàng, mời bạn đến nhận đúng giờ..."
+              style={{
+                width: '100%', padding: '14px', background: 'var(--kem-dam)',
+                border: '1px solid rgba(15,14,12,0.2)',
+                fontFamily: 'var(--serif-2)', fontSize: '15px',
+                resize: 'vertical', outline: 'none', boxSizing: 'border-box',
+                minHeight: '100px'
+              }}
+            />
+            <div style={{
+              textAlign: 'right', fontFamily: 'var(--mono)', fontSize: '10px',
+              color: 'var(--muc-mo)', marginTop: '4px'
+            }}>
+              {approveNote.length}/500
+            </div>
+
+            <div style={{ display: 'flex', gap: '12px', marginTop: '24px' }}>
+              <button type="button" onClick={() => setApproveModal(false)} style={{
+                flex: 1, padding: '16px', background: 'transparent',
+                border: '1px solid var(--muc)', color: 'var(--muc)',
+                fontFamily: 'var(--mono)', fontSize: '11px', letterSpacing: '2px',
+                textTransform: 'uppercase', cursor: 'pointer'
+              }}>Đóng</button>
+              <button type="button" onClick={handleApprove} disabled={approveSubmitting} style={{
+                flex: 2, padding: '16px', background: 'var(--xanh-reu)',
+                border: 'none', color: 'var(--kem)',
+                fontFamily: 'var(--mono)', fontSize: '11px', letterSpacing: '2px',
+                textTransform: 'uppercase',
+                cursor: approveSubmitting ? 'wait' : 'pointer'
+              }}>
+                {approveSubmitting ? 'Đang xử lý...' : '✓ Xác nhận duyệt'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {cancelModal && cancellingBooking && (
         <div style={{

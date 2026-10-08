@@ -55,13 +55,11 @@ public class OwnerRegistrationServiceImpl implements OwnerRegistrationService {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.USER_NOT_FOUND));
 
-        // Check: user đã là OWNER chưa
         if (user.getRole() == Role.OWNER) {
             throw new BadRequestException(ErrorCode.VALIDATION_ERROR,
                     "Bạn đã là chủ xe.");
         }
 
-        // Check: user có request PENDING không
         boolean hasPending = ownerRequestRepository
                 .existsByUserIdAndStatusAndDeletedAtIsNull(userId, "PENDING");
         if (hasPending) {
@@ -69,20 +67,16 @@ public class OwnerRegistrationServiceImpl implements OwnerRegistrationService {
                     "Bạn đã có yêu cầu đang chờ duyệt. Vui lòng chờ Admin xử lý.");
         }
 
-        // ★ CÁCH B: Xóa tất cả request REJECTED cũ của user TRƯỚC khi tạo mới
         List<OwnerRequest> oldRejected = ownerRequestRepository
                 .findByUserIdAndStatusAndDeletedAtIsNull(userId, "REJECTED");
 
         for (OwnerRequest old : oldRejected) {
-            // Xóa documents trước (để tránh FK constraint)
             documentRepository.deleteByRequestId(old.getId());
-            // Xóa request
             ownerRequestRepository.delete(old);
             log.info("Deleted old REJECTED owner request: id={}, userId={}",
                     old.getId(), userId);
         }
 
-        // Validate tuổi ≥ 18
         if (dto.getDateOfBirth() != null) {
             int age = LocalDateTime.now().getYear() - dto.getDateOfBirth().getYear();
             if (age < 18) {
@@ -91,7 +85,6 @@ public class OwnerRegistrationServiceImpl implements OwnerRegistrationService {
             }
         }
 
-        // Tạo request mới
         OwnerRequest request = OwnerRequest.builder()
                 .userId(userId)
                 .fullName(dto.getFullName().trim())
@@ -110,13 +103,13 @@ public class OwnerRegistrationServiceImpl implements OwnerRegistrationService {
         OwnerRequest saved = ownerRequestRepository.save(request);
         log.info("Owner request created: id={}, userId={}", saved.getId(), userId);
 
-        // Thông báo cho Admin
+        // ★ Thông báo cho Admin
         try {
             List<User> admins = userRepository.findByRole(Role.ADMIN);
             for (User admin : admins) {
                 notificationService.createNotification(
                         admin.getId(),
-                        NotificationType.SYSTEM,
+                        NotificationType.OWNER_REQUEST_SUBMITTED,
                         "Có yêu cầu đăng ký chủ xe mới",
                         String.format("%s vừa gửi yêu cầu đăng ký làm chủ xe. Vui lòng vào duyệt.",
                                 user.getName()),
@@ -157,7 +150,6 @@ public class OwnerRegistrationServiceImpl implements OwnerRegistrationService {
                     "Số file và số loại không khớp");
         }
 
-        // Xóa ảnh cũ nếu có
         List<OwnerRequestDocument> oldDocs = documentRepository.findByRequestId(requestId);
         for (OwnerRequestDocument old : oldDocs) {
             try {
@@ -168,7 +160,6 @@ public class OwnerRegistrationServiceImpl implements OwnerRegistrationService {
         }
         documentRepository.deleteByRequestId(requestId);
 
-        // Upload ảnh mới
         for (int i = 0; i < files.length; i++) {
             String type = types[i];
             if (!REQUIRED_TYPES.contains(type)) {
@@ -235,7 +226,6 @@ public class OwnerRegistrationServiceImpl implements OwnerRegistrationService {
                     "Chỉ có thể duyệt yêu cầu đang chờ");
         }
 
-        // Validate: phải có đủ 5 ảnh
         List<OwnerRequestDocument> docs = documentRepository.findByRequestId(requestId);
         List<String> uploadedTypes = docs.stream()
                 .map(OwnerRequestDocument::getDocumentType).toList();
@@ -245,14 +235,12 @@ public class OwnerRegistrationServiceImpl implements OwnerRegistrationService {
                     "Yêu cầu chưa đủ 5 ảnh. Không thể duyệt.");
         }
 
-        // Cập nhật role
         User user = userRepository.findById(request.getUserId())
                 .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.USER_NOT_FOUND));
 
         user.setRole(Role.OWNER);
         userRepository.save(user);
 
-        // Cập nhật request
         request.setStatus("APPROVED");
         request.setProcessedBy(adminId);
         request.setProcessedAt(LocalDateTime.now());
@@ -260,11 +248,11 @@ public class OwnerRegistrationServiceImpl implements OwnerRegistrationService {
 
         OwnerRequest updated = ownerRequestRepository.save(request);
 
-        // Thông báo cho Customer
+        // ★ Thông báo cho Customer
         try {
             notificationService.createNotification(
                     user.getId(),
-                    NotificationType.SYSTEM,
+                    NotificationType.OWNER_REQUEST_APPROVED,
                     "Đăng ký chủ xe đã được duyệt",
                     "Chúc mừng! Bạn đã trở thành chủ xe. Vui lòng đăng nhập lại để thấy menu mới.",
                     updated.getId()
@@ -306,11 +294,11 @@ public class OwnerRegistrationServiceImpl implements OwnerRegistrationService {
 
         OwnerRequest updated = ownerRequestRepository.save(request);
 
-        // Thông báo cho Customer
+        // ★ Thông báo cho Customer
         try {
             notificationService.createNotification(
                     request.getUserId(),
-                    NotificationType.SYSTEM,
+                    NotificationType.OWNER_REQUEST_REJECTED,
                     "Đăng ký chủ xe bị từ chối",
                     String.format("Lý do: %s. Bạn có thể bổ sung và gửi lại yêu cầu.", reason),
                     updated.getId()

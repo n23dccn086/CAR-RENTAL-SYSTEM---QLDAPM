@@ -43,7 +43,6 @@ public class DriverAssignmentServiceImpl implements DriverAssignmentService {
     NotificationSender notificationSender;
     NotificationService notificationService;
 
-    /** Thời gian tối đa để tài xế phản hồi (phút) */
     static final int RESPONSE_TIMEOUT_MINUTES = 5;
 
     // ===== ASSIGN (AUTO) =====
@@ -88,7 +87,7 @@ public class DriverAssignmentServiceImpl implements DriverAssignmentService {
         try {
             notificationService.createNotification(
                     booking.getOwnerId(),
-                    NotificationType.SYSTEM,
+                    NotificationType.BOOKING_DRIVER_ASSIGNED,
                     "Đã gán tài xế tự động",
                     String.format("Đơn #%d đã được gán cho tài xế %s.", bookingId, driver.getName()),
                     bookingId
@@ -100,7 +99,6 @@ public class DriverAssignmentServiceImpl implements DriverAssignmentService {
         return saved;
     }
 
-    // ★ NEW: Assign driver cụ thể mà Khách đã chọn
     @Override
     @Transactional
     public DriverAssignment assignSelectedDriver(Booking booking) {
@@ -123,7 +121,7 @@ public class DriverAssignmentServiceImpl implements DriverAssignmentService {
         try {
             notificationService.createNotification(
                     booking.getOwnerId(),
-                    NotificationType.SYSTEM,
+                    NotificationType.BOOKING_DRIVER_ASSIGNED,
                     "Đã gửi yêu cầu cho tài xế",
                     String.format("Đơn #%d đã gửi yêu cầu cho tài xế %s. Chờ tài xế xác nhận.",
                             booking.getId(), driver.getName()),
@@ -219,7 +217,6 @@ public class DriverAssignmentServiceImpl implements DriverAssignmentService {
         Booking booking = bookingRepository.findById(assignment.getBookingId())
                 .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.BOOKING_NOT_FOUND));
 
-        // Đảm bảo booking.driverId = assignment.driverId
         if (booking.getDriverId() == null) {
             booking.setDriverId(assignment.getDriverId());
         }
@@ -235,11 +232,12 @@ public class DriverAssignmentServiceImpl implements DriverAssignmentService {
             driverRepository.save(driver);
         }
 
+        // ★ Thông báo cho Owner + Customer
         try {
             String driverName = driver != null ? driver.getName() : "Tài xế";
             notificationService.createNotification(
                     booking.getOwnerId(),
-                    NotificationType.SYSTEM,
+                    NotificationType.BOOKING_DRIVER_ACCEPTED,
                     "Tài xế đã nhận chuyến",
                     String.format("Tài xế %s đã nhận đơn #%d.", driverName, booking.getId()),
                     booking.getId()
@@ -272,6 +270,25 @@ public class DriverAssignmentServiceImpl implements DriverAssignmentService {
         assignment.setRejectReason(reason);
         assignment.setRespondedAt(LocalDateTime.now());
         assignmentRepository.save(assignment);
+
+        // ★ Thông báo cho Owner
+        try {
+            Booking booking = bookingRepository.findById(assignment.getBookingId()).orElse(null);
+            if (booking != null) {
+                Driver driver = driverRepository.findById(assignment.getDriverId()).orElse(null);
+                String driverName = driver != null ? driver.getName() : "Tài xế";
+                notificationService.createNotification(
+                        booking.getOwnerId(),
+                        NotificationType.BOOKING_DRIVER_REJECTED,
+                        "Tài xế từ chối chuyến",
+                        String.format("Tài xế %s đã từ chối đơn #%d. Đang tìm tài xế khác.",
+                                driverName, booking.getId()),
+                        booking.getId()
+                );
+            }
+        } catch (Exception e) {
+            log.warn("Failed to notify owner: {}", e.getMessage());
+        }
 
         assignNextDriver(assignment.getBookingId());
     }

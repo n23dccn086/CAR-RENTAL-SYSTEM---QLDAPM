@@ -9,6 +9,8 @@ import com.carrental.common.constant.ErrorCode;
 import com.carrental.common.exception.BadRequestException;
 import com.carrental.common.exception.ResourceNotFoundException;
 import com.carrental.common.exception.UnauthorizedException;
+import com.carrental.notification.entity.NotificationType;
+import com.carrental.notification.service.NotificationService;
 import com.carrental.review.dto.ReviewMapper;
 import com.carrental.review.dto.ReviewRequest;
 import com.carrental.review.dto.ReviewResponse;
@@ -36,6 +38,7 @@ public class ReviewServiceImpl implements ReviewService {
     UserRepository userRepository;
     CarRepository carRepository;
     ReviewMapper reviewMapper;
+    NotificationService notificationService;
 
     // ===== CREATE =====
 
@@ -44,27 +47,22 @@ public class ReviewServiceImpl implements ReviewService {
     public ReviewResponse createReview(Long customerId, ReviewRequest request) {
         log.info("Create review for booking: {} by customer: {}", request.getBookingId(), customerId);
 
-        // 1. Check booking tồn tại
         Booking booking = bookingRepository.findById(request.getBookingId())
                 .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.BOOKING_NOT_FOUND));
 
-        // 2. Check booking thuộc customer
         if (!booking.getCustomerId().equals(customerId)) {
             throw new UnauthorizedException(ErrorCode.BOOKING_NOT_OWNED);
         }
 
-        // 3. Check booking đã hoàn tất
         if (booking.getStatus() != BookingStatus.COMPLETED) {
             throw new BadRequestException(ErrorCode.BOOKING_STATUS_INVALID,
                     "Chỉ được đánh giá sau khi chuyến đi hoàn tất");
         }
 
-        // 4. Check đã đánh giá chưa
         if (reviewRepository.existsByBookingId(request.getBookingId())) {
             throw new BadRequestException(ErrorCode.REVIEW_ALREADY_EXISTS);
         }
 
-        // 5. Tạo Review
         Review review = Review.builder()
                 .bookingId(booking.getId())
                 .customerId(customerId)
@@ -78,6 +76,22 @@ public class ReviewServiceImpl implements ReviewService {
 
         Review saved = reviewRepository.save(review);
         log.info("Review created with id: {}", saved.getId());
+
+        // ★ MỚI: Thông báo cho Owner
+        try {
+            notificationService.createNotification(
+                    booking.getOwnerId(),
+                    NotificationType.REVIEW_NEW,
+                    "Có đánh giá mới",
+                    String.format("Khách đã đánh giá đơn #%d. Xe: %d★, Chủ xe: %d★.",
+                            booking.getId(),
+                            request.getCarRating(),
+                            request.getOwnerRating()),
+                    saved.getId()
+            );
+        } catch (Exception e) {
+            log.warn("Failed to notify owner: {}", e.getMessage());
+        }
 
         return buildResponse(saved);
     }
@@ -112,7 +126,6 @@ public class ReviewServiceImpl implements ReviewService {
         Review review = reviewRepository.findById(reviewId)
                 .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.REVIEW_NOT_FOUND));
 
-        // Chỉ chính chủ review mới được xóa
         if (!review.getCustomerId().equals(userId)) {
             throw new UnauthorizedException(ErrorCode.PERMISSION_DENIED);
         }
@@ -123,14 +136,9 @@ public class ReviewServiceImpl implements ReviewService {
 
     // ===== HELPER =====
 
-    /**
-     * Build ReviewResponse với customerName + carName.
-     * Nếu isAnonymous = true → không set customerName.
-     */
     private ReviewResponse buildResponse(Review review) {
         ReviewResponse response = reviewMapper.toResponse(review);
 
-        // Set customerName (chỉ khi không ẩn danh)
         if (review.getIsAnonymous() == null || !review.getIsAnonymous()) {
             if (review.getCustomerId() != null) {
                 User customer = userRepository.findById(review.getCustomerId()).orElse(null);
@@ -140,7 +148,6 @@ public class ReviewServiceImpl implements ReviewService {
             }
         }
 
-        // Set carName
         if (review.getCarId() != null) {
             Car car = carRepository.findById(review.getCarId()).orElse(null);
             if (car != null) {

@@ -12,6 +12,9 @@ import com.carrental.dispute.dto.CounterEvidenceRequest;
 import com.carrental.dispute.dto.ReviewRequest;
 import com.carrental.notification.entity.NotificationType;
 import com.carrental.notification.service.NotificationService;
+import com.carrental.user.entity.Role;
+import com.carrental.user.entity.User;
+import com.carrental.user.repository.UserRepository;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
@@ -20,6 +23,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
+import java.util.List;
 
 @Service
 @RequiredArgsConstructor
@@ -30,6 +34,7 @@ public class CounterEvidenceServiceImpl implements CounterEvidenceService {
     DisputeRepository disputeRepository;
     DisputeMapper disputeMapper;
     NotificationService notificationService;
+    UserRepository userRepository;
 
     // ===== ACCEPT (khách đồng ý) =====
 
@@ -56,16 +61,34 @@ public class CounterEvidenceServiceImpl implements CounterEvidenceService {
         dispute.setCounterDeadlineAt(null);
         Dispute updated = disputeRepository.save(dispute);
 
+        // ★ Thông báo cho người tạo
         try {
             notificationService.createNotification(
                     dispute.getRaisedBy(),
-                    NotificationType.SYSTEM,
+                    NotificationType.DISPUTE_ACCEPTED,
                     "Khách đã xác nhận tranh chấp",
                     String.format("Khách đã đồng ý với tranh chấp %s.", dispute.getDisputeCode()),
                     dispute.getId()
             );
         } catch (Exception e) {
             log.warn("Failed to send notification: {}", e.getMessage());
+        }
+
+        // ★ Thông báo cho tất cả Admin
+        try {
+            List<User> admins = userRepository.findByRole(Role.ADMIN);
+            for (User admin : admins) {
+                notificationService.createNotification(
+                        admin.getId(),
+                        NotificationType.DISPUTE_ACCEPTED,
+                        "Tranh chấp đã được chấp nhận",
+                        String.format("Khách đã đồng ý với tranh chấp %s. Vui lòng duyệt tiếp.",
+                                dispute.getDisputeCode()),
+                        dispute.getId()
+                );
+            }
+        } catch (Exception e) {
+            log.warn("Failed to notify admins: {}", e.getMessage());
         }
 
         return disputeMapper.toResponse(updated);
@@ -105,10 +128,11 @@ public class CounterEvidenceServiceImpl implements CounterEvidenceService {
 
         Dispute updated = disputeRepository.save(dispute);
 
+        // ★ Thông báo cho người tạo
         try {
             notificationService.createNotification(
                     dispute.getRaisedBy(),
-                    NotificationType.SYSTEM,
+                    NotificationType.DISPUTE_COUNTER_FILED,
                     "Khách hàng đã phản bác",
                     String.format("Khách hàng đã phản bác tranh chấp %s. Admin sẽ xem xét.",
                             dispute.getDisputeCode()),
@@ -118,12 +142,28 @@ public class CounterEvidenceServiceImpl implements CounterEvidenceService {
             log.warn("Failed to send notification: {}", e.getMessage());
         }
 
+        // ★ Thông báo cho tất cả Admin
+        try {
+            List<User> admins = userRepository.findByRole(Role.ADMIN);
+            for (User admin : admins) {
+                notificationService.createNotification(
+                        admin.getId(),
+                        NotificationType.DISPUTE_COUNTER_FILED,
+                        "Khách đã phản bác tranh chấp",
+                        String.format("Tranh chấp %s đã được khách phản bác. Vui lòng xem xét.",
+                                dispute.getDisputeCode()),
+                        dispute.getId()
+                );
+            }
+        } catch (Exception e) {
+            log.warn("Failed to notify admins: {}", e.getMessage());
+        }
+
         log.info("Counter evidence filed for dispute {}, status: COUNTER_FILED", disputeId);
         return disputeMapper.toResponse(updated);
     }
 
     // ===== SUBMIT REVIEW (bổ sung khi admin yêu cầu) =====
-    // Cho phép CẢ RAISER và AGAINST submit, tùy vào awaitingResponseFrom
 
     @Override
     @Transactional
@@ -160,7 +200,6 @@ public class CounterEvidenceServiceImpl implements CounterEvidenceService {
                     "Đã hết hạn bổ sung thông tin");
         }
 
-        // ===== Cập nhật nội dung tùy theo ai submit =====
         if (isRaiser) {
             dispute.setDescription(request.getDescription().trim());
             if (request.getEvidence() != null && !request.getEvidence().isBlank()) {
@@ -173,12 +212,10 @@ public class CounterEvidenceServiceImpl implements CounterEvidenceService {
             }
         }
 
-        // ===== Lưu ghi chú vào evidenceHistory (không đụng resolution) =====
         if (request.getUserNote() != null && !request.getUserNote().isBlank()) {
             appendHistoryEntry(dispute, userId, request.getUserNote());
         }
 
-        // ===== Reset về PENDING để admin duyệt tiếp =====
         dispute.setStatus("PENDING");
         dispute.setAdminRequest(null);
         dispute.setAwaitingResponseFrom(null);
@@ -193,10 +230,6 @@ public class CounterEvidenceServiceImpl implements CounterEvidenceService {
 
     // ===== HELPER =====
 
-    /**
-     * Ghi 1 entry vào evidenceHistory.
-     * Định dạng: [{"at":"...","by":<userId>,"note":"..."}, ...]
-     */
     private void appendHistoryEntry(Dispute dispute, Long userId, String note) {
         try {
             String entry = String.format(

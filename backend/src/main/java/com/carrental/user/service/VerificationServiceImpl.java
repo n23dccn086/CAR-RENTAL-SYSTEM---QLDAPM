@@ -7,6 +7,7 @@ import com.carrental.common.service.FileStorageService;
 import com.carrental.notification.entity.NotificationType;
 import com.carrental.notification.service.NotificationService;
 import com.carrental.user.dto.VerificationResponse;
+import com.carrental.user.entity.Role;
 import com.carrental.user.entity.User;
 import com.carrental.user.entity.UserDocument;
 import com.carrental.user.entity.VerificationStatus;
@@ -21,9 +22,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
-import java.time.LocalDateTime;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.List;
 
 @Service
@@ -65,7 +64,6 @@ public class VerificationServiceImpl implements VerificationService {
                     "Số lượng file và loại không khớp");
         }
 
-        // Xóa ảnh cũ nếu có (để re-upload)
         List<UserDocument> oldDocs = documentRepository.findByUserId(userId);
         for (UserDocument old : oldDocs) {
             try {
@@ -76,7 +74,6 @@ public class VerificationServiceImpl implements VerificationService {
         }
         documentRepository.deleteByUserId(userId);
 
-        // Upload ảnh mới
         for (int i = 0; i < files.length; i++) {
             String type = types[i];
             if (!ALLOWED_TYPES.contains(type)) {
@@ -111,7 +108,6 @@ public class VerificationServiceImpl implements VerificationService {
 
         List<UserDocument> docs = documentRepository.findByUserId(userId);
 
-        // Validate đủ 5 loại ảnh
         List<String> uploadedTypes = docs.stream().map(UserDocument::getDocumentType).toList();
         List<String> missing = new ArrayList<>(REQUIRED_TYPES);
         missing.removeAll(uploadedTypes);
@@ -124,6 +120,23 @@ public class VerificationServiceImpl implements VerificationService {
         user.setVerificationStatus(VerificationStatus.PENDING);
         user.setRejectionReason(null);
         userRepository.save(user);
+
+        // ★ MỚI: Thông báo cho tất cả Admin
+        try {
+            List<User> admins = userRepository.findByRole(Role.ADMIN);
+            for (User admin : admins) {
+                notificationService.createNotification(
+                        admin.getId(),
+                        NotificationType.VERIFICATION_SUBMITTED,
+                        "Hồ sơ xác thực mới",
+                        String.format("User %s (%s) vừa gửi hồ sơ xác thực. Vui lòng vào duyệt.",
+                                user.getName(), user.getPhone()),
+                        userId
+                );
+            }
+        } catch (Exception e) {
+            log.warn("Failed to notify admins: {}", e.getMessage());
+        }
 
         log.info("User {} verification status -> PENDING", userId);
         return buildResponse(user);
@@ -160,7 +173,7 @@ public class VerificationServiceImpl implements VerificationService {
         try {
             notificationService.createNotification(
                     userId,
-                    NotificationType.SYSTEM,
+                    NotificationType.VERIFICATION_APPROVED,
                     "Hồ sơ xác thực đã được duyệt",
                     "Tài khoản của bạn đã được xác thực. Bạn có thể thuê xe tự lái.",
                     userId
@@ -194,7 +207,7 @@ public class VerificationServiceImpl implements VerificationService {
         try {
             notificationService.createNotification(
                     userId,
-                    NotificationType.SYSTEM,
+                    NotificationType.VERIFICATION_REJECTED,
                     "Hồ sơ xác thực bị từ chối",
                     "Lý do: " + reason + ". Vui lòng upload lại giấy tờ đúng chuẩn.",
                     userId

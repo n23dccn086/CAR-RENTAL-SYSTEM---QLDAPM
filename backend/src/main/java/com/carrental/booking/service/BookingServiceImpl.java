@@ -98,7 +98,6 @@ public class BookingServiceImpl implements BookingService {
             throw new BadRequestException(ErrorCode.BOOKING_ALREADY_EXISTS);
         }
 
-        // ★ VALIDATE DRIVER khi WITH_DRIVER
         Long driverId = request.getDriverId();
         if (request.getRentalMode() == RentalMode.WITH_DRIVER) {
             if (driverId == null) {
@@ -206,7 +205,7 @@ public class BookingServiceImpl implements BookingService {
                 && booking.getStatus() != BookingStatus.APPROVED) {
             throw new BadRequestException(ErrorCode.BOOKING_CANNOT_CANCEL,
                     "Chỉ có thể hủy đơn khi đơn ở trạng thái Chưa cọc / Đã cọc / Đã duyệt. "
-                    + "Đơn đã nhận xe không thể hủy.");
+                            + "Đơn đã nhận xe không thể hủy.");
         }
 
         long refundAmount = calculateRefundAmount(booking);
@@ -237,6 +236,7 @@ public class BookingServiceImpl implements BookingService {
         booking.setCancelledAt(LocalDateTime.now());
         Booking updated = bookingRepository.save(booking);
 
+        // ★ Thông báo cho Owner
         try {
             notificationService.createNotification(
                     booking.getOwnerId(),
@@ -244,10 +244,25 @@ public class BookingServiceImpl implements BookingService {
                     "Đơn bị hủy",
                     String.format("Đơn #%d đã bị khách hủy. Hoàn cọc: %dđ. Lý do: %s",
                             id, refundAmount, reason),
-                    id
-            );
+                    id);
         } catch (Exception e) {
             log.warn("Failed to notify owner: {}", e.getMessage());
+        }
+
+        // ★ Thông báo cho tất cả Admin (cần duyệt hoàn tiền)
+        try {
+            java.util.List<User> admins = userRepository.findByRole(com.carrental.user.entity.Role.ADMIN);
+            for (User admin : admins) {
+                notificationService.createNotification(
+                        admin.getId(),
+                        NotificationType.REFUND_REQUESTED,
+                        "Yêu cầu hoàn tiền mới",
+                        String.format("Đơn #%d bị khách hủy. Cần hoàn %dđ cho khách. Vui lòng duyệt.",
+                                id, refundAmount),
+                        id);
+            }
+        } catch (Exception e) {
+            log.warn("Failed to notify admins: {}", e.getMessage());
         }
 
         log.info("Booking cancelled: id={}, refundAmount={}", id, refundAmount);
@@ -270,11 +285,23 @@ public class BookingServiceImpl implements BookingService {
         }
 
         booking.setStatus(BookingStatus.APPROVED);
-        if (note != null) booking.setOwnerNote(note);
+        if (note != null)
+            booking.setOwnerNote(note);
 
         Booking updated = bookingRepository.save(booking);
 
-        // ★ NẾU KHÁCH ĐÃ CHỌN DRIVER → TẠO ASSIGNMENT + GỬI MAGIC LINK
+        // ★ Thông báo cho Customer
+        try {
+            notificationService.createNotification(
+                    booking.getCustomerId(),
+                    NotificationType.BOOKING_APPROVED,
+                    "Đơn đã được duyệt",
+                    String.format("Đơn #%d đã được chủ xe duyệt. Vui lòng chờ nhận xe.", id),
+                    id);
+        } catch (Exception e) {
+            log.warn("Failed to notify customer: {}", e.getMessage());
+        }
+
         if (updated.getDriverId() != null) {
             try {
                 driverAssignmentService.assignSelectedDriver(updated);
@@ -336,19 +363,35 @@ public class BookingServiceImpl implements BookingService {
 
         Booking updated = bookingRepository.save(booking);
 
+        // ★ Thông báo cho Customer
         try {
             notificationService.createNotification(
                     booking.getCustomerId(),
-                    NotificationType.BOOKING_CANCELLED,
+                    NotificationType.BOOKING_REJECTED,
                     "Chủ xe đã hủy đơn của bạn",
                     String.format(
                             "Đơn #%d đã bị chủ xe hủy. Bạn sẽ được HOÀN 100%% cọc (%dđ). "
-                            + "Lý do từ chủ xe: %s. Chúng tôi xin lỗi vì sự bất tiện này.",
+                                    + "Lý do từ chủ xe: %s. Chúng tôi xin lỗi vì sự bất tiện này.",
                             id, refundAmount, reason),
-                    id
-            );
+                    id);
         } catch (Exception e) {
             log.warn("Failed to notify customer: {}", e.getMessage());
+        }
+
+        // ★ Thông báo cho tất cả Admin
+        try {
+            java.util.List<User> admins = userRepository.findByRole(com.carrental.user.entity.Role.ADMIN);
+            for (User admin : admins) {
+                notificationService.createNotification(
+                        admin.getId(),
+                        NotificationType.REFUND_REQUESTED,
+                        "Yêu cầu hoàn tiền mới",
+                        String.format("Đơn #%d bị chủ xe hủy. Cần hoàn %dđ cho khách. Vui lòng duyệt.",
+                                id, refundAmount),
+                        id);
+            }
+        } catch (Exception e) {
+            log.warn("Failed to notify admins: {}", e.getMessage());
         }
 
         return buildResponse(updated, null);
@@ -420,6 +463,18 @@ public class BookingServiceImpl implements BookingService {
             carRepository.save(car);
         }
 
+        // ★ Thông báo cho Customer
+        try {
+            notificationService.createNotification(
+                    booking.getCustomerId(),
+                    NotificationType.BOOKING_COMPLETED,
+                    "Đơn đã hoàn tất",
+                    String.format("Đơn #%d đã hoàn tất. Mời bạn đánh giá chuyến đi.", id),
+                    id);
+        } catch (Exception e) {
+            log.warn("Failed to notify customer: {}", e.getMessage());
+        }
+
         log.info("Rental completed: id={}", id);
         return buildResponse(updated, null);
     }
@@ -432,12 +487,12 @@ public class BookingServiceImpl implements BookingService {
         }
 
         long deposit = booking.getDepositAmount();
-        if (deposit <= 0) return 0;
+        if (deposit <= 0)
+            return 0;
 
         long hoursUntilStart = Duration.between(
                 LocalDateTime.now(),
-                booking.getStartDate()
-        ).toHours();
+                booking.getStartDate()).toHours();
 
         BigDecimal percent;
         if (hoursUntilStart >= 24) {
@@ -466,13 +521,23 @@ public class BookingServiceImpl implements BookingService {
         }
 
         User customer = userRepository.findById(booking.getCustomerId()).orElse(null);
-        if (customer != null) response.setCustomerName(customer.getName());
+        if (customer != null)
+            response.setCustomerName(customer.getName());
 
         User owner = userRepository.findById(booking.getOwnerId()).orElse(null);
-        if (owner != null) response.setOwnerName(owner.getName());
+        if (owner != null)
+            response.setOwnerName(owner.getName());
 
         if (detail != null) {
             response.setDetails(bookingMapper.toDetailResponse(detail));
+        }
+
+        try {
+            response.setDepositPercent(
+                    configHelper.getDefaultDepositPercent().intValue());
+        } catch (Exception e) {
+            log.warn("Failed to load depositPercent: {}", e.getMessage());
+            response.setDepositPercent(30);
         }
 
         try {
@@ -480,15 +545,22 @@ public class BookingServiceImpl implements BookingService {
                     .ifPresent(handover -> {
                         BigDecimal lateFee = handover.getLateFee();
                         BigDecimal extraFees = handover.getExtraFees();
+                        BigDecimal kmOverageFee = handover.getKmOverageFee();
 
                         long lateFeeVal = lateFee != null ? lateFee.longValue() : 0L;
                         long extraFeeVal = extraFees != null ? extraFees.longValue() : 0L;
+                        long kmOverageFeeVal = kmOverageFee != null ? kmOverageFee.longValue() : 0L;
 
                         response.setLateFee(lateFeeVal);
+                        response.setKmOverageFee(kmOverageFeeVal);
                         response.setExtraFees(extraFeeVal);
-                        response.setTotalExtraFees(lateFeeVal + extraFeeVal);
+                        response.setTotalExtraFees(lateFeeVal + extraFees.longValue() + kmOverageFeeVal);
                         response.setLateMinutes(handover.getLateMinutes());
                         response.setExtraFeesNote(handover.getExtraFeesNote());
+
+                        response.setKmDriven(handover.getKmDriven());
+                        response.setKmAllowed(handover.getKmAllowed());
+                        response.setKmOverage(handover.getKmOverage());
                     });
         } catch (Exception e) {
             log.warn("Failed to load handover fees for booking {}: {}",

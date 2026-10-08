@@ -114,7 +114,7 @@ public class PaymentServiceImpl implements PaymentService {
         return payments.stream().map(this::buildResponse).toList();
     }
 
-    // ===== CALLBACK (Momo thật — giữ nguyên) =====
+    // ===== CALLBACK =====
 
     @Override
     @Transactional
@@ -153,7 +153,7 @@ public class PaymentServiceImpl implements PaymentService {
         return buildResponse(updated);
     }
 
-    // ===== MOCK CALLBACK (dùng khi demo) =====
+    // ===== MOCK CALLBACK =====
 
     @Override
     @Transactional
@@ -168,28 +168,26 @@ public class PaymentServiceImpl implements PaymentService {
             return buildResponse(payment);
         }
 
-        // 1. Update payment
         payment.setStatus(PaymentStatus.SUCCESS);
         payment.setPaidAt(LocalDateTime.now());
         payment.setGatewayTransactionId("MOCK_" + method + "_" + System.currentTimeMillis());
         payment.setGatewayResponse("{\"mock\": true, \"method\": \"" + method + "\"}");
         Payment savedPayment = paymentRepository.save(payment);
 
-        // 2. Update booking → PAID
         Booking booking = bookingRepository.findById(payment.getBookingId()).orElse(null);
         if (booking != null && booking.getStatus() == BookingStatus.PENDING) {
             booking.setStatus(BookingStatus.PAID);
             bookingRepository.save(booking);
             log.info("Booking {} updated to PAID", booking.getId());
 
-            // 3. Thông báo cho owner
+            // ★ Thông báo cho Owner: Đơn mới
             try {
                 notificationService.createNotification(
-                    booking.getOwnerId(),
-                    NotificationType.BOOKING_NEW,
-                    "Có đơn đặt xe mới",
-                    String.format("Đơn #%d đã được thanh toán cọc. Vui lòng xác nhận.", booking.getId()),
-                    booking.getId()
+                        booking.getOwnerId(),
+                        NotificationType.BOOKING_NEW,
+                        "Có đơn đặt xe mới",
+                        String.format("Đơn #%d đã được thanh toán cọc. Vui lòng xác nhận.", booking.getId()),
+                        booking.getId()
                 );
             } catch (Exception e) {
                 log.warn("Failed to send notification: {}", e.getMessage());

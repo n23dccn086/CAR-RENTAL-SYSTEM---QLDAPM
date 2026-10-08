@@ -10,7 +10,6 @@ export default function MyBookingsPage() {
   const [filter, setFilter] = useState("ALL");
   const [message, setMessage] = useState("");
 
-  // ===== PHÂN TRANG =====
   const [currentPage, setCurrentPage] = useState(1);
   const ITEMS_PER_PAGE = 10;
 
@@ -25,7 +24,6 @@ export default function MyBookingsPage() {
     fetchBookings();
   }, []);
 
-  // Reset page khi filter đổi
   useEffect(() => {
     setCurrentPage(1);
   }, [filter]);
@@ -53,7 +51,6 @@ export default function MyBookingsPage() {
     let ruleReason = "";
     let timeInfo = "";
 
-    // Format thời gian còn lại
     const formatDuration = (hours) => {
       if (hours < 0) return "đã qua";
       const h = Math.floor(hours);
@@ -95,11 +92,8 @@ export default function MyBookingsPage() {
     }
 
     const lostAmount = deposit - refundAmount;
-
-    // Format tiền
     const fmt = (n) => new Intl.NumberFormat("vi-VN").format(n);
 
-    // Format ngày
     const fmtDate = (d) =>
       new Date(d).toLocaleString("vi-VN", {
         day: "2-digit",
@@ -151,7 +145,6 @@ export default function MyBookingsPage() {
   const canCancel = (status) =>
     !["RENTED", "RETURNED", "COMPLETED", "CANCELLED"].includes(status);
 
-  // ===== XEM BIÊN BẢN =====
   const handleViewHandover = async (booking) => {
     try {
       const res = await api.get(`/handovers/booking/${booking.id}`);
@@ -162,7 +155,6 @@ export default function MyBookingsPage() {
         return;
       }
 
-      // Ưu tiên biên bản chưa ký đủ
       const pendingHandover = handovers.find((h) => h.status === "PENDING");
       const target = pendingHandover || handovers[handovers.length - 1];
 
@@ -175,7 +167,6 @@ export default function MyBookingsPage() {
   const filtered =
     filter === "ALL" ? bookings : bookings.filter((b) => b.status === filter);
 
-  // ===== TÍNH TOÁN PHÂN TRANG =====
   const totalPages = Math.ceil(filtered.length / ITEMS_PER_PAGE);
   const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
   const currentBookings = filtered.slice(
@@ -300,10 +291,7 @@ export default function MyBookingsPage() {
                 "RETURNED",
                 "COMPLETED",
               ].includes(b.status);
-              const showCancelOrReview =
-                canCancel(b.status) || b.status === "COMPLETED";
 
-              // ★ CHỈ HIỆN NÚT "THANH TOÁN NỐT" khi: RETURNED + chưa thanh toán
               const canPayFinal =
                 b.status === "RETURNED" &&
                 (b.remainingAmount > 0 || b.totalExtraFees > 0);
@@ -320,7 +308,6 @@ export default function MyBookingsPage() {
                     borderBottom: "1px solid rgba(15,14,12,0.12)",
                   }}
                 >
-                  {/* ★ Đổi Link từ /payment/{id} → /bookings/{id} để xem CHI TIẾT */}
                   <Link to={`/bookings/${b.id}`} style={{ color: "inherit" }}>
                     <div
                       style={{
@@ -353,6 +340,24 @@ export default function MyBookingsPage() {
                       {new Date(b.startDate).toLocaleDateString("vi-VN")} →{" "}
                       {new Date(b.endDate).toLocaleDateString("vi-VN")}
                     </div>
+
+                    {/* ★ MỚI: Cảnh báo tự hủy cho đơn PENDING */}
+                    {b.status === "PENDING" && (
+                      <div
+                        style={{
+                          marginTop: "8px",
+                          padding: "8px 12px",
+                          background: "rgba(201,169,97,0.12)",
+                          borderLeft: "3px solid var(--dong)",
+                          fontFamily: "var(--mono)",
+                          fontSize: "11px",
+                          letterSpacing: "1px",
+                          color: "var(--dong)",
+                        }}
+                      >
+                        ⏰ Đơn sẽ tự hủy nếu không thanh toán trong 12 giờ tiếp theo
+                      </div>
+                    )}
 
                     {b.totalExtraFees > 0 && (
                       <div
@@ -414,7 +419,28 @@ export default function MyBookingsPage() {
                       justifyContent: "flex-end",
                     }}
                   >
-                    {/* ★ NÚT THANH TOÁN NỐT — CHỈ KHI RETURNED */}
+                    {/* ★ MỚI: NÚT THANH TOÁN CỌC — CHỈ KHI PENDING */}
+                    {b.status === "PENDING" && (
+                      <Link
+                        to={`/payment/${b.id}`}
+                        style={{
+                          padding: "8px 16px",
+                          background: "var(--do)",
+                          border: "1px solid var(--do)",
+                          color: "var(--kem)",
+                          fontFamily: "var(--mono)",
+                          fontSize: "10px",
+                          letterSpacing: "2px",
+                          textTransform: "uppercase",
+                          textDecoration: "none",
+                          whiteSpace: "nowrap",
+                        }}
+                      >
+                        💳 Thanh toán cọc ({formatPrice(b.depositAmount || 0)}đ)
+                      </Link>
+                    )}
+
+                    {/* NÚT THANH TOÁN NỐT — CHỈ KHI RETURNED */}
                     {canPayFinal && (
                       <Link
                         to={`/payment-final/${b.id}`}
@@ -431,8 +457,7 @@ export default function MyBookingsPage() {
                           whiteSpace: "nowrap",
                         }}
                       >
-                        💰 Thanh toán nốt ({formatPrice(b.remainingAmount || 0)}
-                        đ)
+                        💰 Thanh toán nốt ({formatPrice(b.remainingAmount || 0)}đ)
                       </Link>
                     )}
 
@@ -522,7 +547,6 @@ export default function MyBookingsPage() {
             })}
           </div>
 
-          {/* PHÂN TRANG */}
           {totalPages > 1 && (
             <>
               <div

@@ -31,6 +31,12 @@ public interface NotificationService {
     /** Xóa thông báo */
     void deleteNotification(Long notificationId, Long userId);
 
+    /** ★ MỚI: Xóa nhiều thông báo theo list ID */
+    void deleteBatch(List<Long> ids, Long userId);
+
+    /** ★ MỚI: Xóa tất cả thông báo của user */
+    void deleteAll(Long userId);
+
     // ===== INTERNAL (dùng cho module khác) =====
 
     /** Tạo thông báo mới — dùng nội bộ */

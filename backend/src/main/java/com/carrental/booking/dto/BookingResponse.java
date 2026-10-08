@@ -42,6 +42,9 @@ public class BookingResponse {
 
     BookingStatus status;
 
+    // ★ MỚI: % cọc đọc từ config
+    Integer depositPercent;
+
     String customerNote;
     String ownerNote;
     String cancelReason;
@@ -51,15 +54,15 @@ public class BookingResponse {
     BookingDetailResponse details;
 
     // ===== Phí phát sinh (từ handover RETURN) =====
-    Long lateFee;              // Phí trả muộn
-    Long kmOverageFee;         // ★ MỚI: Phí vượt km
-    Long extraFees;            // Phí phát sinh khác (vệ sinh, xăng...)
-    Long totalExtraFees;       // Tổng = lateFee + kmOverageFee + extraFees
-    Integer lateMinutes;       // Số phút trả muộn
-    Integer kmDriven;          // ★ MỚI: Số km đã chạy
-    Integer kmAllowed;         // ★ MỚI: Số km được phép
-    Integer kmOverage;         // ★ MỚI: Số km vượt
-    String extraFeesNote;      // Ghi chú phí phát sinh
+    Long lateFee;
+    Long kmOverageFee;
+    Long extraFees;
+    Long totalExtraFees;
+    Integer lateMinutes;
+    Integer kmDriven;
+    Integer kmAllowed;
+    Integer kmOverage;
+    String extraFeesNote;
 
     LocalDateTime createdAt;
     LocalDateTime updatedAt;

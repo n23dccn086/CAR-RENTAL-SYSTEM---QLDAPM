@@ -25,9 +25,22 @@ export default function BookingPage() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
 
+  // ★ MỚI: % cọc đọc từ config
+  const [depositPercent, setDepositPercent] = useState(30)
+
   useEffect(() => {
     getCarById(carId).then(res => setCar(res.data)).catch(console.error)
   }, [carId])
+
+  // ★ MỚI: Load % cọc từ public config
+  useEffect(() => {
+    api.get('/public/config/default_deposit_percent')
+      .then(res => {
+        const pct = parseInt(res.data.data)
+        if (!isNaN(pct) && pct > 0) setDepositPercent(pct)
+      })
+      .catch(() => setDepositPercent(30))
+  }, [])
 
   // Load drivers khi WITH_DRIVER
   useEffect(() => {
@@ -115,6 +128,7 @@ export default function BookingPage() {
   }
 
   const total = calcTotal()
+  const depositAmount = Math.round(total * depositPercent / 100)
   const noDriverAvailable = form.rentalMode === 'WITH_DRIVER' && !loadingDrivers && drivers.length === 0
 
   return (
@@ -269,11 +283,22 @@ export default function BookingPage() {
                 <div style={{ fontFamily: 'var(--mono)', fontSize: '10px', letterSpacing: '2px', textTransform: 'uppercase', color: 'var(--muc-mo)', marginBottom: '4px' }}>Cỗ xe</div>
                 <div style={{ fontFamily: 'var(--serif)', fontSize: '22px', fontWeight: 700 }}>{car.brand} {car.model}</div>
               </div>
+
               <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '16px', fontFamily: 'var(--serif-2)', fontSize: '16px' }}>
                 <span>Giá thuê</span>
                 <span style={{ fontFamily: 'var(--mono)' }}>{formatPrice(car.pricePerDay)}đ/ngày</span>
               </div>
+
+              {/* ★ MỚI: Tiền cọc */}
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '16px', fontFamily: 'var(--serif-2)', fontSize: '16px' }}>
+                <span>Tiền cọc ({depositPercent}%)</span>
+                <span style={{ fontFamily: 'var(--mono)', color: 'var(--do)' }}>
+                  {formatPrice(depositAmount)}đ
+                </span>
+              </div>
+
               <div style={{ height: '1px', background: 'rgba(15,14,12,0.15)', margin: '24px 0' }}></div>
+
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
                 <span style={{ fontFamily: 'var(--mono)', fontSize: '11px', letterSpacing: '2px', textTransform: 'uppercase' }}>Tổng</span>
                 <span style={{ fontFamily: 'var(--serif)', fontSize: '32px', fontWeight: 900, color: 'var(--do)' }}>

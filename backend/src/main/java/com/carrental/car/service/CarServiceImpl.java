@@ -15,7 +15,11 @@ import com.carrental.common.exception.BadRequestException;
 import com.carrental.common.exception.ResourceNotFoundException;
 import com.carrental.common.exception.UnauthorizedException;
 import com.carrental.common.service.FileStorageService;
+import com.carrental.notification.entity.NotificationType;
+import com.carrental.notification.service.NotificationService;
 import com.carrental.review.repository.ReviewRepository;
+import com.carrental.user.entity.Role;
+import com.carrental.user.entity.User;
 import com.carrental.user.repository.UserRepository;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
@@ -46,21 +50,18 @@ public class CarServiceImpl implements CarService {
     FileStorageService fileStorageService;
     ReviewRepository reviewRepository;
     BookingRepository bookingRepository;
+    NotificationService notificationService;
 
-    // ★ Chỉ cho phép Owner đổi 4 trạng thái này qua dropdown
     static final Set<CarStatus> OWNER_ALLOWED_STATUSES = Set.of(
             CarStatus.AVAILABLE,
             CarStatus.MAINTENANCE,
             CarStatus.BROKEN,
-            CarStatus.INACTIVE
-    );
+            CarStatus.INACTIVE);
 
-    // ★ Trạng thái KHÔNG cho Sửa/Xóa
     static final Set<CarStatus> LOCKED_FOR_EDIT = Set.of(
             CarStatus.PENDING,
             CarStatus.RENTED,
-            CarStatus.REJECTED
-    );
+            CarStatus.REJECTED);
 
     // ===== CREATE =====
 
@@ -73,7 +74,6 @@ public class CarServiceImpl implements CarService {
             throw new ResourceNotFoundException(ErrorCode.USER_NOT_FOUND);
         }
 
-        // Check trùng biển số — với TẤT CẢ xe (mọi trạng thái)
         if (carRepository.existsByPlate(request.getPlate())) {
             throw new BadRequestException(ErrorCode.CAR_PLATE_EXISTED);
         }
@@ -90,6 +90,23 @@ public class CarServiceImpl implements CarService {
 
         Car saved = carRepository.save(car);
         log.info("Car created with id: {}", saved.getId());
+
+        // ★ MỚI: Thông báo cho tất cả Admin
+        try {
+            List<User> admins = userRepository.findByRole(Role.ADMIN);
+            for (User admin : admins) {
+                notificationService.createNotification(
+                        admin.getId(),
+                        NotificationType.CAR_PENDING,
+                        "Xe mới chờ duyệt",
+                        String.format("Xe %s %s (%s) vừa được thêm. Vui lòng vào duyệt.",
+                                saved.getBrand(), saved.getModel(), saved.getPlate()),
+                        saved.getId()
+                );
+            }
+        } catch (Exception e) {
+            log.warn("Failed to notify admins: {}", e.getMessage());
+        }
 
         return carMapper.toResponse(saved);
     }
@@ -137,7 +154,6 @@ public class CarServiceImpl implements CarService {
             throw new UnauthorizedException(ErrorCode.CAR_NOT_OWNED);
         }
 
-        // ★ Không cho sửa khi PENDING/RENTED/REJECTED
         if (LOCKED_FOR_EDIT.contains(car.getStatus())) {
             String reason = switch (car.getStatus()) {
                 case PENDING -> "Xe đang chờ Admin duyệt, không thể sửa";
@@ -148,7 +164,6 @@ public class CarServiceImpl implements CarService {
             throw new BadRequestException(ErrorCode.VALIDATION_ERROR, reason);
         }
 
-        // ★ CHECK TRÙNG BIỂN SỐ VỚI TẤT CẢ XE (mọi trạng thái)
         if (!car.getPlate().equals(request.getPlate())
                 && carRepository.existsByPlate(request.getPlate())) {
             throw new BadRequestException(ErrorCode.CAR_PLATE_EXISTED);
@@ -180,6 +195,23 @@ public class CarServiceImpl implements CarService {
             log.info("Car {} status reset: {} → PENDING (do Owner sửa thông tin)",
                     id, car.getStatus());
             car.setStatus(CarStatus.PENDING);
+
+            // ★ MỚI: Thông báo cho tất cả Admin
+            try {
+                List<User> admins = userRepository.findByRole(Role.ADMIN);
+                for (User admin : admins) {
+                    notificationService.createNotification(
+                            admin.getId(),
+                            NotificationType.CAR_RESUBMITTED,
+                            "Xe cần duyệt lại",
+                            String.format("Xe %s %s (%s) đã được Owner cập nhật thông tin. Vui lòng duyệt lại.",
+                                    car.getBrand(), car.getModel(), car.getPlate()),
+                            car.getId()
+                    );
+                }
+            } catch (Exception e) {
+                log.warn("Failed to notify admins: {}", e.getMessage());
+            }
         }
 
         Car updated = carRepository.save(car);
@@ -201,7 +233,6 @@ public class CarServiceImpl implements CarService {
             throw new UnauthorizedException(ErrorCode.CAR_NOT_OWNED);
         }
 
-        // ★ Không cho xóa khi PENDING/RENTED/REJECTED
         if (LOCKED_FOR_EDIT.contains(car.getStatus())) {
             String reason = switch (car.getStatus()) {
                 case PENDING -> "Xe đang chờ Admin duyệt, không thể xóa";
@@ -296,9 +327,6 @@ public class CarServiceImpl implements CarService {
                 .map(this::enrichStats);
     }
 
-    /**
-     * Enrich CarResponse với stats: rating, reviewCount, rentalCount
-     */
     private CarResponse enrichStats(Car car) {
         CarResponse response = carMapper.toResponse(car);
 
@@ -321,9 +349,7 @@ public class CarServiceImpl implements CarService {
         return response;
     }
 
-    // ============================================================
-    // OWNER — ĐỔI TRẠNG THÁI XE
-    // ============================================================
+    // ===== OWNER — ĐỔI TRẠNG THÁI XE =====
 
     @Override
     @Transactional
@@ -381,6 +407,20 @@ public class CarServiceImpl implements CarService {
         car.setStatus(CarStatus.AVAILABLE);
         Car updated = carRepository.save(car);
 
+        // ★ Thông báo cho Owner
+        try {
+            notificationService.createNotification(
+                    car.getOwnerId(),
+                    NotificationType.CAR_APPROVED,
+                    "Xe đã được duyệt",
+                    String.format("Xe %s %s (%s) đã được Admin duyệt và hiển thị ra bộ sưu tập.",
+                            car.getBrand(), car.getModel(), car.getPlate()),
+                    car.getId()
+            );
+        } catch (Exception e) {
+            log.warn("Failed to notify owner: {}", e.getMessage());
+        }
+
         return carMapper.toResponse(updated);
     }
 
@@ -395,6 +435,22 @@ public class CarServiceImpl implements CarService {
             car.setDescription(car.getDescription() + "\n[REJECT] " + reason);
         }
         Car updated = carRepository.save(car);
+
+        // ★ Thông báo cho Owner
+        try {
+            notificationService.createNotification(
+                    car.getOwnerId(),
+                    NotificationType.CAR_REJECTED,
+                    "Xe bị từ chối",
+                    String.format("Xe %s %s (%s) bị Admin từ chối. Lý do: %s. " +
+                                    "Vui lòng sửa thông tin và gửi duyệt lại.",
+                            car.getBrand(), car.getModel(), car.getPlate(),
+                            reason != null ? reason : "Không có lý do"),
+                    car.getId()
+            );
+        } catch (Exception e) {
+            log.warn("Failed to notify owner: {}", e.getMessage());
+        }
 
         return carMapper.toResponse(updated);
     }
@@ -414,7 +470,6 @@ public class CarServiceImpl implements CarService {
             throw new UnauthorizedException(ErrorCode.CAR_NOT_OWNED);
         }
 
-        // ★ Không cho upload khi PENDING/RENTED/REJECTED
         if (LOCKED_FOR_EDIT.contains(car.getStatus())) {
             String reason = switch (car.getStatus()) {
                 case PENDING -> "Xe đang chờ Admin duyệt, không thể thêm ảnh";
@@ -452,6 +507,23 @@ public class CarServiceImpl implements CarService {
                     carId, car.getStatus());
             car.setStatus(CarStatus.PENDING);
             carRepository.save(car);
+
+            // ★ MỚI: Thông báo cho tất cả Admin
+            try {
+                List<User> admins = userRepository.findByRole(Role.ADMIN);
+                for (User admin : admins) {
+                    notificationService.createNotification(
+                            admin.getId(),
+                            NotificationType.CAR_RESUBMITTED,
+                            "Xe cần duyệt lại",
+                            String.format("Xe %s %s (%s) đã được Owner cập nhật ảnh. Vui lòng duyệt lại.",
+                                    car.getBrand(), car.getModel(), car.getPlate()),
+                            car.getId()
+                    );
+                }
+            } catch (Exception e) {
+                log.warn("Failed to notify admins: {}", e.getMessage());
+            }
         }
 
         log.info("Uploaded {} images for car {}", urls.size(), carId);
@@ -478,7 +550,6 @@ public class CarServiceImpl implements CarService {
             throw new UnauthorizedException(ErrorCode.CAR_NOT_OWNED);
         }
 
-        // ★ Không cho xóa ảnh khi PENDING/RENTED/REJECTED
         if (LOCKED_FOR_EDIT.contains(car.getStatus())) {
             String reason = switch (car.getStatus()) {
                 case PENDING -> "Xe đang chờ Admin duyệt, không thể xóa ảnh";
@@ -503,6 +574,23 @@ public class CarServiceImpl implements CarService {
                     carId, car.getStatus());
             car.setStatus(CarStatus.PENDING);
             carRepository.save(car);
+
+            // ★ MỚI: Thông báo cho tất cả Admin
+            try {
+                List<User> admins = userRepository.findByRole(Role.ADMIN);
+                for (User admin : admins) {
+                    notificationService.createNotification(
+                            admin.getId(),
+                            NotificationType.CAR_RESUBMITTED,
+                            "Xe cần duyệt lại",
+                            String.format("Xe %s %s (%s) đã bị Owner xóa ảnh. Vui lòng duyệt lại.",
+                                    car.getBrand(), car.getModel(), car.getPlate()),
+                            car.getId()
+                    );
+                }
+            } catch (Exception e) {
+                log.warn("Failed to notify admins: {}", e.getMessage());
+            }
         }
 
         log.info("Deleted image for car {}", carId);

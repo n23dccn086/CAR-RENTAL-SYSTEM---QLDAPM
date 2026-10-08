@@ -63,7 +63,6 @@ public class NotificationServiceImpl implements NotificationService {
 
         Notification notification = getEntityById(notificationId);
 
-        // Check notification thuộc user
         if (!notification.getUserId().equals(userId)) {
             throw new UnauthorizedException(ErrorCode.PERMISSION_DENIED,
                     "Bạn không có quyền đánh dấu thông báo này");
@@ -105,6 +104,25 @@ public class NotificationServiceImpl implements NotificationService {
 
         notificationRepository.delete(notification);
         log.info("Notification deleted id: {}", notificationId);
+    }
+
+    @Override
+    @Transactional
+    public void deleteBatch(List<Long> ids, Long userId) {
+        if (ids == null || ids.isEmpty()) {
+            return;
+        }
+        log.info("Delete {} notifications by user {}", ids.size(), userId);
+        notificationRepository.deleteByIdInAndUserId(ids, userId);
+        log.info("Batch delete done");
+    }
+
+    @Override
+    @Transactional
+    public void deleteAll(Long userId) {
+        log.info("Delete ALL notifications of user {}", userId);
+        notificationRepository.deleteAllByUserId(userId);
+        log.info("All notifications deleted for user {}", userId);
     }
 
     // ===== INTERNAL =====

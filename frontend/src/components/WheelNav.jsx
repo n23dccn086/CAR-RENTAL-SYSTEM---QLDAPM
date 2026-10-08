@@ -30,7 +30,7 @@ export default function WheelNav() {
   };
 
   const navItems = [
-    ...(!isLoggedIn || user?.role !== "ADMIN"
+    ...(!isLoggedIn || user?.role === "CUSTOMER"
       ? [{ path: "/", label: "Trang chủ", icon: "⌂" }]
       : []),
     ...(!isLoggedIn || (user?.role !== "OWNER" && user?.role !== "ADMIN")

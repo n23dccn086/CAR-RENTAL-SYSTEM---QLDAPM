@@ -16,7 +16,7 @@ import java.util.Map;
 
 /**
  * Public config API — không cần auth.
- * Chỉ expose các config an toàn cho public: support_hotline, support_email.
+ * Chỉ expose các config an toàn cho public.
  */
 @RestController
 @RequestMapping("/public/config")
@@ -36,20 +36,24 @@ public class PublicConfigController {
         Map<String, String> result = new HashMap<>();
         result.put("support_hotline", configHelper.getSupportHotline());
         result.put("support_email", configHelper.getSupportEmail());
+        // ★ MỚI: Thêm % cọc mặc định
+        result.put("default_deposit_percent",
+                configHelper.getDefaultDepositPercent().toPlainString());
         return ApiResponse.success(result);
     }
 
     /**
      * Lấy 1 config theo key.
      * GET /api/v1/public/config/{key}
-     * Chỉ cho phép: support_hotline, support_email
+     * Whitelist: support_hotline, support_email, default_deposit_percent
      */
     @GetMapping("/{key}")
     public ApiResponse<String> getConfig(@PathVariable String key) {
-        // Whitelist — chỉ cho phép 2 key an toàn
         String value = switch (key) {
             case "support_hotline" -> configHelper.getSupportHotline();
             case "support_email" -> configHelper.getSupportEmail();
+            case "default_deposit_percent" ->
+                    configHelper.getDefaultDepositPercent().toPlainString();
             default -> null;
         };
 

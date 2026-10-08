@@ -17,6 +17,9 @@ import com.carrental.dispute.dto.EvidenceRequest;
 import com.carrental.dispute.dto.UploadResponse;
 import com.carrental.notification.entity.NotificationType;
 import com.carrental.notification.service.NotificationService;
+import com.carrental.user.entity.Role;
+import com.carrental.user.entity.User;
+import com.carrental.user.repository.UserRepository;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
@@ -41,6 +44,7 @@ public class DisputeServiceImpl implements DisputeService {
     DisputeMapper disputeMapper;
     NotificationService notificationService;
     FileStorageService fileStorageService;
+    UserRepository userRepository;
 
     // ===== CREATE =====
 
@@ -59,7 +63,6 @@ public class DisputeServiceImpl implements DisputeService {
                     "Bạn không có quyền tạo tranh chấp cho đơn này");
         }
 
-        // ===== MỚI: Chỉ cho tạo tranh chấp khi đơn đã COMPLETED =====
         if (booking.getStatus() != BookingStatus.COMPLETED) {
             throw new BadRequestException(ErrorCode.BOOKING_STATUS_INVALID,
                     "Chỉ được tạo tranh chấp cho đơn đã hoàn thành");
@@ -85,10 +88,11 @@ public class DisputeServiceImpl implements DisputeService {
         Dispute saved = disputeRepository.save(dispute);
         log.info("Dispute created: id={}, code={}", saved.getId(), disputeCode);
 
+        // ★ Thông báo cho bên bị kiện
         try {
             notificationService.createNotification(
                     againstUser,
-                    NotificationType.SYSTEM,
+                    NotificationType.DISPUTE_CREATED,
                     "Bạn có tranh chấp mới",
                     String.format("Bạn bị kiện trong tranh chấp %s. Vui lòng phản hồi trong vòng 48 giờ.",
                             disputeCode),
@@ -96,6 +100,23 @@ public class DisputeServiceImpl implements DisputeService {
             );
         } catch (Exception e) {
             log.warn("Failed to send notification: {}", e.getMessage());
+        }
+
+        // ★ Thông báo cho tất cả Admin
+        try {
+            List<User> admins = userRepository.findByRole(Role.ADMIN);
+            for (User admin : admins) {
+                notificationService.createNotification(
+                        admin.getId(),
+                        NotificationType.DISPUTE_CREATED,
+                        "Tranh chấp mới",
+                        String.format("Tranh chấp %s vừa được tạo cho đơn #%d. Vui lòng vào xử lý.",
+                                disputeCode, booking.getId()),
+                        saved.getId()
+                );
+            }
+        } catch (Exception e) {
+            log.warn("Failed to notify admins: {}", e.getMessage());
         }
 
         return disputeMapper.toResponse(saved);
@@ -201,7 +222,6 @@ public class DisputeServiceImpl implements DisputeService {
                 ? originalName.substring(originalName.lastIndexOf(".")).toLowerCase()
                 : "";
 
-        // Chấp nhận Word + PDF + ảnh
         boolean isImage = contentType != null && contentType.startsWith("image/");
         boolean isPdf = "application/pdf".equals(contentType) || ".pdf".equals(ext);
         boolean isWord = ".doc".equals(ext) || ".docx".equals(ext);
@@ -211,7 +231,6 @@ public class DisputeServiceImpl implements DisputeService {
                     "Chỉ chấp nhận file ảnh, PDF hoặc Word (.doc, .docx)");
         }
 
-        // Giới hạn 20MB cho file Word/PDF, 5MB cho ảnh
         long maxSize = (isPdf || isWord) ? 20 * 1024 * 1024 : 5 * 1024 * 1024;
         if (file.getSize() > maxSize) {
             throw new BadRequestException(ErrorCode.FILE_TOO_LARGE,

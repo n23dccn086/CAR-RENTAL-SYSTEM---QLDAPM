@@ -69,7 +69,6 @@ public class AdminDisputeServiceImpl implements AdminDisputeService {
                 LocalDateTime.now(), adminId);
         appendHistory(dispute, note);
 
-        // Nếu B đã duyệt rồi → chuyển READY_TO_FINALIZE
         if ("APPROVED_AGAINST".equals(dispute.getStatus())) {
             dispute.setStatus("READY_TO_FINALIZE");
         } else {
@@ -112,7 +111,7 @@ public class AdminDisputeServiceImpl implements AdminDisputeService {
         return disputeMapper.toResponse(updated);
     }
 
-    // ===== RESOLVE — CHỈ KHI READY_TO_FINALIZE + TỰ ĐỘNG TẠO PDF =====
+    // ===== RESOLVE =====
 
     @Override
     @Transactional
@@ -126,13 +125,11 @@ public class AdminDisputeServiceImpl implements AdminDisputeService {
             throw new BadRequestException(ErrorCode.DISPUTE_ALREADY_RESOLVED);
         }
 
-        // ===== BẮT BUỘC PHẢI DUYỆT CẢ 2 BÊN =====
         if (!"READY_TO_FINALIZE".equals(dispute.getStatus())) {
             throw new BadRequestException(ErrorCode.DISPUTE_INVALID_STATUS,
                     "Phải duyệt CẢ 2 form (Bên A + Bên B) trước khi giải quyết");
         }
 
-        // ===== VALIDATE RESOLVED AMOUNT =====
         if (resolvedAmount != null) {
             if (resolvedAmount.compareTo(BigDecimal.ZERO) < 0) {
                 throw new BadRequestException(ErrorCode.VALIDATION_ERROR,
@@ -144,20 +141,17 @@ public class AdminDisputeServiceImpl implements AdminDisputeService {
             }
         }
 
-        // ===== VALIDATE RESOLUTION =====
         if (resolution == null || resolution.trim().isEmpty()) {
             throw new BadRequestException(ErrorCode.VALIDATION_ERROR,
                     "Kết luận không được để trống");
         }
 
-        // Set kết quả
         dispute.setResolution(resolution.trim());
         dispute.setResolvedAmount(resolvedAmount);
         dispute.setResolvedBy(adminId);
         dispute.setResolvedAt(LocalDateTime.now());
         dispute.setStatus("RESOLVED");
 
-        // ===== TỰ ĐỘNG TẠO PDF =====
         try {
             String contractUrl = disputeContractService.generateContract(dispute);
             dispute.setContractUrl(contractUrl);
@@ -172,16 +166,16 @@ public class AdminDisputeServiceImpl implements AdminDisputeService {
 
         Dispute updated = disputeRepository.save(dispute);
 
-        // Thông báo
+        // ★ Thông báo cho 2 bên
         try {
             String msg = String.format("Tranh chấp %s đã được giải quyết. %s",
                     dispute.getDisputeCode(),
                     resolvedAmount != null ? "Bồi thường: " + resolvedAmount + "đ" : "");
 
             notificationService.createNotification(dispute.getRaisedBy(),
-                    NotificationType.SYSTEM, "Tranh chấp đã giải quyết", msg, dispute.getId());
+                    NotificationType.DISPUTE_RESOLVED, "Tranh chấp đã giải quyết", msg, dispute.getId());
             notificationService.createNotification(dispute.getAgainstUser(),
-                    NotificationType.SYSTEM, "Tranh chấp đã giải quyết", msg, dispute.getId());
+                    NotificationType.DISPUTE_RESOLVED, "Tranh chấp đã giải quyết", msg, dispute.getId());
         } catch (Exception e) {
             log.warn("Failed to send notifications: {}", e.getMessage());
         }
@@ -225,11 +219,11 @@ public class AdminDisputeServiceImpl implements AdminDisputeService {
 
             if ("RAISER".equals(target) || "BOTH".equals(target)) {
                 notificationService.createNotification(dispute.getRaisedBy(),
-                        NotificationType.SYSTEM, title, content, dispute.getId());
+                        NotificationType.DISPUTE_NEED_EVIDENCE, title, content, dispute.getId());
             }
             if ("AGAINST".equals(target) || "BOTH".equals(target)) {
                 notificationService.createNotification(dispute.getAgainstUser(),
-                        NotificationType.SYSTEM, title, content, dispute.getId());
+                        NotificationType.DISPUTE_NEED_EVIDENCE, title, content, dispute.getId());
             }
         } catch (Exception e) {
             log.warn("Failed to send notification: {}", e.getMessage());
@@ -238,7 +232,7 @@ public class AdminDisputeServiceImpl implements AdminDisputeService {
         return disputeMapper.toResponse(updated);
     }
 
-    // ===== FINALIZE (giữ lại nhưng không dùng) =====
+    // ===== FINALIZE =====
 
     @Override
     @Transactional
@@ -270,9 +264,9 @@ public class AdminDisputeServiceImpl implements AdminDisputeService {
                     dispute.getDisputeCode());
 
             notificationService.createNotification(dispute.getRaisedBy(),
-                    NotificationType.SYSTEM, "Tranh chấp đã chốt kết quả", msg, dispute.getId());
+                    NotificationType.DISPUTE_RESOLVED, "Tranh chấp đã chốt kết quả", msg, dispute.getId());
             notificationService.createNotification(dispute.getAgainstUser(),
-                    NotificationType.SYSTEM, "Tranh chấp đã chốt kết quả", msg, dispute.getId());
+                    NotificationType.DISPUTE_RESOLVED, "Tranh chấp đã chốt kết quả", msg, dispute.getId());
         } catch (Exception e) {
             log.warn("Failed to send notifications: {}", e.getMessage());
         }

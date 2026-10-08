@@ -10,6 +10,8 @@ import com.carrental.driver.dto.DriverResponse;
 import com.carrental.driver.entity.Driver;
 import com.carrental.driver.entity.DriverStatus;
 import com.carrental.driver.repository.DriverRepository;
+import com.carrental.notification.entity.NotificationType;
+import com.carrental.notification.service.NotificationService;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
@@ -31,6 +33,7 @@ public class DriverServiceImpl implements DriverService {
 
     DriverRepository driverRepository;
     DriverMapper driverMapper;
+    NotificationService notificationService;
 
     static final Set<DriverStatus> LOCKED_FOR_EDIT = Set.of(
             DriverStatus.PENDING,
@@ -161,9 +164,6 @@ public class DriverServiceImpl implements DriverService {
         return driverMapper.toResponse(updated);
     }
 
-    // ============================================================
-    // ★ MỚI: KHÓA / MỞ KHÓA TÀI XẾ
-    // ============================================================
     @Override
     @Transactional
     public DriverResponse updateDriverStatus(Long id, Long ownerId, String newStatus) {
@@ -184,13 +184,11 @@ public class DriverServiceImpl implements DriverService {
                     "Trạng thái không hợp lệ: " + newStatus);
         }
 
-        // ★ Chỉ cho ACTIVE ↔ INACTIVE
         if (target != DriverStatus.ACTIVE && target != DriverStatus.INACTIVE) {
             throw new BadRequestException(ErrorCode.VALIDATION_ERROR,
                     "Bạn chỉ có thể khóa/mở khóa tài xế");
         }
 
-        // ★ Không cho đổi khi PENDING/BUSY/REJECTED
         if (driver.getStatus() == DriverStatus.BUSY) {
             throw new BadRequestException(ErrorCode.VALIDATION_ERROR,
                     "Tài xế đang chạy chuyến, không thể khóa");
@@ -253,6 +251,20 @@ public class DriverServiceImpl implements DriverService {
         driver.setStatus(DriverStatus.ACTIVE);
         Driver updated = driverRepository.save(driver);
 
+        // ★ MỚI: Thông báo cho Owner
+        try {
+            notificationService.createNotification(
+                    driver.getOwnerId(),
+                    NotificationType.DRIVER_APPROVED,
+                    "Tài xế đã được duyệt",
+                    String.format("Tài xế %s (%s) đã được Admin duyệt.",
+                            driver.getName(), driver.getPhone()),
+                    driver.getId()
+            );
+        } catch (Exception e) {
+            log.warn("Failed to notify owner: {}", e.getMessage());
+        }
+
         return driverMapper.toResponse(updated);
     }
 
@@ -264,6 +276,21 @@ public class DriverServiceImpl implements DriverService {
         Driver driver = getEntityById(id);
         driver.setStatus(DriverStatus.REJECTED);
         Driver updated = driverRepository.save(driver);
+
+        // ★ MỚI: Thông báo cho Owner
+        try {
+            notificationService.createNotification(
+                    driver.getOwnerId(),
+                    NotificationType.DRIVER_REJECTED,
+                    "Tài xế bị từ chối",
+                    String.format("Tài xế %s (%s) bị Admin từ chối. Lý do: %s.",
+                            driver.getName(), driver.getPhone(),
+                            reason != null ? reason : "Không có lý do"),
+                    driver.getId()
+            );
+        } catch (Exception e) {
+            log.warn("Failed to notify owner: {}", e.getMessage());
+        }
 
         return driverMapper.toResponse(updated);
     }

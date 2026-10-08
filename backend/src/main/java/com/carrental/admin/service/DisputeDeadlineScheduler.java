@@ -35,7 +35,7 @@ public class DisputeDeadlineScheduler {
     // ============================================================
     // 1. DEADLINE PHẢN BÁC (48h) — PENDING → ACCEPTED
     // ============================================================
-    @Scheduled(fixedDelay = 5 * 60 * 1000) // 5 phút
+    @Scheduled(fixedDelay = 5 * 60 * 1000)
     @Transactional
     public void checkCounterDeadline() {
         LocalDateTime now = LocalDateTime.now();
@@ -49,7 +49,6 @@ public class DisputeDeadlineScheduler {
 
         for (Dispute dispute : expired) {
             try {
-                // Quá 48h không phản bác → coi như chấp nhận
                 dispute.setStatus("ACCEPTED");
                 dispute.setCounterFiledAt(now);
                 dispute.setCounterDescription("[Hệ thống] Khách không phản hồi trong 48h");
@@ -59,15 +58,17 @@ public class DisputeDeadlineScheduler {
                 log.info("[Scheduler] Dispute {} counter deadline expired -> ACCEPTED",
                         dispute.getDisputeCode());
 
-                // Notify cả 2 bên
+                // ★ Notify cả 2 bên — dùng type DISPUTE_DEADLINE_WARNING
                 try {
                     String msg = String.format(
                             "Tranh chấp %s: Khách không phản hồi trong 48h. Coi như chấp nhận.",
                             dispute.getDisputeCode());
                     notificationService.createNotification(dispute.getRaisedBy(),
-                            NotificationType.SYSTEM, "Hết hạn phản bác", msg, dispute.getId());
+                            NotificationType.DISPUTE_DEADLINE_WARNING,
+                            "Hết hạn phản bác", msg, dispute.getId());
                     notificationService.createNotification(dispute.getAgainstUser(),
-                            NotificationType.SYSTEM, "Hết hạn phản bác", msg, dispute.getId());
+                            NotificationType.DISPUTE_DEADLINE_WARNING,
+                            "Hết hạn phản bác", msg, dispute.getId());
                 } catch (Exception e) {
                     log.warn("[Scheduler] Failed to send notification: {}", e.getMessage());
                 }
@@ -82,7 +83,7 @@ public class DisputeDeadlineScheduler {
     // ============================================================
     // 2. DEADLINE BỔ SUNG BẰNG CHỨNG (24h) — WAITING_EVIDENCE → PENDING
     // ============================================================
-    @Scheduled(fixedDelay = 5 * 60 * 1000) // 5 phút
+    @Scheduled(fixedDelay = 5 * 60 * 1000)
     @Transactional
     public void checkReviewDeadline() {
         LocalDateTime now = LocalDateTime.now();
@@ -96,15 +97,11 @@ public class DisputeDeadlineScheduler {
 
         for (Dispute dispute : expired) {
             try {
-                // Quá 24h không bổ sung → quay về PENDING cho admin duyệt tiếp.
-                // Không set resolution vì resolution là "kết luận của admin",
-                // hệ thống chỉ ghi chú vào lịch sử bằng chứng.
                 dispute.setStatus("PENDING");
                 dispute.setAdminRequest(null);
                 dispute.setAwaitingResponseFrom(null);
                 dispute.setReviewDeadlineAt(null);
 
-                // Ghi chú hệ thống vào lịch sử — KHÔNG đụng vào resolution
                 appendSystemNote(dispute,
                         "[Hệ thống] Hết hạn bổ sung — admin duyệt dựa trên bằng chứng hiện có");
 
@@ -113,15 +110,17 @@ public class DisputeDeadlineScheduler {
                 log.warn("[Scheduler] Dispute {} review deadline expired -> PENDING",
                         dispute.getDisputeCode());
 
-                // Notify cả 2 bên
+                // ★ Notify cả 2 bên — dùng type DISPUTE_DEADLINE_WARNING
                 try {
                     String msg = String.format(
                             "Tranh chấp %s: Hết hạn bổ sung bằng chứng. Admin sẽ duyệt dựa trên thông tin hiện có.",
                             dispute.getDisputeCode());
                     notificationService.createNotification(dispute.getRaisedBy(),
-                            NotificationType.SYSTEM, "Hết hạn bổ sung", msg, dispute.getId());
+                            NotificationType.DISPUTE_DEADLINE_WARNING,
+                            "Hết hạn bổ sung", msg, dispute.getId());
                     notificationService.createNotification(dispute.getAgainstUser(),
-                            NotificationType.SYSTEM, "Hết hạn bổ sung", msg, dispute.getId());
+                            NotificationType.DISPUTE_DEADLINE_WARNING,
+                            "Hết hạn bổ sung", msg, dispute.getId());
                 } catch (Exception e) {
                     log.warn("[Scheduler] Failed to send notification: {}", e.getMessage());
                 }
@@ -133,10 +132,6 @@ public class DisputeDeadlineScheduler {
         }
     }
 
-    /**
-     * Ghi 1 dòng system note vào evidenceHistory mà không đụng tới resolution.
-     * evidenceHistory là jsonb nhưng lưu dạng string trong entity.
-     */
     private void appendSystemNote(Dispute dispute, String note) {
         try {
             String entry = String.format(
