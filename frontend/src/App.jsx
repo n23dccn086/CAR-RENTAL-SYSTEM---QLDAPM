@@ -41,6 +41,7 @@ import OwnerRegisterPage from "./pages/OwnerRegisterPage";
 import AdminOwnerRequestsPage from "./pages/AdminOwnerRequestsPage";
 import OwnerCarsPage from "./pages/OwnerCarsPage";
 import CarEditPage from "./pages/CarEditPage";
+import AdminDriversPage from "./pages/AdminDriversPage";
 
 function App() {
   return (
@@ -285,6 +286,16 @@ function App() {
             element={
               <ProtectedRoute allowedRoles={["ADMIN"]}>
                 <AdminApprovalsPage />
+              </ProtectedRoute>
+            }
+          />
+
+          {/* ★ MỚI: Duyệt tài xế */}
+          <Route
+            path="/admin/drivers"
+            element={
+              <ProtectedRoute allowedRoles={["ADMIN"]}>
+                <AdminDriversPage />
               </ProtectedRoute>
             }
           />

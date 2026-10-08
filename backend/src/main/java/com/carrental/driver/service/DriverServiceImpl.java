@@ -14,11 +14,14 @@ import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Set;
 
 @Service
 @RequiredArgsConstructor
@@ -28,6 +31,11 @@ public class DriverServiceImpl implements DriverService {
 
     DriverRepository driverRepository;
     DriverMapper driverMapper;
+
+    static final Set<DriverStatus> LOCKED_FOR_EDIT = Set.of(
+            DriverStatus.PENDING,
+            DriverStatus.BUSY,
+            DriverStatus.REJECTED);
 
     // ===== CREATE =====
 
@@ -75,8 +83,28 @@ public class DriverServiceImpl implements DriverService {
     @Override
     public List<DriverResponse> getAvailableDrivers() {
         List<Driver> drivers = driverRepository
-                .findByStatusAndDeletedAtIsNull(DriverStatus.ACTIVE);   // ← SỬA
+                .findByStatusAndDeletedAtIsNull(DriverStatus.ACTIVE);
         return driverMapper.toResponseList(drivers);
+    }
+
+    // ===== SEARCH + PHÂN TRANG =====
+
+    @Override
+    @Transactional(readOnly = true)
+    public Page<DriverResponse> searchOwnerDrivers(
+            Long ownerId,
+            String status,
+            String search,
+            Pageable pageable) {
+
+        String statusParam = (status != null && !status.isBlank()) ? status.trim() : null;
+        String searchParam = (search != null && !search.isBlank()) ? search.trim() : null;
+
+        log.info("Search owner drivers: ownerId={}, status={}, search={}",
+                ownerId, statusParam, searchParam);
+
+        return driverRepository.searchOwnerDrivers(ownerId, statusParam, searchParam, pageable)
+                .map(driverMapper::toResponse);
     }
 
     // ===== UPDATE =====
@@ -91,6 +119,16 @@ public class DriverServiceImpl implements DriverService {
         if (!driver.getOwnerId().equals(ownerId)) {
             throw new UnauthorizedException(ErrorCode.PERMISSION_DENIED,
                     "Bạn không sở hữu tài xế này");
+        }
+
+        if (LOCKED_FOR_EDIT.contains(driver.getStatus())) {
+            String reason = switch (driver.getStatus()) {
+                case PENDING -> "Tài xế đang chờ Admin duyệt, không thể sửa";
+                case BUSY -> "Tài xế đang chạy chuyến, không thể sửa";
+                case REJECTED -> "Tài xế đã bị Admin từ chối, không thể sửa";
+                default -> "Không thể sửa tài xế ở trạng thái này";
+            };
+            throw new BadRequestException(ErrorCode.VALIDATION_ERROR, reason);
         }
 
         if (!driver.getPhone().equals(request.getPhone())
@@ -111,9 +149,66 @@ public class DriverServiceImpl implements DriverService {
         driver.setExperienceYears(request.getExperienceYears());
         driver.setAvatarUrl(request.getAvatarUrl());
 
+        if (driver.getStatus() != DriverStatus.PENDING) {
+            log.info("Driver {} status reset: {} → PENDING (do Owner sửa thông tin)",
+                    id, driver.getStatus());
+            driver.setStatus(DriverStatus.PENDING);
+        }
+
         Driver updated = driverRepository.save(driver);
         log.info("Driver updated id: {}", id);
 
+        return driverMapper.toResponse(updated);
+    }
+
+    // ============================================================
+    // ★ MỚI: KHÓA / MỞ KHÓA TÀI XẾ
+    // ============================================================
+    @Override
+    @Transactional
+    public DriverResponse updateDriverStatus(Long id, Long ownerId, String newStatus) {
+        log.info("Owner {} update driver {} status to {}", ownerId, id, newStatus);
+
+        Driver driver = getEntityById(id);
+
+        if (!driver.getOwnerId().equals(ownerId)) {
+            throw new UnauthorizedException(ErrorCode.PERMISSION_DENIED,
+                    "Bạn không sở hữu tài xế này");
+        }
+
+        DriverStatus target;
+        try {
+            target = DriverStatus.valueOf(newStatus.toUpperCase());
+        } catch (Exception e) {
+            throw new BadRequestException(ErrorCode.VALIDATION_ERROR,
+                    "Trạng thái không hợp lệ: " + newStatus);
+        }
+
+        // ★ Chỉ cho ACTIVE ↔ INACTIVE
+        if (target != DriverStatus.ACTIVE && target != DriverStatus.INACTIVE) {
+            throw new BadRequestException(ErrorCode.VALIDATION_ERROR,
+                    "Bạn chỉ có thể khóa/mở khóa tài xế");
+        }
+
+        // ★ Không cho đổi khi PENDING/BUSY/REJECTED
+        if (driver.getStatus() == DriverStatus.BUSY) {
+            throw new BadRequestException(ErrorCode.VALIDATION_ERROR,
+                    "Tài xế đang chạy chuyến, không thể khóa");
+        }
+        if (driver.getStatus() == DriverStatus.PENDING) {
+            throw new BadRequestException(ErrorCode.VALIDATION_ERROR,
+                    "Tài xế đang chờ Admin duyệt, không thể đổi trạng thái");
+        }
+        if (driver.getStatus() == DriverStatus.REJECTED) {
+            throw new BadRequestException(ErrorCode.VALIDATION_ERROR,
+                    "Tài xế đã bị Admin từ chối, không thể đổi trạng thái");
+        }
+
+        DriverStatus oldStatus = driver.getStatus();
+        driver.setStatus(target);
+        Driver updated = driverRepository.save(driver);
+
+        log.info("Driver {} status: {} → {}", id, oldStatus, target);
         return driverMapper.toResponse(updated);
     }
 
@@ -131,6 +226,16 @@ public class DriverServiceImpl implements DriverService {
                     "Bạn không sở hữu tài xế này");
         }
 
+        if (LOCKED_FOR_EDIT.contains(driver.getStatus())) {
+            String reason = switch (driver.getStatus()) {
+                case PENDING -> "Tài xế đang chờ Admin duyệt, không thể xóa";
+                case BUSY -> "Tài xế đang chạy chuyến, không thể xóa";
+                case REJECTED -> "Tài xế đã bị Admin từ chối, không thể xóa";
+                default -> "Không thể xóa tài xế ở trạng thái này";
+            };
+            throw new BadRequestException(ErrorCode.VALIDATION_ERROR, reason);
+        }
+
         driver.setDeletedAt(LocalDateTime.now());
         driverRepository.save(driver);
 
@@ -145,7 +250,7 @@ public class DriverServiceImpl implements DriverService {
         log.info("Approve driver id: {}", id);
 
         Driver driver = getEntityById(id);
-        driver.setStatus(DriverStatus.ACTIVE);   // ← SỬA
+        driver.setStatus(DriverStatus.ACTIVE);
         Driver updated = driverRepository.save(driver);
 
         return driverMapper.toResponse(updated);
@@ -161,6 +266,29 @@ public class DriverServiceImpl implements DriverService {
         Driver updated = driverRepository.save(driver);
 
         return driverMapper.toResponse(updated);
+    }
+
+    @Override
+    public List<DriverResponse> getAllDrivers() {
+        List<Driver> drivers = driverRepository.findAll();
+        return drivers.stream()
+                .filter(d -> d.getDeletedAt() == null)
+                .map(driverMapper::toResponse)
+                .toList();
+    }
+
+    @Override
+    public List<DriverResponse> getDriversByStatus(DriverStatus status) {
+        List<Driver> drivers = driverRepository.findByStatus(status);
+        return drivers.stream()
+                .filter(d -> d.getDeletedAt() == null)
+                .map(driverMapper::toResponse)
+                .toList();
+    }
+
+    @Override
+    public long countPendingDrivers() {
+        return driverRepository.countByStatusAndDeletedAtIsNull(DriverStatus.PENDING);
     }
 
     // ===== HELPER =====

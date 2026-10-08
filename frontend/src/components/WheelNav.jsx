@@ -85,6 +85,9 @@ export default function WheelNav() {
       ? [{ path: "/admin/approvals", label: "Duyệt xe", icon: "⊚" }]
       : []),
     ...(isLoggedIn && user?.role === "ADMIN"
+      ? [{ path: "/admin/drivers", label: "Duyệt tài xế", icon: "◍" }]
+      : []),
+    ...(isLoggedIn && user?.role === "ADMIN"
       ? [{ path: "/admin/disputes", label: "Tranh chấp", icon: "⚖" }]
       : []),
     ...(isLoggedIn && user?.role === "ADMIN"

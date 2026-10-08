@@ -6,10 +6,16 @@ import com.carrental.driver.dto.DriverResponse;
 import com.carrental.driver.entity.DriverStatus;
 import com.carrental.driver.service.DriverService;
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.NotBlank;
 import lombok.AccessLevel;
+import lombok.Data;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -25,10 +31,6 @@ public class DriverController {
 
     // ===== OWNER =====
 
-    /**
-     * Tạo tài xế mới.
-     * POST /api/v1/drivers
-     */
     @PostMapping
     public ApiResponse<DriverResponse> createDriver(
             @RequestAttribute("userId") Long ownerId,
@@ -38,34 +40,36 @@ public class DriverController {
                 driverService.createDriver(ownerId, request));
     }
 
-    /**
-     * Lấy danh sách tài xế của tôi.
-     * GET /api/v1/drivers/my
-     */
     @GetMapping("/my")
-    public ApiResponse<List<DriverResponse>> getMyDrivers(
+    public ApiResponse<Page<DriverResponse>> getMyDrivers(
             @RequestAttribute("userId") Long ownerId,
-            @RequestParam(required = false) DriverStatus status) {
-        if (status != null) {
-            return ApiResponse.success(
-                    driverService.getMyDriversByStatus(ownerId, status));
-        }
-        return ApiResponse.success(driverService.getMyDrivers(ownerId));
+            @RequestParam(required = false) String status,
+            @RequestParam(required = false) String search,
+            @RequestParam(defaultValue = "createdAt,desc") String sort,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "10") int size) {
+
+        log.info("REST: Get my drivers: ownerId={}, status={}, search={}, sort={}, page={}, size={}",
+                ownerId, status, search, sort, page, size);
+
+        String[] sortParts = sort.split(",");
+        Sort.Direction direction = sortParts.length > 1 && sortParts[1].equalsIgnoreCase("desc")
+                ? Sort.Direction.DESC : Sort.Direction.ASC;
+        String sortField = mapSortField(sortParts[0]);
+
+        Pageable pageable = PageRequest.of(page, size, Sort.by(direction, sortField));
+
+        Page<DriverResponse> drivers = driverService.searchOwnerDrivers(
+                ownerId, status, search, pageable);
+
+        return ApiResponse.success(drivers);
     }
 
-    /**
-     * Lấy chi tiết tài xế.
-     * GET /api/v1/drivers/{id}
-     */
     @GetMapping("/{id}")
     public ApiResponse<DriverResponse> getDriverById(@PathVariable Long id) {
         return ApiResponse.success(driverService.getDriverById(id));
     }
 
-    /**
-     * Cập nhật tài xế.
-     * PUT /api/v1/drivers/{id}
-     */
     @PutMapping("/{id}")
     public ApiResponse<DriverResponse> updateDriver(
             @PathVariable Long id,
@@ -77,9 +81,20 @@ public class DriverController {
     }
 
     /**
-     * Xóa tài xế.
-     * DELETE /api/v1/drivers/{id}
+     * ★ MỚI: Khóa/Mở khóa tài xế.
+     * PATCH /api/v1/drivers/{id}/status
+     * Body: { "status": "ACTIVE" | "INACTIVE" }
      */
+    @PatchMapping("/{id}/status")
+    public ApiResponse<DriverResponse> updateStatus(
+            @PathVariable Long id,
+            @RequestAttribute("userId") Long ownerId,
+            @RequestBody UpdateStatusRequest body) {
+        log.info("REST: Owner {} update driver {} status to {}", ownerId, id, body.getStatus());
+        return ApiResponse.success("Cập nhật trạng thái thành công",
+                driverService.updateDriverStatus(id, ownerId, body.getStatus()));
+    }
+
     @DeleteMapping("/{id}")
     public ApiResponse<Void> deleteDriver(
             @PathVariable Long id,
@@ -90,19 +105,11 @@ public class DriverController {
 
     // ===== PUBLIC / ADMIN =====
 
-    /**
-     * Lấy danh sách tài xế khả dụng.
-     * GET /api/v1/drivers/available
-     */
     @GetMapping("/available")
     public ApiResponse<List<DriverResponse>> getAvailableDrivers() {
         return ApiResponse.success(driverService.getAvailableDrivers());
     }
 
-    /**
-     * Admin duyệt tài xế.
-     * PUT /api/v1/drivers/{id}/approve
-     */
     @PutMapping("/{id}/approve")
     public ApiResponse<DriverResponse> approveDriver(@PathVariable Long id) {
         log.info("REST: Approve driver id: {}", id);
@@ -110,10 +117,6 @@ public class DriverController {
                 driverService.approveDriver(id));
     }
 
-    /**
-     * Admin từ chối tài xế.
-     * PUT /api/v1/drivers/{id}/reject
-     */
     @PutMapping("/{id}/reject")
     public ApiResponse<DriverResponse> rejectDriver(
             @PathVariable Long id,
@@ -121,5 +124,28 @@ public class DriverController {
         log.info("REST: Reject driver id: {}", id);
         return ApiResponse.success("Từ chối tài xế thành công",
                 driverService.rejectDriver(id, reason));
+    }
+
+    // ===== HELPER =====
+
+    private String mapSortField(String jpaField) {
+        return switch (jpaField) {
+            case "createdAt" -> "created_at";
+            case "updatedAt" -> "updated_at";
+            case "experienceYears" -> "experience_years";
+            case "totalTrips" -> "total_trips";
+            case "licenseExpiry" -> "license_expiry";
+            case "dateOfBirth" -> "date_of_birth";
+            case "licenseNumber" -> "license_number";
+            default -> jpaField;
+        };
+    }
+
+    // ===== DTO =====
+
+    @Data
+    public static class UpdateStatusRequest {
+        @NotBlank(message = "Trạng thái không được để trống")
+        private String status;
     }
 }

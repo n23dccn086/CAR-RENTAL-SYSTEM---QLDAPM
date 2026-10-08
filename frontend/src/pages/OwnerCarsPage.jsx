@@ -16,7 +16,6 @@ const CAR_TYPE_OPTIONS = [
 
 const STATUS_MAP = {
   PENDING: { label: "Chờ duyệt", color: "var(--dong)" },
-  APPROVED: { label: "Đã duyệt", color: "var(--xanh-reu)" },
   AVAILABLE: { label: "Sẵn sàng", color: "var(--xanh-reu)" },
   RENTED: { label: "Đang được thuê", color: "var(--xanh-ngoc)" },
   MAINTENANCE: { label: "Bảo dưỡng", color: "var(--tim)" },
@@ -636,8 +635,10 @@ export default function OwnerCarsPage() {
 
                   {/* Actions */}
                   <div style={{ display: "flex", gap: "8px" }}>
-                    {/* Nút Sửa — ẨN hoàn toàn khi REJECTED */}
-                    {car.status !== "REJECTED" && (
+                    {/* Nút Sửa — ẨN khi PENDING/RENTED/REJECTED */}
+                    {!["PENDING", "RENTED", "REJECTED"].includes(
+                      car.status,
+                    ) && (
                       <Link
                         to={`/cars/edit/${car.id}`}
                         style={btnStyle("var(--muc)")}
@@ -646,8 +647,10 @@ export default function OwnerCarsPage() {
                       </Link>
                     )}
 
-                    {/* Nút Xóa — Ẩn khi RENTED/PENDING/REJECTED */}
-                    {!isLocked && (
+                    {/* Nút Xóa — ẨN khi PENDING/RENTED/REJECTED */}
+                    {!["PENDING", "RENTED", "REJECTED"].includes(
+                      car.status,
+                    ) && (
                       <button
                         onClick={() => handleDelete(car)}
                         style={btnStyle("var(--do)")}

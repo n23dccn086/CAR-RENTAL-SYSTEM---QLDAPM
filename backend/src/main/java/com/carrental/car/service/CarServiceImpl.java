@@ -1,6 +1,5 @@
 package com.carrental.car.service;
 
-import com.carrental.booking.repository.BookingRepository;
 import com.carrental.car.dto.CarMapper;
 import com.carrental.car.dto.CarRequest;
 import com.carrental.car.dto.CarResponse;
@@ -10,6 +9,7 @@ import com.carrental.car.entity.CarStatus;
 import com.carrental.car.entity.CarType;
 import com.carrental.car.repository.CarImageRepository;
 import com.carrental.car.repository.CarRepository;
+import com.carrental.booking.repository.BookingRepository;
 import com.carrental.common.constant.ErrorCode;
 import com.carrental.common.exception.BadRequestException;
 import com.carrental.common.exception.ResourceNotFoundException;
@@ -47,12 +47,20 @@ public class CarServiceImpl implements CarService {
     ReviewRepository reviewRepository;
     BookingRepository bookingRepository;
 
-    // ★ Chỉ cho phép Owner đổi 4 trạng thái này
+    // ★ Chỉ cho phép Owner đổi 4 trạng thái này qua dropdown
     static final Set<CarStatus> OWNER_ALLOWED_STATUSES = Set.of(
             CarStatus.AVAILABLE,
             CarStatus.MAINTENANCE,
             CarStatus.BROKEN,
-            CarStatus.INACTIVE);
+            CarStatus.INACTIVE
+    );
+
+    // ★ Trạng thái KHÔNG cho Sửa/Xóa
+    static final Set<CarStatus> LOCKED_FOR_EDIT = Set.of(
+            CarStatus.PENDING,
+            CarStatus.RENTED,
+            CarStatus.REJECTED
+    );
 
     // ===== CREATE =====
 
@@ -65,6 +73,7 @@ public class CarServiceImpl implements CarService {
             throw new ResourceNotFoundException(ErrorCode.USER_NOT_FOUND);
         }
 
+        // Check trùng biển số — với TẤT CẢ xe (mọi trạng thái)
         if (carRepository.existsByPlate(request.getPlate())) {
             throw new BadRequestException(ErrorCode.CAR_PLATE_EXISTED);
         }
@@ -73,16 +82,11 @@ public class CarServiceImpl implements CarService {
         car.setOwnerId(ownerId);
         car.setStatus(CarStatus.PENDING);
 
-        if (car.getCurrentKm() == null)
-            car.setCurrentKm(0);
-        if (car.getExtraKmPrice() == null)
-            car.setExtraKmPrice(5000L);
-        if (car.getDeliveryFee() == null)
-            car.setDeliveryFee(100000L);
-        if (car.getCleaningFee() == null)
-            car.setCleaningFee(0L);
-        if (car.getDeliveryRadius() == null)
-            car.setDeliveryRadius(20);
+        if (car.getCurrentKm() == null) car.setCurrentKm(0);
+        if (car.getExtraKmPrice() == null) car.setExtraKmPrice(5000L);
+        if (car.getDeliveryFee() == null) car.setDeliveryFee(100000L);
+        if (car.getCleaningFee() == null) car.setCleaningFee(0L);
+        if (car.getDeliveryRadius() == null) car.setDeliveryRadius(20);
 
         Car saved = carRepository.save(car);
         log.info("Car created with id: {}", saved.getId());
@@ -133,6 +137,18 @@ public class CarServiceImpl implements CarService {
             throw new UnauthorizedException(ErrorCode.CAR_NOT_OWNED);
         }
 
+        // ★ Không cho sửa khi PENDING/RENTED/REJECTED
+        if (LOCKED_FOR_EDIT.contains(car.getStatus())) {
+            String reason = switch (car.getStatus()) {
+                case PENDING -> "Xe đang chờ Admin duyệt, không thể sửa";
+                case RENTED -> "Xe đang được thuê, không thể sửa";
+                case REJECTED -> "Xe đã bị Admin từ chối, không thể sửa";
+                default -> "Không thể sửa xe ở trạng thái này";
+            };
+            throw new BadRequestException(ErrorCode.VALIDATION_ERROR, reason);
+        }
+
+        // ★ CHECK TRÙNG BIỂN SỐ VỚI TẤT CẢ XE (mọi trạng thái)
         if (!car.getPlate().equals(request.getPlate())
                 && carRepository.existsByPlate(request.getPlate())) {
             throw new BadRequestException(ErrorCode.CAR_PLATE_EXISTED);
@@ -159,6 +175,13 @@ public class CarServiceImpl implements CarService {
         car.setDeliveryRadius(request.getDeliveryRadius());
         car.setDescription(request.getDescription());
 
+        // ★ Reset về PENDING — Admin duyệt lại
+        if (car.getStatus() != CarStatus.PENDING) {
+            log.info("Car {} status reset: {} → PENDING (do Owner sửa thông tin)",
+                    id, car.getStatus());
+            car.setStatus(CarStatus.PENDING);
+        }
+
         Car updated = carRepository.save(car);
         log.info("Car updated id: {}", id);
 
@@ -176,6 +199,17 @@ public class CarServiceImpl implements CarService {
 
         if (!car.getOwnerId().equals(ownerId)) {
             throw new UnauthorizedException(ErrorCode.CAR_NOT_OWNED);
+        }
+
+        // ★ Không cho xóa khi PENDING/RENTED/REJECTED
+        if (LOCKED_FOR_EDIT.contains(car.getStatus())) {
+            String reason = switch (car.getStatus()) {
+                case PENDING -> "Xe đang chờ Admin duyệt, không thể xóa";
+                case RENTED -> "Xe đang được thuê, không thể xóa";
+                case REJECTED -> "Xe đã bị Admin từ chối, không thể xóa";
+                default -> "Không thể xóa xe ở trạng thái này";
+            };
+            throw new BadRequestException(ErrorCode.VALIDATION_ERROR, reason);
         }
 
         car.setDeletedAt(LocalDateTime.now());
@@ -258,13 +292,12 @@ public class CarServiceImpl implements CarService {
         log.info("Search owner cars: ownerId={}, carType={}, status={}, seats={}, search={}",
                 ownerId, typeParam, statusParam, seatsParam, searchParam);
 
-        // Lấy Page<Car> → convert từng car → enrich stats
         return carRepository.searchOwnerCars(ownerId, typeParam, statusParam, seatsParam, searchParam, pageable)
                 .map(this::enrichStats);
     }
 
     /**
-     * ★ Enrich CarResponse với stats: rating, reviewCount, rentalCount
+     * Enrich CarResponse với stats: rating, reviewCount, rentalCount
      */
     private CarResponse enrichStats(Car car) {
         CarResponse response = carMapper.toResponse(car);
@@ -289,7 +322,7 @@ public class CarServiceImpl implements CarService {
     }
 
     // ============================================================
-    // ★ MỚI: OWNER — ĐỔI TRẠNG THÁI XE
+    // OWNER — ĐỔI TRẠNG THÁI XE
     // ============================================================
 
     @Override
@@ -299,12 +332,10 @@ public class CarServiceImpl implements CarService {
 
         Car car = getCarEntityById(carId);
 
-        // 1. Check ownership
         if (!car.getOwnerId().equals(ownerId)) {
             throw new UnauthorizedException(ErrorCode.CAR_NOT_OWNED);
         }
 
-        // 2. Parse status
         CarStatus targetStatus;
         try {
             targetStatus = CarStatus.valueOf(newStatus.toUpperCase());
@@ -313,13 +344,11 @@ public class CarServiceImpl implements CarService {
                     "Trạng thái không hợp lệ: " + newStatus);
         }
 
-        // 3. Validate: Chỉ cho phép 4 trạng thái
         if (!OWNER_ALLOWED_STATUSES.contains(targetStatus)) {
             throw new BadRequestException(ErrorCode.VALIDATION_ERROR,
                     "Bạn chỉ có thể đổi sang: Sẵn sàng, Bảo dưỡng, Hỏng, hoặc Đã khóa");
         }
 
-        // 4. Không cho đổi nếu xe đang ở trạng thái hệ thống quản lý
         CarStatus currentStatus = car.getStatus();
         if (currentStatus == CarStatus.RENTED) {
             throw new BadRequestException(ErrorCode.VALIDATION_ERROR,
@@ -334,7 +363,6 @@ public class CarServiceImpl implements CarService {
                     "Xe đã bị Admin từ chối, không thể đổi trạng thái");
         }
 
-        // 5. Set status + save
         car.setStatus(targetStatus);
         Car updated = carRepository.save(car);
 
@@ -386,12 +414,22 @@ public class CarServiceImpl implements CarService {
             throw new UnauthorizedException(ErrorCode.CAR_NOT_OWNED);
         }
 
+        // ★ Không cho upload khi PENDING/RENTED/REJECTED
+        if (LOCKED_FOR_EDIT.contains(car.getStatus())) {
+            String reason = switch (car.getStatus()) {
+                case PENDING -> "Xe đang chờ Admin duyệt, không thể thêm ảnh";
+                case RENTED -> "Xe đang được thuê, không thể thêm ảnh";
+                case REJECTED -> "Xe đã bị Admin từ chối, không thể thêm ảnh";
+                default -> "Không thể thêm ảnh ở trạng thái này";
+            };
+            throw new BadRequestException(ErrorCode.VALIDATION_ERROR, reason);
+        }
+
         List<String> urls = new ArrayList<>();
         long existing = carImageRepository.countByCarId(carId);
 
         for (MultipartFile file : files) {
-            if (file.isEmpty())
-                continue;
+            if (file.isEmpty()) continue;
             if (existing + urls.size() >= 10) {
                 log.warn("Vượt quá 10 ảnh cho car {}", carId);
                 break;
@@ -406,6 +444,14 @@ public class CarServiceImpl implements CarService {
                     .imageType("OTHER")
                     .build();
             carImageRepository.save(image);
+        }
+
+        // ★ Reset về PENDING — Admin duyệt lại
+        if (car.getStatus() != CarStatus.PENDING) {
+            log.info("Car {} status reset: {} → PENDING (do Owner thêm ảnh)",
+                    carId, car.getStatus());
+            car.setStatus(CarStatus.PENDING);
+            carRepository.save(car);
         }
 
         log.info("Uploaded {} images for car {}", urls.size(), carId);
@@ -432,6 +478,17 @@ public class CarServiceImpl implements CarService {
             throw new UnauthorizedException(ErrorCode.CAR_NOT_OWNED);
         }
 
+        // ★ Không cho xóa ảnh khi PENDING/RENTED/REJECTED
+        if (LOCKED_FOR_EDIT.contains(car.getStatus())) {
+            String reason = switch (car.getStatus()) {
+                case PENDING -> "Xe đang chờ Admin duyệt, không thể xóa ảnh";
+                case RENTED -> "Xe đang được thuê, không thể xóa ảnh";
+                case REJECTED -> "Xe đã bị Admin từ chối, không thể xóa ảnh";
+                default -> "Không thể xóa ảnh ở trạng thái này";
+            };
+            throw new BadRequestException(ErrorCode.VALIDATION_ERROR, reason);
+        }
+
         CarImage image = carImageRepository.findByCarIdOrderByDisplayOrderAsc(carId).stream()
                 .filter(img -> img.getImageUrl().equals(imageUrl))
                 .findFirst()
@@ -439,6 +496,14 @@ public class CarServiceImpl implements CarService {
 
         fileStorageService.deleteFile(image.getImageUrl());
         carImageRepository.delete(image);
+
+        // ★ Reset về PENDING — Admin duyệt lại
+        if (car.getStatus() != CarStatus.PENDING) {
+            log.info("Car {} status reset: {} → PENDING (do Owner xóa ảnh)",
+                    carId, car.getStatus());
+            car.setStatus(CarStatus.PENDING);
+            carRepository.save(car);
+        }
 
         log.info("Deleted image for car {}", carId);
     }

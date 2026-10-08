@@ -8,12 +8,11 @@ import lombok.RequiredArgsConstructor;
 public enum CarStatus {
 
     PENDING("Chờ duyệt"),
-    APPROVED("Đã duyệt - Chưa cho thuê"),
-    AVAILABLE("Sẵn sàng cho thuê"),
+    AVAILABLE("Sẵn sàng"),
     RENTED("Đang được thuê"),
-    MAINTENANCE("Đang bảo dưỡng"),
+    MAINTENANCE("Bảo dưỡng"),
     BROKEN("Bị hỏng"),
-    INACTIVE("Ngừng hoạt động"),
+    INACTIVE("Đã khóa"),
     REJECTED("Bị từ chối");
 
     private final String description;
