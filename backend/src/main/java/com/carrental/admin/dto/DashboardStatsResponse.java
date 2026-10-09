@@ -8,7 +8,6 @@ import java.math.BigDecimal;
 
 /**
  * Response DTO cho Admin Dashboard.
- * Chứa tất cả số liệu tổng quan theo spec Role ADMIN.txt
  */
 @Data
 @Builder
@@ -19,25 +18,26 @@ import java.math.BigDecimal;
 public class DashboardStatsResponse {
 
     // ===== DOANH THU =====
-    Long totalRevenue;              // Tổng doanh thu (chưa trích hoa hồng)
-    Long platformRevenue;           // Số nền tảng thực nhận = % hoa hồng × totalRevenue
-    BigDecimal commissionRate;      // % hoa hồng hiện tại
+    Long totalRevenue;
+    Long platformRevenue;
+    BigDecimal commissionRate;
 
     // ===== ĐƠN HÀNG =====
     Long totalBookings;
     Long completedBookings;
     Long cancelledBookings;
-    Double cancelRate;              // Tỉ lệ hủy = cancelled/total × 100 (%)
+    Double cancelRate;
 
     // ===== CSAT =====
-    Double csatCar;                 // AVG(carRating) — CSAT_xe
-    Double csatOwner;               // AVG(ownerRating) — CSAT_chủ_xe
-    Double csat;                    // (csatCar + csatOwner) / 2 — CSAT_tổng
-    Long totalReviews;              // Số review
+    Double csatCar;
+    Double csatOwner;
+    Double csat;
+    Long totalReviews;
 
     // ===== HỒ SƠ CHỜ DUYỆT =====
-    Long pendingCars;               // Xe chờ Admin duyệt
-    Long pendingVerifications;      // User chờ xác thực GPLX/CCCD
-    Long pendingOwnerRequests;      // Yêu cầu đăng ký chủ xe (UC chưa làm)
-    Long pendingDisputes;           // Tranh chấp chờ xử lý (UC chưa làm)
+    Long pendingCars;
+    Long pendingDrivers;
+    Long pendingVerifications;
+    Long pendingOwnerRequests;
+    Long pendingDisputes;
 }

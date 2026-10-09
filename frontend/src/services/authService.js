@@ -36,3 +36,17 @@ export async function logout() {
     localStorage.removeItem('user')
   }
 }
+
+export async function forgotPassword(phone) {
+  const response = await api.post('/auth/forgot-password', { phone })
+  return response.data
+}
+
+export async function resetPassword(phone, otp, newPassword) {
+  const response = await api.post('/auth/reset-password', {
+    phone,
+    otp,
+    newPassword,
+  })
+  return response.data
+}

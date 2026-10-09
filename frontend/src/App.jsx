@@ -42,6 +42,8 @@ import AdminOwnerRequestsPage from "./pages/AdminOwnerRequestsPage";
 import OwnerCarsPage from "./pages/OwnerCarsPage";
 import CarEditPage from "./pages/CarEditPage";
 import AdminDriversPage from "./pages/AdminDriversPage";
+import ForgotPasswordPage from "./pages/ForgotPasswordPage";
+import ResetPasswordPage from "./pages/ResetPasswordPage";
 
 function App() {
   return (
@@ -95,6 +97,9 @@ function App() {
               </ProtectedRoute>
             }
           />
+
+          <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+          <Route path="/reset-password" element={<ResetPasswordPage />} />
 
           {/* ===== CUSTOMER ĐĂNG KÝ CHỦ XE ===== */}
           <Route

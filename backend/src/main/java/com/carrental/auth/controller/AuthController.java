@@ -1,9 +1,12 @@
 package com.carrental.auth.controller;
 
 import com.carrental.auth.dto.AuthResponse;
+import com.carrental.auth.dto.ForgotPasswordRequest;
 import com.carrental.auth.dto.LoginRequest;
 import com.carrental.auth.dto.RegisterRequest;
+import com.carrental.auth.dto.ResetPasswordRequest;
 import com.carrental.auth.service.AuthService;
+import com.carrental.auth.service.OtpService;
 import com.carrental.common.dto.ApiResponse;
 import com.carrental.common.security.JwtService;
 import com.carrental.user.dto.UserDto;
@@ -30,6 +33,7 @@ public class AuthController {
 
     AuthService authService;
     JwtService jwtService;
+    OtpService otpService;  // ★ MỚI
 
     /**
      * Đăng ký tài khoản mới
@@ -110,6 +114,36 @@ public class AuthController {
         Long userId = extractUserId(request);
         log.info("REST request to change password user id: {}", userId);
         authService.changePassword(userId, body.getCurrentPassword(), body.getNewPassword());
+        return ApiResponse.success("Đổi mật khẩu thành công", null);
+    }
+
+    // ============================================================
+    // ★ MỚI: QUÊN MẬT KHẨU — OTP SMS
+    // ============================================================
+
+    /**
+     * Quên mật khẩu — gửi OTP qua SMS (Mock — in ra console).
+     * POST /api/v1/auth/forgot-password
+     */
+    @PostMapping("/forgot-password")
+    public ApiResponse<Void> forgotPassword(@Valid @RequestBody ForgotPasswordRequest request) {
+        log.info("REST request to forgot password for phone: {}", request.getPhone());
+        otpService.sendOtp(request.getPhone());
+        return ApiResponse.success(
+                "Mã OTP đã được gửi. Vui lòng kiểm tra tin nhắn (console backend).",
+                null
+        );
+    }
+
+    /**
+     * Đặt lại mật khẩu bằng OTP.
+     * POST /api/v1/auth/reset-password
+     */
+    @PostMapping("/reset-password")
+    public ApiResponse<Void> resetPassword(@Valid @RequestBody ResetPasswordRequest request) {
+        log.info("REST request to reset password for phone: {}", request.getPhone());
+        otpService.verifyAndResetPassword(
+                request.getPhone(), request.getOtp(), request.getNewPassword());
         return ApiResponse.success("Đổi mật khẩu thành công", null);
     }
 

@@ -102,11 +102,27 @@ export default function LoginPage() {
             required
           />
 
+          {/* ★ MỚI: Link quên mật khẩu */}
+          <div style={{ textAlign: 'right', marginTop: '-8px', marginBottom: '16px' }}>
+            <Link
+              to="/forgot-password"
+              style={{
+                fontFamily: 'var(--serif-2)',
+                fontStyle: 'italic',
+                fontSize: '14px',
+                color: 'var(--do)',
+                borderBottom: '1px solid var(--do)',
+              }}
+            >
+              Quên mật khẩu?
+            </Link>
+          </div>
+
           <button
             type="submit"
             className="btn-login"
             disabled={loading}
-            style={{ width: '100%', justifyContent: 'center', padding: '16px', marginTop: '12px' }}
+            style={{ width: '100%', justifyContent: 'center', padding: '16px' }}
           >
             <span>{loading ? 'Đang xử lý...' : 'Đăng nhập'}</span>
           </button>

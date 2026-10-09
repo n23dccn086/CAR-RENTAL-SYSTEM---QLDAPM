@@ -1,11 +1,15 @@
 package com.carrental.admin.service;
 
 import com.carrental.admin.dto.DashboardStatsResponse;
+import com.carrental.admin.repository.DisputeRepository;
+import com.carrental.admin.repository.OwnerRequestRepository;
 import com.carrental.booking.entity.Booking;
 import com.carrental.booking.entity.BookingStatus;
 import com.carrental.booking.repository.BookingRepository;
 import com.carrental.car.entity.CarStatus;
 import com.carrental.car.repository.CarRepository;
+import com.carrental.driver.entity.DriverStatus;
+import com.carrental.driver.repository.DriverRepository;
 import com.carrental.review.repository.ReviewRepository;
 import com.carrental.user.entity.VerificationStatus;
 import com.carrental.user.repository.UserRepository;
@@ -27,8 +31,11 @@ public class AdminDashboardServiceImpl implements AdminDashboardService {
 
     BookingRepository bookingRepository;
     CarRepository carRepository;
+    DriverRepository driverRepository;
     ReviewRepository reviewRepository;
     UserRepository userRepository;
+    OwnerRequestRepository ownerRequestRepository;
+    DisputeRepository disputeRepository;
     ConfigHelper configHelper;
 
     @Override
@@ -83,14 +90,15 @@ public class AdminDashboardServiceImpl implements AdminDashboardService {
 
         // ===== 3. PENDING APPROVALS =====
         long pendingCars = carRepository.findByStatus(CarStatus.PENDING).size();
+
+        // ★ Đếm tài xế chờ duyệt
+        long pendingDrivers = driverRepository.countByStatusAndDeletedAtIsNull(DriverStatus.PENDING);
+
         long pendingVerifications = userRepository
                 .findByVerificationStatus(VerificationStatus.PENDING).size();
 
-        // TODO: Nếu đã làm UC-OWNER-REGISTER, thêm count OwnerRequest PENDING
-        long pendingOwnerRequests = 0;
-
-        // TODO: Nếu đã làm UC Dispute count, thêm
-        long pendingDisputes = 0;
+        long pendingOwnerRequests = ownerRequestRepository.countByStatusAndDeletedAtIsNull("PENDING");
+        long pendingDisputes = disputeRepository.countByStatus("PENDING");
 
         return DashboardStatsResponse.builder()
                 .totalRevenue(totalRevenue)
@@ -105,6 +113,7 @@ public class AdminDashboardServiceImpl implements AdminDashboardService {
                 .csat(csat)
                 .totalReviews(totalReviews)
                 .pendingCars(pendingCars)
+                .pendingDrivers(pendingDrivers)
                 .pendingVerifications(pendingVerifications)
                 .pendingOwnerRequests(pendingOwnerRequests)
                 .pendingDisputes(pendingDisputes)
