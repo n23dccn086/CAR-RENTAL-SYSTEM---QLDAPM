@@ -48,7 +48,8 @@ public class PaymentServiceImpl implements PaymentService {
     @Override
     @Transactional
     public PaymentResponse createPayment(Long customerId, PaymentRequest request) {
-        log.info("Create payment: customerId={}, bookingId={}", customerId, request.getBookingId());
+        log.info("Create payment: customerId={}, bookingId={}, type={}",
+                customerId, request.getBookingId(), request.getPaymentType());
 
         Booking booking = bookingRepository.findById(request.getBookingId())
                 .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.BOOKING_NOT_FOUND));
@@ -57,8 +58,17 @@ public class PaymentServiceImpl implements PaymentService {
             throw new UnauthorizedException(ErrorCode.BOOKING_NOT_OWNED);
         }
 
-        if (booking.getStatus() != BookingStatus.PENDING) {
-            throw new BadRequestException(ErrorCode.BOOKING_STATUS_INVALID);
+        // ★ SỬA: Cho phép DEPOSIT khi PENDING, REMAINING khi RETURNED
+        if (request.getPaymentType() == PaymentType.DEPOSIT) {
+            if (booking.getStatus() != BookingStatus.PENDING) {
+                throw new BadRequestException(ErrorCode.BOOKING_STATUS_INVALID,
+                        "Chỉ thanh toán cọc khi đơn ở trạng thái PENDING");
+            }
+        } else if (request.getPaymentType() == PaymentType.REMAINING) {
+            if (booking.getStatus() != BookingStatus.RETURNED) {
+                throw new BadRequestException(ErrorCode.BOOKING_STATUS_INVALID,
+                        "Chỉ thanh toán nốt khi đơn ở trạng thái RETURNED");
+            }
         }
 
         String transactionId = "TXN_" + UUID.randomUUID().toString().substring(0, 8).toUpperCase();
@@ -137,10 +147,18 @@ public class PaymentServiceImpl implements PaymentService {
             payment.setGatewayTransactionId(momoGateway.extractGatewayTransactionId(callbackData));
 
             Booking booking = bookingRepository.findById(payment.getBookingId()).orElse(null);
-            if (booking != null && booking.getStatus() == BookingStatus.PENDING) {
-                booking.setStatus(BookingStatus.PAID);
-                bookingRepository.save(booking);
-                log.info("Booking updated to PAID: id={}", booking.getId());
+            if (booking != null) {
+                if (payment.getPaymentType() == PaymentType.DEPOSIT
+                        && booking.getStatus() == BookingStatus.PENDING) {
+                    booking.setStatus(BookingStatus.PAID);
+                    bookingRepository.save(booking);
+                    log.info("Booking updated to PAID: id={}", booking.getId());
+                } else if (payment.getPaymentType() == PaymentType.REMAINING
+                        && booking.getStatus() == BookingStatus.RETURNED) {
+                    booking.setStatus(BookingStatus.COMPLETED);
+                    bookingRepository.save(booking);
+                    log.info("Booking updated to COMPLETED: id={}", booking.getId());
+                }
             }
         } else {
             payment.setStatus(PaymentStatus.FAILED);
@@ -175,22 +193,55 @@ public class PaymentServiceImpl implements PaymentService {
         Payment savedPayment = paymentRepository.save(payment);
 
         Booking booking = bookingRepository.findById(payment.getBookingId()).orElse(null);
-        if (booking != null && booking.getStatus() == BookingStatus.PENDING) {
-            booking.setStatus(BookingStatus.PAID);
-            bookingRepository.save(booking);
-            log.info("Booking {} updated to PAID", booking.getId());
+        if (booking != null) {
+            // ===== DEPOSIT: PENDING → PAID =====
+            if (payment.getPaymentType() == PaymentType.DEPOSIT
+                    && booking.getStatus() == BookingStatus.PENDING) {
+                booking.setStatus(BookingStatus.PAID);
+                bookingRepository.save(booking);
+                log.info("Booking {} updated to PAID", booking.getId());
 
-            // ★ Thông báo cho Owner: Đơn mới
-            try {
-                notificationService.createNotification(
-                        booking.getOwnerId(),
-                        NotificationType.BOOKING_NEW,
-                        "Có đơn đặt xe mới",
-                        String.format("Đơn #%d đã được thanh toán cọc. Vui lòng xác nhận.", booking.getId()),
-                        booking.getId()
-                );
-            } catch (Exception e) {
-                log.warn("Failed to send notification: {}", e.getMessage());
+                // Thông báo cho Owner: Đơn mới
+                try {
+                    notificationService.createNotification(
+                            booking.getOwnerId(),
+                            NotificationType.BOOKING_NEW,
+                            "Có đơn đặt xe mới",
+                            String.format("Đơn #%d đã được thanh toán cọc. Vui lòng xác nhận.", booking.getId()),
+                            booking.getId()
+                    );
+                } catch (Exception e) {
+                    log.warn("Failed to send notification: {}", e.getMessage());
+                }
+            }
+            // ===== REMAINING: RETURNED → COMPLETED =====
+            else if (payment.getPaymentType() == PaymentType.REMAINING
+                    && booking.getStatus() == BookingStatus.RETURNED) {
+                booking.setStatus(BookingStatus.COMPLETED);
+                bookingRepository.save(booking);
+                log.info("Booking {} updated to COMPLETED", booking.getId());
+
+                // Thông báo cho Khách + Chủ xe
+                try {
+                    notificationService.createNotification(
+                            booking.getCustomerId(),
+                            NotificationType.BOOKING_COMPLETED,
+                            "Thanh toán nốt thành công",
+                            String.format("Đơn #%d đã thanh toán nốt %sđ. Đơn hoàn tất.",
+                                    booking.getId(), formatMoney(payment.getAmount())),
+                            booking.getId()
+                    );
+                    notificationService.createNotification(
+                            booking.getOwnerId(),
+                            NotificationType.BOOKING_COMPLETED,
+                            "Khách đã thanh toán nốt",
+                            String.format("Đơn #%d: Khách đã thanh toán nốt %sđ. Đơn hoàn tất.",
+                                    booking.getId(), formatMoney(payment.getAmount())),
+                            booking.getId()
+                    );
+                } catch (Exception e) {
+                    log.warn("Failed to send notification: {}", e.getMessage());
+                }
             }
         }
 
@@ -243,5 +294,10 @@ public class PaymentServiceImpl implements PaymentService {
         response.setBookingCode("BK-" + payment.getBookingId());
 
         return response;
+    }
+
+    private String formatMoney(Long amount) {
+        if (amount == null) return "0";
+        return String.format("%,d", amount);
     }
 }

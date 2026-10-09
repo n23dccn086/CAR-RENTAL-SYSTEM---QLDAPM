@@ -355,36 +355,71 @@ export default function MyBookingsPage() {
                           color: "var(--dong)",
                         }}
                       >
-                        ⏰ Đơn sẽ tự hủy nếu không thanh toán trong 12 giờ tiếp theo
+                        ⏰ Đơn sẽ tự hủy nếu không thanh toán trong 12 giờ tiếp
+                        theo
                       </div>
                     )}
 
-                    {b.totalExtraFees > 0 && (
-                      <div
-                        style={{
-                          marginTop: "8px",
-                          padding: "8px 12px",
-                          background: "rgba(139,44,44,0.08)",
-                          borderLeft: "3px solid var(--do)",
-                          fontFamily: "var(--mono)",
-                          fontSize: "11px",
-                          letterSpacing: "1px",
-                          color: "var(--do)",
-                        }}
-                      >
-                        ⚠️ Phí phát sinh: {formatPrice(b.totalExtraFees)}đ
-                        {b.lateFee > 0 && (
-                          <span style={{ marginLeft: "8px", opacity: 0.7 }}>
-                            (trả muộn: {formatPrice(b.lateFee)}đ)
-                          </span>
-                        )}
-                        {b.kmOverageFee > 0 && (
-                          <span style={{ marginLeft: "8px", opacity: 0.7 }}>
-                            (vượt km: {formatPrice(b.kmOverageFee)}đ)
-                          </span>
-                        )}
-                      </div>
-                    )}
+                    {/* ⚠️ Phí phát sinh + nhắc thanh toán nốt */}
+                    {(b.totalExtraFees > 0 || b.remainingAmount > 0) &&
+                      b.status === "RETURNED" && (
+                        <>
+                          {b.totalExtraFees > 0 && (
+                            <div
+                              style={{
+                                marginTop: "8px",
+                                padding: "8px 12px",
+                                background: "rgba(139,44,44,0.08)",
+                                borderLeft: "3px solid var(--do)",
+                                fontFamily: "var(--mono)",
+                                fontSize: "11px",
+                                letterSpacing: "1px",
+                                color: "var(--do)",
+                              }}
+                            >
+                              ⚠️ Phí phát sinh: {formatPrice(b.totalExtraFees)}đ
+                              {b.lateFee > 0 && (
+                                <span
+                                  style={{ marginLeft: "8px", opacity: 0.7 }}
+                                >
+                                  (trả muộn: {formatPrice(b.lateFee)}đ)
+                                </span>
+                              )}
+                              {b.kmOverageFee > 0 && (
+                                <span
+                                  style={{ marginLeft: "8px", opacity: 0.7 }}
+                                >
+                                  (vượt km: {formatPrice(b.kmOverageFee)}đ)
+                                </span>
+                              )}
+                            </div>
+                          )}
+
+                          {/* ★ MỚI: Nhắc thanh toán nốt trong 12h */}
+                          <div
+                            style={{
+                              marginTop: "8px",
+                              padding: "8px 12px",
+                              background: "rgba(201,169,97,0.12)",
+                              borderLeft: "3px solid var(--dong)",
+                              fontFamily: "var(--mono)",
+                              fontSize: "11px",
+                              letterSpacing: "1px",
+                              color: "var(--dong)",
+                            }}
+                          >
+                            ⏰ Vui lòng thanh toán nốt{" "}
+                            <strong>
+                              {formatPrice(
+                                (b.remainingAmount || 0) +
+                                  (b.totalExtraFees || 0),
+                              )}
+                              đ
+                            </strong>{" "}
+                            trong 12 giờ
+                          </div>
+                        </>
+                      )}
                   </Link>
 
                   <div
@@ -457,7 +492,8 @@ export default function MyBookingsPage() {
                           whiteSpace: "nowrap",
                         }}
                       >
-                        💰 Thanh toán nốt ({formatPrice(b.remainingAmount || 0)}đ)
+                        💰 Thanh toán nốt ({formatPrice(b.remainingAmount || 0)}
+                        đ)
                       </Link>
                     )}
 
