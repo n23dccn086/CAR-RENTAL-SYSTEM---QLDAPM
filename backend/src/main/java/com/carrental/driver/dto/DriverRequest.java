@@ -1,5 +1,6 @@
 package com.carrental.driver.dto;
 
+import com.fasterxml.jackson.annotation.JsonAlias;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
@@ -15,6 +16,7 @@ import lombok.NoArgsConstructor;
 import lombok.experimental.FieldDefaults;
 
 import java.time.LocalDate;
+import java.util.List;
 
 /**
  * Request DTO cho tạo/cập nhật tài xế.
@@ -40,18 +42,26 @@ public class DriverRequest {
     String email;
 
     @Pattern(regexp = "^[0-9]{12}$", message = "Số CCCD phải 12 số")
+    @JsonAlias({"cccd_number", "cccdNumber", "cccd"})
     String cccd;
 
     @NotBlank(message = "Số GPLX không được để trống")
     @Size(max = 30, message = "Số GPLX tối đa 30 ký tự")
+    @JsonAlias({"gplx_number", "gplxNumber", "licenseNumber", "license_number"})
     String licenseNumber;
 
     @NotBlank(message = "Hạng GPLX không được để trống")
     @Pattern(regexp = "^(B1|B2|C|D|E)$", message = "Hạng GPLX phải là B1, B2, C, D hoặc E")
+    @JsonAlias({"gplx_class", "gplxClass", "licenseClass", "license_class"})
     String licenseClass;
 
+    @JsonAlias({"gplx_expiry_date", "gplxExpiryDate", "licenseExpiry", "license_expiry"})
     LocalDate licenseExpiry;
 
+    @JsonAlias({"gplx_issue_date", "gplxIssueDate", "licenseIssueDate"})
+    LocalDate gplxIssueDate;
+
+    @JsonAlias({"date_of_birth", "dateOfBirth"})
     LocalDate dateOfBirth;
 
     @Size(max = 255, message = "Địa chỉ tối đa 255 ký tự")
@@ -59,8 +69,15 @@ public class DriverRequest {
 
     @Min(value = 0, message = "Số năm kinh nghiệm không được âm")
     @Max(value = 50, message = "Số năm kinh nghiệm tối đa 50")
+    @JsonAlias({"experience_years", "experienceYears"})
     Integer experienceYears;
 
     @Size(max = 500, message = "URL avatar tối đa 500 ký tự")
     String avatarUrl;
+
+    @JsonAlias({"vehicle_types", "vehicleTypes"})
+    List<String> vehicleTypes;
+
+    @JsonAlias({"operating_area", "operatingArea"})
+    String operatingArea;
 }

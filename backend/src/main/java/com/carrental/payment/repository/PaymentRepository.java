@@ -17,6 +17,9 @@ public interface PaymentRepository extends JpaRepository<Payment, Long> {
 
     List<Payment> findByCustomerIdOrderByCreatedAtDesc(Long customerId);
 
+    org.springframework.data.domain.Page<Payment> findByCustomerIdOrderByCreatedAtDesc(
+            Long customerId, org.springframework.data.domain.Pageable pageable);
+
     List<Payment> findByStatus(PaymentStatus status);
 
     Optional<Payment> findByBookingIdAndStatus(Long bookingId, PaymentStatus status);

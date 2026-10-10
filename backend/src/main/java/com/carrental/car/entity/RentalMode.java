@@ -12,4 +12,14 @@ public enum RentalMode {
     BOTH("Cả hai");
 
     private final String description;
+
+    @com.fasterxml.jackson.annotation.JsonCreator
+    public static RentalMode fromString(String value) {
+        if (value == null) return null;
+        String normalized = value.trim().toUpperCase().replace("-", "_");
+        for (RentalMode mode : values()) {
+            if (mode.name().equals(normalized)) return mode;
+        }
+        return SELF_DRIVE;
+    }
 }

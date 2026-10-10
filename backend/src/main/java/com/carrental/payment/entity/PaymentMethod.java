@@ -13,4 +13,15 @@ public enum PaymentMethod {
     BANKING("Thẻ ngân hàng");
 
     private final String description;
+
+    @com.fasterxml.jackson.annotation.JsonCreator
+    public static PaymentMethod fromString(String value) {
+        if (value == null || value.isBlank()) return null;
+        for (PaymentMethod m : PaymentMethod.values()) {
+            if (m.name().equalsIgnoreCase(value.trim())) {
+                return m;
+            }
+        }
+        return MOMO;
+    }
 }

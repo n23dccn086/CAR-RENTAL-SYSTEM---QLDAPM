@@ -17,8 +17,13 @@ public interface AdminDisputeService {
 
     DisputeResponse approveAgainst(Long disputeId, Long adminId);
 
+    org.springframework.data.domain.Page<DisputeResponse> getDisputesPaged(String status, org.springframework.data.domain.Pageable pageable);
+
     DisputeResponse resolveDispute(Long disputeId, Long adminId,
             String resolution, BigDecimal resolvedAmount);
+
+    DisputeResponse resolveDispute(Long disputeId, Long adminId,
+            com.carrental.admin.dto.ResolveDisputeRequest request);
 
     DisputeResponse requestEvidence(Long disputeId, Long adminId, String target, String request);
 

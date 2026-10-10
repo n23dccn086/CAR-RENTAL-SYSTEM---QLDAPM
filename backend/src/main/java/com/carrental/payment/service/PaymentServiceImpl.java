@@ -124,6 +124,13 @@ public class PaymentServiceImpl implements PaymentService {
         return payments.stream().map(this::buildResponse).toList();
     }
 
+    @Override
+    public org.springframework.data.domain.Page<PaymentResponse> getMyPaymentsPaged(
+            Long customerId, org.springframework.data.domain.Pageable pageable) {
+        return paymentRepository.findByCustomerIdOrderByCreatedAtDesc(customerId, pageable)
+                .map(this::buildResponse);
+    }
+
     // ===== CALLBACK =====
 
     @Override

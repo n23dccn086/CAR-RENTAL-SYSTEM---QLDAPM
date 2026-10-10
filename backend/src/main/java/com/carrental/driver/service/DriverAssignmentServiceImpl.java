@@ -191,6 +191,116 @@ public class DriverAssignmentServiceImpl implements DriverAssignmentService {
         return saved;
     }
 
+    // ===== CONTRACT 7.3: OWNER MANUAL ASSIGN =====
+
+    @Override
+    @Transactional
+    public DriverAssignment manualAssignDriver(Long ownerId, Long driverId, Long bookingId, Long carId) {
+        log.info("Owner {} manually assigning driver {} to booking {}", ownerId, driverId, bookingId);
+
+        Booking booking = bookingRepository.findById(bookingId)
+                .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.BOOKING_NOT_FOUND));
+
+        if (!booking.getOwnerId().equals(ownerId)) {
+            throw new UnauthorizedException(ErrorCode.PERMISSION_DENIED, "Bạn không phải chủ xe của đơn này");
+        }
+
+        Driver driver = driverRepository.findById(driverId)
+                .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.DRIVER_NOT_FOUND));
+
+        if (!driver.getOwnerId().equals(ownerId)) {
+            throw new UnauthorizedException(ErrorCode.PERMISSION_DENIED, "Tài xế này không thuộc quyền quản lý của bạn");
+        }
+
+        if (carId != null && !booking.getCarId().equals(carId)) {
+            booking.setCarId(carId);
+        }
+
+        // Hủy các assignment đang chờ trước đó của booking này (nếu có)
+        List<DriverAssignment> existing = assignmentRepository.findByBookingIdOrderByCreatedAtDesc(bookingId);
+        for (DriverAssignment a : existing) {
+            if (a.getStatus() == AssignmentStatus.PENDING) {
+                a.setStatus(AssignmentStatus.CANCELLED);
+                assignmentRepository.save(a);
+            }
+        }
+
+        DriverAssignment assignment = createAssignment(booking, driver, existing.size() + 1);
+        DriverAssignment saved = assignmentRepository.save(assignment);
+
+        booking.setDriverId(driverId);
+        bookingRepository.save(booking);
+
+        sendAssignmentNotification(saved, booking, driver);
+        return saved;
+    }
+
+    @Override
+    @Transactional
+    public DriverAssignment acceptAssignmentByDriver(Long assignmentId, Long driverUserId, String token) {
+        log.info("Accept assignment by driver: id={}, driverUserId={}, token={}", assignmentId, driverUserId, token);
+
+        DriverAssignment assignment = assignmentRepository.findById(assignmentId)
+                .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.VALIDATION_ERROR));
+
+        if (token != null && !token.isBlank()) {
+            if (!token.equals(assignment.getToken())) {
+                throw new UnauthorizedException(ErrorCode.PERMISSION_DENIED, "Token không hợp lệ");
+            }
+        }
+
+        if (assignment.getStatus() != AssignmentStatus.PENDING) {
+            throw new BadRequestException(ErrorCode.VALIDATION_ERROR, "Assignment đã được xử lý");
+        }
+
+        assignment.setStatus(AssignmentStatus.ACCEPTED);
+        assignment.setRespondedAt(LocalDateTime.now());
+        assignmentRepository.save(assignment);
+
+        Booking booking = bookingRepository.findById(assignment.getBookingId())
+                .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.BOOKING_NOT_FOUND));
+
+        booking.setDriverId(assignment.getDriverId());
+        if (booking.getStatus() == BookingStatus.PAID) {
+            booking.setStatus(BookingStatus.APPROVED);
+        }
+        bookingRepository.save(booking);
+
+        Driver driver = driverRepository.findById(assignment.getDriverId()).orElse(null);
+        if (driver != null) {
+            driver.setStatus(DriverStatus.BUSY);
+            driverRepository.save(driver);
+        }
+
+        return assignment;
+    }
+
+    @Override
+    @Transactional
+    public DriverAssignment rejectAssignmentByDriver(Long assignmentId, Long driverUserId, String token, String reason) {
+        log.info("Reject assignment by driver: id={}, reason={}", assignmentId, reason);
+
+        DriverAssignment assignment = assignmentRepository.findById(assignmentId)
+                .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.VALIDATION_ERROR));
+
+        if (token != null && !token.isBlank()) {
+            if (!token.equals(assignment.getToken())) {
+                throw new UnauthorizedException(ErrorCode.PERMISSION_DENIED, "Token không hợp lệ");
+            }
+        }
+
+        if (assignment.getStatus() != AssignmentStatus.PENDING) {
+            throw new BadRequestException(ErrorCode.VALIDATION_ERROR, "Assignment đã được xử lý");
+        }
+
+        assignment.setStatus(AssignmentStatus.REJECTED);
+        assignment.setRejectReason(reason != null ? reason : "Bận việc đột xuất");
+        assignment.setRespondedAt(LocalDateTime.now());
+        assignmentRepository.save(assignment);
+
+        return assignment;
+    }
+
     // ===== ACCEPT / REJECT / EXPIRE =====
 
     @Override

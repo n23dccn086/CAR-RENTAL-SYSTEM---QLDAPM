@@ -29,8 +29,11 @@ public class PaymentController {
 
     // ===== CREATE =====
 
+    /**
+     * Contract 5.1: POST /payments
+     */
     @PostMapping
-    public ApiResponse<PaymentResponse> createPayment(
+    public ApiResponse<Object> createPayment(
             @Valid @RequestBody PaymentRequest request,
             HttpServletRequest httpRequest) {
 
@@ -39,11 +42,26 @@ public class PaymentController {
                 customerId, request.getBookingId());
 
         PaymentResponse response = paymentService.createPayment(customerId, request);
-        return ApiResponse.success("Tạo giao dịch thành công. Vui lòng thanh toán.", response);
+
+        java.util.Map<String, Object> data = new java.util.LinkedHashMap<>();
+        data.put("id", response.getId());
+        data.put("payment_id", response.getId());
+        data.put("transaction_id", response.getTransactionId());
+        data.put("payment_url", response.getPaymentUrl());
+        data.put("qr_code", response.getQr_code());
+        data.put("expires_at", response.getExpires_at());
+        data.put("booking_id", response.getBookingId());
+        data.put("amount", response.getAmount());
+        data.put("status", response.getStatus());
+
+        return ApiResponse.success("Tạo giao dịch thành công. Vui lòng thanh toán.", data);
     }
 
     // ===== READ =====
 
+    /**
+     * Contract 5.3: GET /payments/:id
+     */
     @GetMapping("/{id}")
     public ApiResponse<PaymentResponse> getPaymentById(@PathVariable Long id) {
         log.info("REST request to get payment: {}", id);
@@ -56,20 +74,66 @@ public class PaymentController {
         return ApiResponse.success(paymentService.getPaymentsByBooking(bookingId));
     }
 
+    /**
+     * Contract 5.4: GET /payments/my?page=1&limit=20
+     */
     @GetMapping("/my")
-    public ApiResponse<List<PaymentResponse>> getMyPayments(HttpServletRequest httpRequest) {
+    public ApiResponse<Object> getMyPayments(
+            HttpServletRequest httpRequest,
+            @RequestParam(required = false) Integer page,
+            @RequestParam(required = false) Integer limit) {
         Long customerId = extractUserId(httpRequest);
-        log.info("REST request to get my payments: customerId={}", customerId);
-        return ApiResponse.success(paymentService.getMyPayments(customerId));
+        log.info("REST request to get my payments: customerId={}, page={}, limit={}",
+                customerId, page, limit);
+
+        int pageNum = page != null ? (page > 0 ? page - 1 : 0) : 0;
+        int pageSize = limit != null ? limit : 20;
+
+        org.springframework.data.domain.Pageable pageable =
+                org.springframework.data.domain.PageRequest.of(
+                        pageNum, pageSize, org.springframework.data.domain.Sort.by(
+                                org.springframework.data.domain.Sort.Direction.DESC, "createdAt"));
+
+        org.springframework.data.domain.Page<PaymentResponse> paged =
+                paymentService.getMyPaymentsPaged(customerId, pageable);
+
+        java.util.Map<String, Object> data = new java.util.LinkedHashMap<>();
+        data.put("payments", paged.getContent());
+        data.put("content", paged.getContent());
+
+        java.util.Map<String, Object> pagination = new java.util.LinkedHashMap<>();
+        pagination.put("page", paged.getNumber() + 1);
+        pagination.put("limit", paged.getSize());
+        pagination.put("total", paged.getTotalElements());
+        pagination.put("total_pages", paged.getTotalPages());
+        data.put("pagination", pagination);
+
+        return ApiResponse.success(data);
     }
 
     // ===== CALLBACK =====
 
+    /**
+     * Contract 5.2: POST /payments/callback/:gateway
+     */
+    @PostMapping("/callback/{gateway}")
+    public ApiResponse<Object> gatewayCallback(
+            @PathVariable String gateway,
+            @RequestBody(required = false) String callbackData) {
+        log.info("REST: Gateway {} callback received: {}", gateway, callbackData);
+        if ("momo".equalsIgnoreCase(gateway) && callbackData != null) {
+            paymentService.handleMomoCallback(callbackData);
+        }
+        return ApiResponse.success("OK");
+    }
+
     @PostMapping("/callback/momo")
-    public ApiResponse<PaymentResponse> momoCallback(@RequestBody String callbackData) {
+    public ApiResponse<Object> momoCallback(@RequestBody(required = false) String callbackData) {
         log.info("Momo callback received: {}", callbackData);
-        return ApiResponse.success("Callback processed",
-                paymentService.handleMomoCallback(callbackData));
+        if (callbackData != null) {
+            paymentService.handleMomoCallback(callbackData);
+        }
+        return ApiResponse.success("OK");
     }
 
     /**

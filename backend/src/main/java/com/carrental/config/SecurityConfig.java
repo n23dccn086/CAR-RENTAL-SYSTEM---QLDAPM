@@ -43,7 +43,11 @@ public class SecurityConfig {
                         "/api/v1/uploads/**",
                         "/uploads/**",
                         "/api/v1/driver/assignments/**",
-                        "/driver/assignments/**"
+                        "/driver/assignments/**",
+                        "/v3/api-docs/**", "/api/v1/v3/api-docs/**",
+                        "/swagger-ui/**", "/api/v1/swagger-ui/**",
+                        "/swagger-ui.html", "/api/v1/swagger-ui.html",
+                        "/openapi.yaml", "/api/v1/openapi.yaml"
                 )
                 .csrf(AbstractHttpConfigurer::disable)
                 .cors(cors -> cors.configurationSource(corsConfigurationSource()))

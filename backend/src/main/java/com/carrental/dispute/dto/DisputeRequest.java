@@ -1,5 +1,6 @@
 package com.carrental.dispute.dto;
 
+import com.fasterxml.jackson.annotation.JsonAlias;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
@@ -16,7 +17,11 @@ import java.math.BigDecimal;
 public class DisputeRequest {
 
     @NotNull(message = "ID đơn hàng không được để trống")
+    @JsonAlias({"booking_id", "bookingId"})
     Long bookingId;
+
+    @JsonAlias({"against_user_id", "against_user", "againstUserId", "againstUser"})
+    Long againstUserId;
 
     @NotBlank(message = "Danh mục không được để trống")
     @Size(max = 30, message = "Danh mục không quá 30 ký tự")
@@ -28,5 +33,6 @@ public class DisputeRequest {
 
     String evidence;         // JSON string: [{url, note}]
 
+    @JsonAlias({"claimed_amount", "claimedAmount"})
     BigDecimal claimedAmount;  // Số tiền yêu cầu bồi thường
 }

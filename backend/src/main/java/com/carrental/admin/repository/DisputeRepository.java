@@ -28,4 +28,12 @@ public interface DisputeRepository extends JpaRepository<Dispute, Long> {
 
     /** Tìm dispute đang chờ bổ sung và đã hết hạn */
     List<Dispute> findByStatusAndReviewDeadlineAtBefore(String status, LocalDateTime deadline);
+
+    org.springframework.data.domain.Page<Dispute> findByRaisedByOrderByCreatedAtDesc(Long raisedBy, org.springframework.data.domain.Pageable pageable);
+
+    org.springframework.data.domain.Page<Dispute> findByRaisedByAndStatusOrderByCreatedAtDesc(Long raisedBy, String status, org.springframework.data.domain.Pageable pageable);
+
+    org.springframework.data.domain.Page<Dispute> findByStatusOrderByCreatedAtDesc(String status, org.springframework.data.domain.Pageable pageable);
+
+    org.springframework.data.domain.Page<Dispute> findAllByOrderByCreatedAtDesc(org.springframework.data.domain.Pageable pageable);
 }

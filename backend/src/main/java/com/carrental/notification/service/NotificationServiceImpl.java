@@ -50,6 +50,26 @@ public class NotificationServiceImpl implements NotificationService {
     }
 
     @Override
+    public org.springframework.data.domain.Page<NotificationResponse> getMyNotificationsPaged(
+            Long userId, boolean unreadOnly, NotificationType type, org.springframework.data.domain.Pageable pageable) {
+        org.springframework.data.domain.Page<Notification> pageResult;
+        if (unreadOnly) {
+            if (type != null) {
+                pageResult = notificationRepository.findByUserIdAndTypeAndIsReadFalseOrderByCreatedAtDesc(userId, type, pageable);
+            } else {
+                pageResult = notificationRepository.findByUserIdAndIsReadFalseOrderByCreatedAtDesc(userId, pageable);
+            }
+        } else {
+            if (type != null) {
+                pageResult = notificationRepository.findByUserIdAndTypeOrderByCreatedAtDesc(userId, type, pageable);
+            } else {
+                pageResult = notificationRepository.findByUserIdOrderByCreatedAtDesc(userId, pageable);
+            }
+        }
+        return pageResult.map(notificationMapper::toResponse);
+    }
+
+    @Override
     public long countUnread(Long userId) {
         return notificationRepository.countByUserIdAndIsReadFalse(userId);
     }

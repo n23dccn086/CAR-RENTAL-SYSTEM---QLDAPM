@@ -40,6 +40,16 @@ server:
   servlet:
     context-path: /api/v1
 
+springdoc:
+  api-docs:
+    path: /v3/api-docs
+    enabled: true
+  swagger-ui:
+    path: /swagger-ui.html
+    enabled: true
+    operations-sorter: alpha
+    tags-sorter: alpha
+
 jwt:
   secret: Y2FyLXJlbnRhbC1zeXN0ZW0tc3VwZXItc2VjcmV0LWtleS0yMDI2LTI1Ni1iaXRz
   expiration: 3600000

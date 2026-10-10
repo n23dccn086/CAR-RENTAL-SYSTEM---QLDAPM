@@ -55,8 +55,8 @@ export default function DisputesPage() {
         api.get("/disputes/my"),
         api.get("/disputes/against-me"),
       ]);
-      setDisputes(myRes.data.data || []);
-      setAgainstMe(againstRes.data.data || []);
+      setDisputes(Array.isArray(myRes.data.data) ? myRes.data.data : (myRes.data.data?.disputes || []));
+      setAgainstMe(Array.isArray(againstRes.data.data) ? againstRes.data.data : (againstRes.data.data?.disputes || []));
     } catch (err) {
       console.error(err);
     } finally {

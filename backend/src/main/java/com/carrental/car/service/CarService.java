@@ -1,8 +1,11 @@
 package com.carrental.car.service;
 
+import com.carrental.car.dto.BlockedDateRequest;
+import com.carrental.car.dto.CarPricingRequest;
 import com.carrental.car.dto.CarRequest;
 import com.carrental.car.dto.CarResponse;
 import com.carrental.car.entity.Car;
+import com.carrental.car.entity.CarBlockedDate;
 import com.carrental.car.entity.CarStatus;
 import com.carrental.car.entity.CarType;
 import org.springframework.data.domain.Page;
@@ -10,7 +13,9 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
+import java.time.LocalDate;
 import java.util.List;
+import java.util.Map;
 
 public interface CarService {
 
@@ -23,6 +28,8 @@ public interface CarService {
     List<CarResponse> getAllCars();
 
     List<CarResponse> getCarsByOwner(Long ownerId);
+
+    Page<CarResponse> getCarsByOwner(Long ownerId, String status, Pageable pageable);
 
     CarResponse updateCar(Long id, Long ownerId, CarRequest request);
 
@@ -38,9 +45,26 @@ public interface CarService {
 
     List<String> uploadImages(Long carId, Long ownerId, MultipartFile[] files) throws IOException;
 
+    List<Map<String, Object>> uploadImagesWithTypes(Long carId, Long ownerId, MultipartFile[] files, String[] imageTypes) throws IOException;
+
     List<String> getCarImages(Long carId);
 
     void deleteImage(Long carId, Long ownerId, String imageUrl);
+
+    // ============================================================
+    // 3.7 UPLOAD GIẤY TỜ XE (POST /cars/:id/documents)
+    // ============================================================
+    List<Map<String, Object>> uploadDocuments(Long carId, Long ownerId, Map<String, MultipartFile> docFiles) throws IOException;
+
+    // ============================================================
+    // 3.8 CẤU HÌNH GIÁ XE (PUT /cars/:id/pricing)
+    // ============================================================
+    CarResponse configurePricing(Long carId, Long ownerId, CarPricingRequest request);
+
+    // ============================================================
+    // 3.9 CHẶN LỊCH XE (POST /cars/:id/blocked-dates)
+    // ============================================================
+    CarBlockedDate blockDates(Long carId, Long ownerId, BlockedDateRequest request);
 
     // ============================================================
     // PUBLIC SEARCH
@@ -49,6 +73,20 @@ public interface CarService {
             String location,
             List<Integer> seats,
             String carType,
+            Pageable pageable);
+
+    Page<CarResponse> searchAvailableCarsFull(
+            String location,
+            String brand,
+            String carType,
+            String transmission,
+            String fuelType,
+            String rentalMode,
+            List<Integer> seats,
+            Long minPrice,
+            Long maxPrice,
+            LocalDate startDate,
+            LocalDate endDate,
             Pageable pageable);
 
     // ============================================================
@@ -63,8 +101,7 @@ public interface CarService {
             Pageable pageable);
 
     // ============================================================
-    // ★ MỚI: OWNER — ĐỔI TRẠNG THÁI XE
-    // Chỉ cho phép: AVAILABLE, MAINTENANCE, BROKEN, INACTIVE
+    // OWNER — ĐỔI TRẠNG THÁI XE
     // ============================================================
     CarResponse updateCarStatus(Long carId, Long ownerId, String newStatus);
 }

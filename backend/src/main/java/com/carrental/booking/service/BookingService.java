@@ -15,11 +15,17 @@ public interface BookingService {
 
     BookingResponse getBookingById(Long id);
 
+    BookingResponse getBookingById(Long id, Long requesterId);
+
     Booking getBookingEntityById(Long id);
 
     List<BookingResponse> getMyBookings(Long customerId);
 
+    List<BookingResponse> getMyBookings(Long customerId, String status);
+
     List<BookingResponse> getOwnerBookings(Long ownerId);
+
+    List<BookingResponse> getOwnerBookings(Long ownerId, String status);
 
     // ===== ACTIONS =====
 
@@ -34,6 +40,8 @@ public interface BookingService {
     BookingResponse startRental(Long id, Long ownerId);
 
     BookingResponse completeRental(Long id, Long ownerId);
+
+    BookingResponse updateStatus(Long id, Long requesterId, String status, String note);
 
     // ===== SEARCH =====
 

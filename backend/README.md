@@ -81,12 +81,26 @@ Khi thấy dòng log `Tomcat started on port(s): 8080 (http) with context path '
 
 ---
 
+## 📖 Tài liệu API Chuẩn OpenAPI 3.0 & Swagger UI
+
+Backend tích hợp sẵn chuẩn **OpenAPI 3.0** và **Swagger UI** tương thích 100% với tài liệu đặc tả SRS `CAR RENTAL SYSTEM-QLDAPM.pdf` (64 endpoints thuộc 14 modules):
+
+* **Swagger UI Trực quan:** [http://localhost:8080/api/v1/swagger-ui.html](http://localhost:8080/api/v1/swagger-ui.html)
+* **OpenAPI 3.0 JSON Schema:** [http://localhost:8080/api/v1/v3/api-docs](http://localhost:8080/api/v1/v3/api-docs)
+* **OpenAPI 3.0 YAML Static Spec:** [http://localhost:8080/api/v1/openapi.yaml](http://localhost:8080/api/v1/openapi.yaml) (hoặc xem trực tiếp file [`openapi.yaml`](file:///d:/school/CAR-RENTAL-SYSTEM---QLDAPM/openapi.yaml) tại thư mục gốc của dự án)
+
+---
+
 ## 📡 Danh mục REST API Endpoints cốt lõi
 
-### 1. Xác thực & Tài khoản (`/api/v1/auth`)
-* `POST /auth/register`: Đăng ký tài khoản (mặc định Role `CUSTOMER`)
+### 1. Xác thực & Tài khoản (`/api/v1/auth` & `/api/v1/users`)
+* `POST /auth/register`: Đăng ký tài khoản (Role `CUSTOMER` hoặc `OWNER`), trả về Token + Refresh Token
 * `POST /auth/login`: Đăng nhập, trả về Access Token + Refresh Token
-* `POST /auth/refresh`: Cấp lại Access Token mới từ Refresh Token
+* `POST /auth/refresh`: Cấp lại Access Token mới từ Refresh Token (hỗ trợ JSON body `refresh_token` & param)
+* `POST /auth/logout`: Thu hồi phiên đăng nhập và đăng xuất
+* `GET /auth/me` & `GET /users/me`: Lấy thông tin tài khoản hiện tại
+* `PUT /auth/me` & `PUT /users/me`: Cập nhật hồ sơ cá nhân
+* `POST /auth/change-password` & `POST /users/change-password`: Đổi mật khẩu
 * `POST /auth/forgot-password`: Yêu cầu gửi OTP khôi phục mật khẩu (in ra console)
 * `POST /auth/reset-password`: Xác thực OTP và đặt lại mật khẩu mới
 

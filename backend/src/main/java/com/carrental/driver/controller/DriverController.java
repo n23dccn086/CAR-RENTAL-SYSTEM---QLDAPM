@@ -28,41 +28,119 @@ import java.util.List;
 public class DriverController {
 
     DriverService driverService;
+    com.carrental.driver.service.DriverAssignmentService assignmentService;
 
     // ===== OWNER =====
 
+    /**
+     * Contract 7.1: POST /drivers
+     */
     @PostMapping
+    @ResponseStatus(org.springframework.http.HttpStatus.CREATED)
     public ApiResponse<DriverResponse> createDriver(
             @RequestAttribute("userId") Long ownerId,
             @Valid @RequestBody DriverRequest request) {
         log.info("REST: Create driver for owner: {}", ownerId);
-        return ApiResponse.success("Tạo tài xế thành công",
+        return ApiResponse.success("Tài xế đã được tạo, chờ Admin duyệt",
                 driverService.createDriver(ownerId, request));
     }
 
+    /**
+     * Contract 7.2: GET /drivers/my?status=available&page=1&limit=20
+     */
     @GetMapping("/my")
-    public ApiResponse<Page<DriverResponse>> getMyDrivers(
+    public ApiResponse<Object> getMyDrivers(
             @RequestAttribute("userId") Long ownerId,
             @RequestParam(required = false) String status,
             @RequestParam(required = false) String search,
             @RequestParam(defaultValue = "createdAt,desc") String sort,
-            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(required = false) Integer page,
+            @RequestParam(required = false) Integer limit,
             @RequestParam(defaultValue = "10") int size) {
 
+        int pageNum = page != null ? (page > 0 ? page - 1 : 0) : 0;
+        int pageSize = limit != null ? limit : size;
+
         log.info("REST: Get my drivers: ownerId={}, status={}, search={}, sort={}, page={}, size={}",
-                ownerId, status, search, sort, page, size);
+                ownerId, status, search, sort, pageNum, pageSize);
 
         String[] sortParts = sort.split(",");
         Sort.Direction direction = sortParts.length > 1 && sortParts[1].equalsIgnoreCase("desc")
                 ? Sort.Direction.DESC : Sort.Direction.ASC;
         String sortField = mapSortField(sortParts[0]);
 
-        Pageable pageable = PageRequest.of(page, size, Sort.by(direction, sortField));
+        Pageable pageable = PageRequest.of(pageNum, pageSize, Sort.by(direction, sortField));
 
         Page<DriverResponse> drivers = driverService.searchOwnerDrivers(
                 ownerId, status, search, pageable);
 
-        return ApiResponse.success(drivers);
+        java.util.Map<String, Object> data = new java.util.LinkedHashMap<>();
+        data.put("drivers", drivers.getContent());
+        data.put("content", drivers.getContent());
+        data.put("totalElements", drivers.getTotalElements());
+        data.put("totalPages", drivers.getTotalPages());
+        data.put("number", drivers.getNumber());
+        data.put("size", drivers.getSize());
+
+        java.util.Map<String, Object> pagination = new java.util.LinkedHashMap<>();
+        pagination.put("page", drivers.getNumber() + 1);
+        pagination.put("limit", drivers.getSize());
+        pagination.put("total", drivers.getTotalElements());
+        pagination.put("total_pages", drivers.getTotalPages());
+        data.put("pagination", pagination);
+
+        return ApiResponse.success(data);
+    }
+
+    /**
+     * Contract 7.3: POST /drivers/assign
+     */
+    @PostMapping("/assign")
+    public ApiResponse<Object> assignDriver(
+            @RequestAttribute("userId") Long ownerId,
+            @jakarta.validation.Valid @RequestBody com.carrental.driver.dto.DriverAssignRequest request) {
+        log.info("REST: Owner {} assign driver: {}", ownerId, request);
+        com.carrental.driver.entity.DriverAssignment assignment = assignmentService.manualAssignDriver(
+                ownerId, request.getDriverId(), request.getBookingId(), request.getCarId());
+
+        java.util.Map<String, Object> data = new java.util.LinkedHashMap<>();
+        data.put("assignment_id", assignment.getId());
+        data.put("driver_id", assignment.getDriverId());
+        data.put("booking_id", assignment.getBookingId());
+        data.put("status", "assigned");
+        return ApiResponse.success("Đã gán tài xế vào chuyến", data);
+    }
+
+    /**
+     * Contract 7.4: POST /drivers/assignments/:id/accept
+     */
+    @PostMapping("/assignments/{id}/accept")
+    public ApiResponse<Object> acceptAssignment(
+            @PathVariable Long id,
+            @RequestAttribute(value = "userId", required = false) Long driverUserId,
+            @RequestParam(value = "token", required = false) String token) {
+        log.info("REST: Driver accept assignment: id={}, user={}, token={}", id, driverUserId, token);
+        assignmentService.acceptAssignmentByDriver(id, driverUserId, token);
+        return ApiResponse.success("Tài xế đã nhận chuyến", java.util.Map.of("status", "accepted"));
+    }
+
+    /**
+     * Contract 7.5: POST /drivers/assignments/:id/reject
+     */
+    @PostMapping("/assignments/{id}/reject")
+    public ApiResponse<Object> rejectAssignment(
+            @PathVariable Long id,
+            @RequestAttribute(value = "userId", required = false) Long driverUserId,
+            @RequestParam(value = "token", required = false) String token,
+            @RequestParam(value = "reason", required = false) String queryReason,
+            @RequestBody(required = false) java.util.Map<String, String> body) {
+        String reason = queryReason;
+        if (reason == null && body != null && body.containsKey("reason")) {
+            reason = body.get("reason");
+        }
+        log.info("REST: Driver reject assignment: id={}, user={}, reason={}", id, driverUserId, reason);
+        assignmentService.rejectAssignmentByDriver(id, driverUserId, token, reason);
+        return ApiResponse.success("Tài xế đã từ chối chuyến", java.util.Map.of("status", "rejected"));
     }
 
     @GetMapping("/{id}")

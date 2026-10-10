@@ -24,23 +24,40 @@ public class NotificationController {
 
     // ===== READ =====
 
+    /**
+     * Contract 13.1: GET /notifications?unread_only=true&page=1&limit=20
+     */
     @GetMapping
-    public ApiResponse<List<NotificationResponse>> getMyNotifications(
+    public ApiResponse<Object> getMyNotifications(
             @RequestAttribute("userId") Long userId,
             @RequestParam(required = false) NotificationType type,
-            @RequestParam(required = false) Boolean unreadOnly) {
+            @RequestParam(required = false) Boolean unreadOnly,
+            @RequestParam(value = "unread_only", required = false) Boolean unread_only,
+            @RequestParam(required = false) Integer page,
+            @RequestParam(required = false) Integer limit) {
 
-        if (Boolean.TRUE.equals(unreadOnly)) {
-            return ApiResponse.success(
-                    notificationService.getMyUnreadNotifications(userId));
-        }
+        boolean isUnreadOnly = Boolean.TRUE.equals(unreadOnly) || Boolean.TRUE.equals(unread_only);
+        int pageNum = page != null ? (page > 0 ? page - 1 : 0) : 0;
+        int pageSize = limit != null ? limit : 20;
 
-        if (type != null) {
-            return ApiResponse.success(
-                    notificationService.getMyNotificationsByType(userId, type));
-        }
+        org.springframework.data.domain.Pageable pageable =
+                org.springframework.data.domain.PageRequest.of(
+                        pageNum, pageSize, org.springframework.data.domain.Sort.by(
+                                org.springframework.data.domain.Sort.Direction.DESC, "createdAt"));
 
-        return ApiResponse.success(notificationService.getMyNotifications(userId));
+        org.springframework.data.domain.Page<NotificationResponse> paged =
+                notificationService.getMyNotificationsPaged(userId, isUnreadOnly, type, pageable);
+        long unreadCount = notificationService.countUnread(userId);
+
+        Map<String, Object> data = new java.util.LinkedHashMap<>();
+        data.put("notifications", paged.getContent());
+        data.put("unread_count", unreadCount);
+        data.put("total", paged.getTotalElements());
+        data.put("page", paged.getNumber() + 1);
+        data.put("limit", paged.getSize());
+        data.put("total_pages", paged.getTotalPages());
+
+        return ApiResponse.success(data);
     }
 
     @GetMapping("/unread-count")
@@ -51,6 +68,9 @@ public class NotificationController {
 
     // ===== UPDATE =====
 
+    /**
+     * Contract 13.2: PUT /notifications/:id/read
+     */
     @PutMapping("/{id}/read")
     public ApiResponse<NotificationResponse> markAsRead(
             @PathVariable Long id,
@@ -60,12 +80,15 @@ public class NotificationController {
                 notificationService.markAsRead(id, userId));
     }
 
+    /**
+     * Contract 13.2: PUT /notifications/read-all
+     */
     @PutMapping("/read-all")
     public ApiResponse<Void> markAllAsRead(
             @RequestAttribute("userId") Long userId) {
         log.info("REST: Mark all notifications as read");
         notificationService.markAllAsRead(userId);
-        return ApiResponse.success("Đã đánh dấu tất cả đã đọc", null);
+        return ApiResponse.success("Đã đánh dấu đã đọc", null);
     }
 
     // ===== DELETE =====

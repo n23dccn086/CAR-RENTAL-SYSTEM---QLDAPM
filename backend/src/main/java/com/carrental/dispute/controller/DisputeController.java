@@ -30,19 +30,70 @@ public class DisputeController {
     DisputeService disputeService;
     CounterEvidenceService counterEvidenceService;
 
-    @PostMapping
-    public ApiResponse<DisputeResponse> createDispute(
+    /**
+     * Contract 9.1 (JSON) + Frontend
+     */
+    @PostMapping(consumes = org.springframework.http.MediaType.APPLICATION_JSON_VALUE)
+    @ResponseStatus(org.springframework.http.HttpStatus.CREATED)
+    public ApiResponse<DisputeResponse> createDisputeJson(
             @RequestAttribute("userId") Long userId,
             @Valid @RequestBody DisputeRequest request) {
-        log.info("REST: Create dispute by user: {}", userId);
-        return ApiResponse.success("Gửi tranh chấp thành công",
+        log.info("REST: Create dispute by user (JSON): {}", userId);
+        return ApiResponse.success("Đã gửi tranh chấp",
                 disputeService.createDispute(userId, request));
     }
 
+    /**
+     * Contract 9.1: POST /disputes (multipart/form-data)
+     */
+    @PostMapping(consumes = org.springframework.http.MediaType.MULTIPART_FORM_DATA_VALUE)
+    @ResponseStatus(org.springframework.http.HttpStatus.CREATED)
+    public ApiResponse<DisputeResponse> createDisputeMultipart(
+            @RequestAttribute("userId") Long userId,
+            @RequestParam("booking_id") Long bookingId,
+            @RequestParam(value = "against_user_id", required = false) Long againstUserId,
+            @RequestParam("category") String category,
+            @RequestParam("description") String description,
+            @RequestParam(value = "claimed_amount", required = false) java.math.BigDecimal claimedAmount,
+            @RequestPart(value = "evidence", required = false) List<MultipartFile> evidenceFiles) {
+        log.info("REST: Create dispute by user (multipart): user={}, bookingId={}", userId, bookingId);
+        return ApiResponse.success("Đã gửi tranh chấp",
+                disputeService.createDisputeMultipart(userId, bookingId, againstUserId, category, description, claimedAmount, evidenceFiles));
+    }
+
+    /**
+     * Contract 9.2: GET /disputes/my?status=pending&page=1&limit=10
+     */
     @GetMapping("/my")
-    public ApiResponse<List<DisputeResponse>> getMyDisputes(
-            @RequestAttribute("userId") Long userId) {
-        return ApiResponse.success(disputeService.getMyDisputes(userId));
+    public ApiResponse<Object> getMyDisputes(
+            @RequestAttribute("userId") Long userId,
+            @RequestParam(required = false) String status,
+            @RequestParam(required = false) Integer page,
+            @RequestParam(required = false) Integer limit) {
+        if (page != null || limit != null) {
+            int pageIdx = page != null ? Math.max(0, page - 1) : 0;
+            int pageSize = limit != null ? limit : 10;
+            org.springframework.data.domain.Pageable pageable =
+                    org.springframework.data.domain.PageRequest.of(pageIdx, pageSize);
+            org.springframework.data.domain.Page<DisputeResponse> paged =
+                    disputeService.getMyDisputesPaged(userId, status, pageable);
+
+            java.util.Map<String, Object> data = new java.util.LinkedHashMap<>();
+            data.put("disputes", paged.getContent());
+            java.util.Map<String, Object> pagination = new java.util.LinkedHashMap<>();
+            pagination.put("page", paged.getNumber() + 1);
+            pagination.put("limit", paged.getSize());
+            pagination.put("total", paged.getTotalElements());
+            pagination.put("total_pages", paged.getTotalPages());
+            data.put("pagination", pagination);
+            return ApiResponse.success(data);
+        }
+
+        List<DisputeResponse> list = disputeService.getMyDisputes(userId);
+        if (status != null && !status.isBlank()) {
+            list = list.stream().filter(d -> status.equalsIgnoreCase(d.getStatus())).toList();
+        }
+        return ApiResponse.success(list);
     }
 
     @GetMapping("/against-me")

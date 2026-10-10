@@ -35,4 +35,8 @@ public class DriverAssignmentResponse {
     String customerName;
 
     LocalDateTime createdAt;
+
+    public Long getAssignment_id() { return id; }
+    public Long getDriver_id() { return driverId; }
+    public Long getBooking_id() { return bookingId; }
 }

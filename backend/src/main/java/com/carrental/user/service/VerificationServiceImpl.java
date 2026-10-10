@@ -6,6 +6,7 @@ import com.carrental.common.exception.ResourceNotFoundException;
 import com.carrental.common.service.FileStorageService;
 import com.carrental.notification.entity.NotificationType;
 import com.carrental.notification.service.NotificationService;
+import com.carrental.user.dto.SubmitVerificationRequest;
 import com.carrental.user.dto.VerificationResponse;
 import com.carrental.user.entity.Role;
 import com.carrental.user.entity.User;
@@ -23,7 +24,9 @@ import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 
 @Service
 @RequiredArgsConstructor
@@ -44,7 +47,282 @@ public class VerificationServiceImpl implements VerificationService {
             "GPLX_FRONT", "GPLX_BACK", "CCCD_FRONT", "CCCD_BACK", "SELFIE"
     );
 
-    // ===== UPLOAD =====
+    // ============================================================
+    // CONTRACT 2.2: UPLOAD GPLX
+    // ============================================================
+
+    @Override
+    @Transactional
+    public Map<String, Object> uploadGplx(Long userId, MultipartFile gplxFront, MultipartFile gplxBack,
+                                          String gplxNumber, String gplxClass) throws IOException {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.USER_NOT_FOUND));
+
+        if (user.getVerificationStatus() == VerificationStatus.VERIFIED) {
+            throw new BadRequestException(ErrorCode.VALIDATION_ERROR,
+                    "Tài khoản đã được xác thực, không thể upload lại");
+        }
+
+        if (gplxFront == null || gplxFront.isEmpty() || gplxBack == null || gplxBack.isEmpty()) {
+            throw new BadRequestException(ErrorCode.VALIDATION_ERROR,
+                    "Vui lòng cung cấp cả ảnh mặt trước và mặt sau GPLX");
+        }
+
+        // Delete old GPLX docs
+        List<UserDocument> oldDocs = documentRepository.findByUserId(userId).stream()
+                .filter(d -> "GPLX_FRONT".equalsIgnoreCase(d.getDocumentType())
+                        || "GPLX_BACK".equalsIgnoreCase(d.getDocumentType()))
+                .toList();
+        for (UserDocument old : oldDocs) {
+            try {
+                fileStorageService.deleteFile(old.getDocumentUrl());
+            } catch (Exception e) {
+                log.warn("Cannot delete old file: {}", e.getMessage());
+            }
+            documentRepository.delete(old);
+        }
+
+        String frontUrl = fileStorageService.storeFile(gplxFront, "verification/" + userId);
+        String backUrl = fileStorageService.storeFile(gplxBack, "verification/" + userId);
+
+        UserDocument docFront = documentRepository.save(UserDocument.builder()
+                .userId(userId)
+                .documentType("GPLX_FRONT")
+                .documentUrl(frontUrl)
+                .build());
+
+        UserDocument docBack = documentRepository.save(UserDocument.builder()
+                .userId(userId)
+                .documentType("GPLX_BACK")
+                .documentUrl(backUrl)
+                .build());
+
+        Map<String, Object> frontMap = new LinkedHashMap<>();
+        frontMap.put("id", docFront.getId());
+        frontMap.put("doc_type", "gplx_front");
+        frontMap.put("document_type", "GPLX_FRONT");
+        frontMap.put("file_url", frontUrl);
+        frontMap.put("document_url", frontUrl);
+
+        Map<String, Object> backMap = new LinkedHashMap<>();
+        backMap.put("id", docBack.getId());
+        backMap.put("doc_type", "gplx_back");
+        backMap.put("document_type", "GPLX_BACK");
+        backMap.put("file_url", backUrl);
+        backMap.put("document_url", backUrl);
+
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("documents", List.of(frontMap, backMap));
+        return result;
+    }
+
+    // ============================================================
+    // CONTRACT 2.3: UPLOAD CCCD
+    // ============================================================
+
+    @Override
+    @Transactional
+    public Map<String, Object> uploadCccd(Long userId, MultipartFile cccdFront, MultipartFile cccdBack,
+                                          String cccdNumber) throws IOException {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.USER_NOT_FOUND));
+
+        if (user.getVerificationStatus() == VerificationStatus.VERIFIED) {
+            throw new BadRequestException(ErrorCode.VALIDATION_ERROR,
+                    "Tài khoản đã được xác thực, không thể upload lại");
+        }
+
+        if (cccdFront == null || cccdFront.isEmpty() || cccdBack == null || cccdBack.isEmpty()) {
+            throw new BadRequestException(ErrorCode.VALIDATION_ERROR,
+                    "Vui lòng cung cấp cả ảnh mặt trước và mặt sau CCCD");
+        }
+
+        // Delete old CCCD docs
+        List<UserDocument> oldDocs = documentRepository.findByUserId(userId).stream()
+                .filter(d -> "CCCD_FRONT".equalsIgnoreCase(d.getDocumentType())
+                        || "CCCD_BACK".equalsIgnoreCase(d.getDocumentType()))
+                .toList();
+        for (UserDocument old : oldDocs) {
+            try {
+                fileStorageService.deleteFile(old.getDocumentUrl());
+            } catch (Exception e) {
+                log.warn("Cannot delete old file: {}", e.getMessage());
+            }
+            documentRepository.delete(old);
+        }
+
+        String frontUrl = fileStorageService.storeFile(cccdFront, "verification/" + userId);
+        String backUrl = fileStorageService.storeFile(cccdBack, "verification/" + userId);
+
+        UserDocument docFront = documentRepository.save(UserDocument.builder()
+                .userId(userId)
+                .documentType("CCCD_FRONT")
+                .documentUrl(frontUrl)
+                .build());
+
+        UserDocument docBack = documentRepository.save(UserDocument.builder()
+                .userId(userId)
+                .documentType("CCCD_BACK")
+                .documentUrl(backUrl)
+                .build());
+
+        Map<String, Object> frontMap = new LinkedHashMap<>();
+        frontMap.put("id", docFront.getId());
+        frontMap.put("doc_type", "cccd_front");
+        frontMap.put("document_type", "CCCD_FRONT");
+        frontMap.put("file_url", frontUrl);
+        frontMap.put("document_url", frontUrl);
+
+        Map<String, Object> backMap = new LinkedHashMap<>();
+        backMap.put("id", docBack.getId());
+        backMap.put("doc_type", "cccd_back");
+        backMap.put("document_type", "CCCD_BACK");
+        backMap.put("file_url", backUrl);
+        backMap.put("document_url", backUrl);
+
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("documents", List.of(frontMap, backMap));
+        return result;
+    }
+
+    // ============================================================
+    // CONTRACT 2.4: UPLOAD SELFIE
+    // ============================================================
+
+    @Override
+    @Transactional
+    public Map<String, Object> uploadSelfie(Long userId, MultipartFile selfie) throws IOException {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.USER_NOT_FOUND));
+
+        if (user.getVerificationStatus() == VerificationStatus.VERIFIED) {
+            throw new BadRequestException(ErrorCode.VALIDATION_ERROR,
+                    "Tài khoản đã được xác thực, không thể upload lại");
+        }
+
+        if (selfie == null || selfie.isEmpty()) {
+            throw new BadRequestException(ErrorCode.VALIDATION_ERROR,
+                    "Vui lòng cung cấp ảnh selfie");
+        }
+
+        // Delete old selfie doc
+        List<UserDocument> oldDocs = documentRepository.findByUserId(userId).stream()
+                .filter(d -> "SELFIE".equalsIgnoreCase(d.getDocumentType()))
+                .toList();
+        for (UserDocument old : oldDocs) {
+            try {
+                fileStorageService.deleteFile(old.getDocumentUrl());
+            } catch (Exception e) {
+                log.warn("Cannot delete old file: {}", e.getMessage());
+            }
+            documentRepository.delete(old);
+        }
+
+        String selfieUrl = fileStorageService.storeFile(selfie, "verification/" + userId);
+
+        UserDocument doc = documentRepository.save(UserDocument.builder()
+                .userId(userId)
+                .documentType("SELFIE")
+                .documentUrl(selfieUrl)
+                .build());
+
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("id", doc.getId());
+        result.put("doc_type", "selfie");
+        result.put("document_type", "SELFIE");
+        result.put("file_url", selfieUrl);
+        result.put("document_url", selfieUrl);
+        return result;
+    }
+
+    // ============================================================
+    // CONTRACT 2.5: SUBMIT VERIFICATION
+    // ============================================================
+
+    @Override
+    @Transactional
+    public Map<String, Object> submitVerification(Long userId, SubmitVerificationRequest request) {
+        log.info("User {} submitting verification", userId);
+
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.USER_NOT_FOUND));
+
+        if (user.getVerificationStatus() == VerificationStatus.VERIFIED) {
+            throw new BadRequestException(ErrorCode.VALIDATION_ERROR,
+                    "Tài khoản đã được xác thực trước đó");
+        }
+
+        List<UserDocument> docs = documentRepository.findByUserId(userId);
+
+        // Security check: if specific document IDs are passed, ensure they belong to this user
+        if (request != null) {
+            if (request.getGplxDocIds() != null) {
+                for (Long docId : request.getGplxDocIds()) {
+                    boolean exists = docs.stream().anyMatch(d -> d.getId().equals(docId));
+                    if (!exists) {
+                        throw new BadRequestException(ErrorCode.VALIDATION_ERROR,
+                                "Tài liệu GPLX id " + docId + " không hợp lệ hoặc không thuộc về người dùng");
+                    }
+                }
+            }
+            if (request.getCccdDocIds() != null) {
+                for (Long docId : request.getCccdDocIds()) {
+                    boolean exists = docs.stream().anyMatch(d -> d.getId().equals(docId));
+                    if (!exists) {
+                        throw new BadRequestException(ErrorCode.VALIDATION_ERROR,
+                                "Tài liệu CCCD id " + docId + " không hợp lệ hoặc không thuộc về người dùng");
+                    }
+                }
+            }
+            if (request.getSelfieDocId() != null) {
+                boolean exists = docs.stream().anyMatch(d -> d.getId().equals(request.getSelfieDocId()));
+                if (!exists) {
+                    throw new BadRequestException(ErrorCode.VALIDATION_ERROR,
+                            "Tài liệu selfie id " + request.getSelfieDocId() + " không hợp lệ hoặc không thuộc về người dùng");
+                }
+            }
+        }
+
+        // Validate that user has uploaded all required 5 documents
+        List<String> uploadedTypes = docs.stream().map(d -> d.getDocumentType().toUpperCase()).toList();
+        List<String> missing = new ArrayList<>(REQUIRED_TYPES);
+        missing.removeAll(uploadedTypes);
+
+        if (!missing.isEmpty()) {
+            throw new BadRequestException(ErrorCode.VALIDATION_ERROR,
+                    "Thiếu giấy tờ: " + String.join(", ", missing));
+        }
+
+        user.setVerificationStatus(VerificationStatus.PENDING);
+        user.setRejectionReason(null);
+        userRepository.save(user);
+
+        // Notify admins
+        try {
+            List<User> admins = userRepository.findByRole(Role.ADMIN);
+            for (User admin : admins) {
+                notificationService.createNotification(
+                        admin.getId(),
+                        NotificationType.VERIFICATION_SUBMITTED,
+                        "Hồ sơ xác thực mới",
+                        String.format("User %s (%s) vừa gửi hồ sơ xác thực. Vui lòng vào duyệt.",
+                                user.getName(), user.getPhone()),
+                        userId
+                );
+            }
+        } catch (Exception e) {
+            log.warn("Failed to notify admins: {}", e.getMessage());
+        }
+
+        Map<String, Object> data = new LinkedHashMap<>();
+        data.put("verification_status", "pending");
+        data.put("verificationStatus", "PENDING");
+        return data;
+    }
+
+    // ============================================================
+    // LEGACY / FRONTEND: UPLOAD 5 FILES
+    // ============================================================
 
     @Override
     @Transactional
@@ -75,7 +353,7 @@ public class VerificationServiceImpl implements VerificationService {
         documentRepository.deleteByUserId(userId);
 
         for (int i = 0; i < files.length; i++) {
-            String type = types[i];
+            String type = types[i].toUpperCase();
             if (!ALLOWED_TYPES.contains(type)) {
                 throw new BadRequestException(ErrorCode.VALIDATION_ERROR,
                         "Loại giấy tờ không hợp lệ: " + type);
@@ -92,57 +370,21 @@ public class VerificationServiceImpl implements VerificationService {
         }
 
         log.info("User {} uploaded {} docs, status remains: {}", userId, files.length, user.getVerificationStatus());
-
         return buildResponse(user);
     }
-
-    // ===== SUBMIT =====
 
     @Override
     @Transactional
     public VerificationResponse submitForReview(Long userId) {
-        log.info("User {} submitting verification for review", userId);
-
+        submitVerification(userId, null);
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.USER_NOT_FOUND));
-
-        List<UserDocument> docs = documentRepository.findByUserId(userId);
-
-        List<String> uploadedTypes = docs.stream().map(UserDocument::getDocumentType).toList();
-        List<String> missing = new ArrayList<>(REQUIRED_TYPES);
-        missing.removeAll(uploadedTypes);
-
-        if (!missing.isEmpty()) {
-            throw new BadRequestException(ErrorCode.VALIDATION_ERROR,
-                    "Thiếu giấy tờ: " + String.join(", ", missing));
-        }
-
-        user.setVerificationStatus(VerificationStatus.PENDING);
-        user.setRejectionReason(null);
-        userRepository.save(user);
-
-        // ★ MỚI: Thông báo cho tất cả Admin
-        try {
-            List<User> admins = userRepository.findByRole(Role.ADMIN);
-            for (User admin : admins) {
-                notificationService.createNotification(
-                        admin.getId(),
-                        NotificationType.VERIFICATION_SUBMITTED,
-                        "Hồ sơ xác thực mới",
-                        String.format("User %s (%s) vừa gửi hồ sơ xác thực. Vui lòng vào duyệt.",
-                                user.getName(), user.getPhone()),
-                        userId
-                );
-            }
-        } catch (Exception e) {
-            log.warn("Failed to notify admins: {}", e.getMessage());
-        }
-
-        log.info("User {} verification status -> PENDING", userId);
         return buildResponse(user);
     }
 
-    // ===== READ =====
+    // ============================================================
+    // READ / APPROVE / REJECT
+    // ============================================================
 
     @Override
     public VerificationResponse getMyVerification(Long userId) {
@@ -150,8 +392,6 @@ public class VerificationServiceImpl implements VerificationService {
                 .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.USER_NOT_FOUND));
         return buildResponse(user);
     }
-
-    // ===== APPROVE =====
 
     @Override
     @Transactional
@@ -184,8 +424,6 @@ public class VerificationServiceImpl implements VerificationService {
 
         return buildResponse(user);
     }
-
-    // ===== REJECT =====
 
     @Override
     @Transactional

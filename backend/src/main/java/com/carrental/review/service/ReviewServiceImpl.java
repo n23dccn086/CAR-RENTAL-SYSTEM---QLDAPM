@@ -11,9 +11,7 @@ import com.carrental.common.exception.ResourceNotFoundException;
 import com.carrental.common.exception.UnauthorizedException;
 import com.carrental.notification.entity.NotificationType;
 import com.carrental.notification.service.NotificationService;
-import com.carrental.review.dto.ReviewMapper;
-import com.carrental.review.dto.ReviewRequest;
-import com.carrental.review.dto.ReviewResponse;
+import com.carrental.review.dto.*;
 import com.carrental.review.entity.Review;
 import com.carrental.review.repository.ReviewRepository;
 import com.carrental.user.entity.User;
@@ -22,10 +20,18 @@ import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 
 @Service
 @RequiredArgsConstructor
@@ -70,14 +76,16 @@ public class ReviewServiceImpl implements ReviewService {
                 .ownerId(booking.getOwnerId())
                 .carRating(request.getCarRating())
                 .ownerRating(request.getOwnerRating())
-                .comment(request.getComment())
+                .driverRating(request.getDriverRating())
+                .comment(request.getComment() != null ? request.getComment().trim() : null)
+                .images(request.getImages() != null ? request.getImages() : new ArrayList<>())
                 .isAnonymous(request.getIsAnonymous() != null ? request.getIsAnonymous() : false)
                 .build();
 
         Review saved = reviewRepository.save(review);
         log.info("Review created with id: {}", saved.getId());
 
-        // ★ MỚI: Thông báo cho Owner
+        // ★ Thông báo cho Owner
         try {
             notificationService.createNotification(
                     booking.getOwnerId(),
@@ -96,7 +104,93 @@ public class ReviewServiceImpl implements ReviewService {
         return buildResponse(saved);
     }
 
-    // ===== READ =====
+    // ===== READ CAR REVIEWS (Contract 8.2) =====
+
+    @Override
+    public Map<String, Object> getCarReviews(Long carId, int page, int limit) {
+        if (!carRepository.existsById(carId)) {
+            throw new ResourceNotFoundException(ErrorCode.CAR_NOT_FOUND);
+        }
+
+        int pageIndex = Math.max(0, page - 1);
+        int pageSize = Math.max(1, limit);
+        Pageable pageable = PageRequest.of(pageIndex, pageSize, Sort.by(Sort.Direction.DESC, "createdAt"));
+
+        Page<Review> reviewPage = reviewRepository.findByCarIdOrderByCreatedAtDesc(carId, pageable);
+        List<ReviewResponse> reviewResponses = reviewPage.getContent().stream()
+                .map(this::buildResponse)
+                .toList();
+
+        // Calculate summary
+        Double avgRating = reviewRepository.getAverageCarRating(carId);
+        double roundedAvg = avgRating != null ? Math.round(avgRating * 10.0) / 10.0 : 0.0;
+        long total = reviewRepository.countByCarId(carId);
+
+        long star5 = reviewRepository.countByCarIdAndCarRating(carId, 5);
+        long star4 = reviewRepository.countByCarIdAndCarRating(carId, 4);
+        long star3 = reviewRepository.countByCarIdAndCarRating(carId, 3);
+        long star2 = reviewRepository.countByCarIdAndCarRating(carId, 2);
+        long star1 = reviewRepository.countByCarIdAndCarRating(carId, 1);
+
+        ReviewSummaryResponse summary = ReviewSummaryResponse.builder()
+                .avgRating(roundedAvg)
+                .total(total)
+                .star5(star5)
+                .star4(star4)
+                .star3(star3)
+                .star2(star2)
+                .star1(star1)
+                .build();
+
+        Map<String, Object> pagination = new LinkedHashMap<>();
+        pagination.put("page", page);
+        pagination.put("limit", pageSize);
+        pagination.put("total", reviewPage.getTotalElements());
+        pagination.put("total_pages", reviewPage.getTotalPages());
+        pagination.put("totalPages", reviewPage.getTotalPages());
+
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("reviews", reviewResponses);
+        result.put("summary", summary);
+        result.put("pagination", pagination);
+        result.put("content", reviewResponses);
+
+        return result;
+    }
+
+    // ===== OWNER REPLY (Contract 8.3) =====
+
+    @Override
+    @Transactional
+    public void replyToReview(Long reviewId, Long ownerId, ReviewReplyRequest request) {
+        log.info("Owner {} replying to review {}", ownerId, reviewId);
+
+        Review review = reviewRepository.findById(reviewId)
+                .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.REVIEW_NOT_FOUND));
+
+        if (!review.getOwnerId().equals(ownerId)) {
+            throw new UnauthorizedException(ErrorCode.PERMISSION_DENIED);
+        }
+
+        review.setOwnerReply(request.getReply().trim());
+        review.setRepliedAt(LocalDateTime.now());
+        reviewRepository.save(review);
+
+        // Notify customer
+        try {
+            notificationService.createNotification(
+                    review.getCustomerId(),
+                    NotificationType.REVIEW_REPLY,
+                    "Chủ xe đã phản hồi đánh giá",
+                    String.format("Chủ xe phản hồi: \"%s\"", request.getReply().trim()),
+                    review.getId()
+            );
+        } catch (Exception e) {
+            log.warn("Failed to notify customer of review reply: {}", e.getMessage());
+        }
+    }
+
+    // ===== READ LIST (Legacy / Frontend) =====
 
     @Override
     public List<ReviewResponse> getMyReviews(Long customerId) {
@@ -139,12 +233,17 @@ public class ReviewServiceImpl implements ReviewService {
     private ReviewResponse buildResponse(Review review) {
         ReviewResponse response = reviewMapper.toResponse(review);
 
-        if (review.getIsAnonymous() == null || !review.getIsAnonymous()) {
-            if (review.getCustomerId() != null) {
-                User customer = userRepository.findById(review.getCustomerId()).orElse(null);
-                if (customer != null) {
-                    response.setCustomerName(customer.getName());
-                }
+        boolean isAnon = Boolean.TRUE.equals(review.getIsAnonymous());
+        if (isAnon) {
+            response.setCustomerName("Khách ẩn danh");
+            response.setReviewerName("Khách ẩn danh");
+            response.setReviewerAvatar(null);
+        } else if (review.getCustomerId() != null) {
+            User customer = userRepository.findById(review.getCustomerId()).orElse(null);
+            if (customer != null) {
+                response.setCustomerName(customer.getName());
+                response.setReviewerName(customer.getName());
+                response.setReviewerAvatar(customer.getAvatarUrl());
             }
         }
 
@@ -154,6 +253,11 @@ public class ReviewServiceImpl implements ReviewService {
                 response.setCarName(car.getBrand() + " " + car.getModel());
             }
         }
+
+        response.setImages(review.getImages() != null ? review.getImages() : List.of());
+        response.setOwnerReply(review.getOwnerReply());
+        response.setDriverRating(review.getDriverRating());
+        response.setRepliedAt(review.getRepliedAt());
 
         return response;
     }

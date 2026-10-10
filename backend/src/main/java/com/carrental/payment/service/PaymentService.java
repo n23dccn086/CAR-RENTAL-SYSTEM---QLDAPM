@@ -22,6 +22,9 @@ public interface PaymentService {
 
     List<PaymentResponse> getMyPayments(Long customerId);
 
+    org.springframework.data.domain.Page<PaymentResponse> getMyPaymentsPaged(
+            Long customerId, org.springframework.data.domain.Pageable pageable);
+
     // ===== CALLBACK =====
 
     PaymentResponse handleMomoCallback(String callbackData);

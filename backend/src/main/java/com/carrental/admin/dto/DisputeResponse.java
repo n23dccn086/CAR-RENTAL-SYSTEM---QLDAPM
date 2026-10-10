@@ -59,4 +59,18 @@ public class DisputeResponse {
 
     LocalDateTime createdAt;
     LocalDateTime updatedAt;
+
+    // ===== DUAL COMPATIBILITY GETTERS (Contract snake_case) =====
+    public String getDispute_code() { return disputeCode; }
+    public Long getBooking_id() { return bookingId; }
+    public Long getRaised_by() { return raisedBy; }
+    public String getRaised_by_name() { return raisedByName; }
+    public Long getAgainst_user() { return againstUser; }
+    public Long getAgainst_user_id() { return againstUser; }
+    public String getAgainst_user_name() { return againstUserName; }
+    public BigDecimal getClaimed_amount() { return claimedAmount; }
+    public BigDecimal getResolved_amount() { return resolvedAmount; }
+    public LocalDateTime getDeadline_at() { return deadlineAt != null ? deadlineAt : counterDeadlineAt; }
+    public LocalDateTime getCreated_at() { return createdAt; }
+    public LocalDateTime getUpdated_at() { return updatedAt; }
 }

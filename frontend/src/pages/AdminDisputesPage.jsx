@@ -28,7 +28,7 @@ export default function AdminDisputesPage() {
     try {
       const params = filter ? { status: filter } : {};
       const res = await api.get("/admin/disputes", { params });
-      setDisputes(res.data.data || []);
+      setDisputes(Array.isArray(res.data.data) ? res.data.data : (res.data.data?.disputes || []));
     } catch (err) {
       console.error(err);
     } finally {
