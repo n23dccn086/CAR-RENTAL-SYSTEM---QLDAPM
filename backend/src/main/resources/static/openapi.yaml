@@ -962,48 +962,134 @@ paths:
                 $ref: '#/components/schemas/ApiResponseVoid'
 
   # ==========================================================
+  # ==========================================================
   # MODULE 6: HANDOVER (3 endpoints)
   # ==========================================================
   /handovers/pickup:
     post:
       tags: [6. Handover]
-      summary: Tạo biên bản bàn giao xe ban đầu (chốt km, xăng, ảnh vết xước) (6.1, UC-C09)
+      summary: Tạo biên bản giao xe (6.1, UC-C09, UC-O09)
       requestBody:
         required: true
         content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [booking_id, km_reading]
+              properties:
+                booking_id: { type: integer, example: 100 }
+                km_reading: { type: integer, example: 25000 }
+                fuel_level: { type: integer, example: 100 }
+                exterior_note: { type: string, example: "Không trầy xước" }
+                interior_note: { type: string, example: "Nội thất sạch sẽ" }
+                damages: { type: string, example: "[]" }
+                images:
+                  type: array
+                  items: { type: string, format: binary }
+                signature: { type: string, example: "data:image/png;base64,..." }
           application/json:
             schema:
-              $ref: '#/components/schemas/HandoverPickupRequest'
+              type: object
+              required: [booking_id, km_reading]
+              properties:
+                booking_id: { type: integer, example: 100 }
+                km_reading: { type: integer, example: 25000 }
+                fuel_level: { type: integer, example: 100 }
+                exterior_note: { type: string, example: "Không trầy xước" }
+                interior_note: { type: string, example: "Nội thất sạch sẽ" }
+                damages: { type: string, example: "[]" }
+                signature: { type: string, example: "data:image/png;base64,..." }
+                image_urls:
+                  type: array
+                  items: { type: string }
       responses:
         '201':
           description: Biên bản giao xe đã được tạo
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/HandoverApiResponse'
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  data:
+                    type: object
+                    properties:
+                      handover_id: { type: integer, example: 50 }
+                      booking_id: { type: integer, example: 100 }
+                      handover_type: { type: string, example: "pickup" }
+                      km_reading: { type: integer, example: 25000 }
+                      owner_signed_at: { type: string, format: date-time, example: "2026-10-15T09:55:00Z" }
+                      record_hash: { type: string, example: "a3f5b..." }
+                      message: { type: string, example: "Chờ khách xác nhận" }
 
   /handovers/return:
     post:
       tags: [6. Handover]
-      summary: Tạo biên bản nhận lại xe (tự động tính km vượt và giờ trễ) (6.2, UC-C09, UC-C12, UC-C13)
+      summary: Tạo biên bản nhận xe (6.2, UC-C09, UC-C12, UC-C13, UC-O10)
       requestBody:
         required: true
         content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [booking_id, km_reading]
+              properties:
+                booking_id: { type: integer, example: 100 }
+                km_reading: { type: integer, example: 26200 }
+                fuel_level: { type: integer, example: 90 }
+                exterior_note: { type: string, example: "Trầy nhẹ cản sau" }
+                interior_note: { type: string, example: "Sạch sẽ" }
+                damages: { type: string, example: "[]" }
+                extra_fees: { type: number, example: 1000000 }
+                extra_fees_note: { type: string, example: "Phí vệ sinh" }
+                images:
+                  type: array
+                  items: { type: string, format: binary }
+                signature: { type: string, example: "data:image/png;base64,..." }
           application/json:
             schema:
-              $ref: '#/components/schemas/HandoverReturnRequest'
+              type: object
+              required: [booking_id, km_reading]
+              properties:
+                booking_id: { type: integer, example: 100 }
+                km_reading: { type: integer, example: 26200 }
+                fuel_level: { type: integer, example: 90 }
+                exterior_note: { type: string, example: "Trầy nhẹ cản sau" }
+                interior_note: { type: string, example: "Sạch sẽ" }
+                damages: { type: string, example: "[]" }
+                extra_fees: { type: number, example: 1000000 }
+                extra_fees_note: { type: string, example: "Phí vệ sinh" }
+                signature: { type: string, example: "data:image/png;base64,..." }
+                image_urls:
+                  type: array
+                  items: { type: string }
       responses:
         '201':
-          description: Biên bản hoàn tất, tính phụ phí phát sinh
+          description: Biên bản nhận xe đã được tạo, tính phụ phí phát sinh
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/HandoverApiResponse'
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  data:
+                    type: object
+                    properties:
+                      handover_id: { type: integer, example: 51 }
+                      booking_id: { type: integer, example: 100 }
+                      handover_type: { type: string, example: "return" }
+                      km_reading: { type: integer, example: 26200 }
+                      overage_km: { type: integer, example: 200 }
+                      overage_km_fee: { type: number, example: 1000000 }
+                      late_fee: { type: number, example: 0 }
+                      extra_fees: { type: number, example: 1000000 }
+                      total_extra: { type: number, example: 1000000 }
+                      record_hash: { type: string, example: "b7c2d..." }
 
-  /handovers/{id}/sign:
-    put:
+  /handovers/{id}/confirm:
+    post:
       tags: [6. Handover]
-      summary: Ký biên bản giao nhận điện tử (6.3)
+      summary: Xác nhận biên bản giao nhận (6.3)
       parameters:
         - name: id
           in: path
@@ -1015,16 +1101,19 @@ paths:
           application/json:
             schema:
               type: object
-              required: [signatureUrl]
+              required: [signature]
               properties:
-                signatureUrl: { type: string, example: https://uploads.vn/signatures/sig_01.png }
+                signature: { type: string, example: "data:image/png;base64,..." }
       responses:
         '200':
-          description: Ký biên bản thành công
+          description: Đã xác nhận biên bản
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/HandoverApiResponse'
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  message: { type: string, example: "Đã xác nhận biên bản" }
 
   # ==========================================================
   # MODULE 7: DRIVERS (5 endpoints)

@@ -29,7 +29,112 @@ public class HandoverController {
     FileStorageService fileStorageService;
 
     /**
-     * Tạo biên bản giao/nhận xe.
+     * Contract 6.1: POST /handovers/pickup (multipart/form-data)
+     */
+    @PostMapping(value = "/pickup", consumes = org.springframework.http.MediaType.MULTIPART_FORM_DATA_VALUE)
+    @ResponseStatus(org.springframework.http.HttpStatus.CREATED)
+    public ApiResponse<Object> createPickupMultipart(
+            @RequestAttribute("userId") Long userId,
+            @RequestParam("booking_id") Long bookingId,
+            @RequestParam("km_reading") Integer kmReading,
+            @RequestParam(value = "fuel_level", required = false) Short fuelLevel,
+            @RequestParam(value = "exterior_note", required = false) String exteriorNote,
+            @RequestParam(value = "interior_note", required = false) String interiorNote,
+            @RequestParam(value = "damages", required = false) String damages,
+            @RequestParam(value = "images", required = false) List<MultipartFile> images,
+            @RequestParam(value = "signature", required = false) String signature) {
+        log.info("REST: User {} creating pickup handover (multipart) for booking {}", userId, bookingId);
+        com.carrental.handover.dto.HandoverPickupRequest req = com.carrental.handover.dto.HandoverPickupRequest.builder()
+                .bookingId(bookingId)
+                .kmReading(kmReading)
+                .fuelLevel(fuelLevel)
+                .exteriorNote(exteriorNote)
+                .interiorNote(interiorNote)
+                .damages(damages)
+                .signature(signature)
+                .build();
+        return ApiResponse.success("Biên bản giao xe đã được tạo",
+                handoverService.createPickupHandover(userId, req, images));
+    }
+
+    /**
+     * Contract 6.1: POST /handovers/pickup (application/json)
+     */
+    @PostMapping(value = "/pickup", consumes = org.springframework.http.MediaType.APPLICATION_JSON_VALUE)
+    @ResponseStatus(org.springframework.http.HttpStatus.CREATED)
+    public ApiResponse<Object> createPickupJson(
+            @RequestAttribute("userId") Long userId,
+            @Valid @RequestBody com.carrental.handover.dto.HandoverPickupRequest request) {
+        log.info("REST: User {} creating pickup handover (json) for booking {}", userId, request.getBookingId());
+        return ApiResponse.success("Biên bản giao xe đã được tạo",
+                handoverService.createPickupHandover(userId, request, null));
+    }
+
+    /**
+     * Contract 6.2: POST /handovers/return (multipart/form-data)
+     */
+    @PostMapping(value = "/return", consumes = org.springframework.http.MediaType.MULTIPART_FORM_DATA_VALUE)
+    @ResponseStatus(org.springframework.http.HttpStatus.CREATED)
+    public ApiResponse<Object> createReturnMultipart(
+            @RequestAttribute("userId") Long userId,
+            @RequestParam("booking_id") Long bookingId,
+            @RequestParam("km_reading") Integer kmReading,
+            @RequestParam(value = "fuel_level", required = false) Short fuelLevel,
+            @RequestParam(value = "exterior_note", required = false) String exteriorNote,
+            @RequestParam(value = "interior_note", required = false) String interiorNote,
+            @RequestParam(value = "damages", required = false) String damages,
+            @RequestParam(value = "extra_fees", required = false) java.math.BigDecimal extraFees,
+            @RequestParam(value = "extra_fees_note", required = false) String extraFeesNote,
+            @RequestParam(value = "images", required = false) List<MultipartFile> images,
+            @RequestParam(value = "signature", required = false) String signature) {
+        log.info("REST: User {} creating return handover (multipart) for booking {}", userId, bookingId);
+        com.carrental.handover.dto.HandoverReturnRequest req = com.carrental.handover.dto.HandoverReturnRequest.builder()
+                .bookingId(bookingId)
+                .kmReading(kmReading)
+                .fuelLevel(fuelLevel)
+                .exteriorNote(exteriorNote)
+                .interiorNote(interiorNote)
+                .damages(damages)
+                .extraFees(extraFees)
+                .extraFeesNote(extraFeesNote)
+                .signature(signature)
+                .build();
+        return ApiResponse.success("Biên bản hoàn tất, tính phụ phí phát sinh",
+                handoverService.createReturnHandover(userId, req, images));
+    }
+
+    /**
+     * Contract 6.2: POST /handovers/return (application/json)
+     */
+    @PostMapping(value = "/return", consumes = org.springframework.http.MediaType.APPLICATION_JSON_VALUE)
+    @ResponseStatus(org.springframework.http.HttpStatus.CREATED)
+    public ApiResponse<Object> createReturnJson(
+            @RequestAttribute("userId") Long userId,
+            @Valid @RequestBody com.carrental.handover.dto.HandoverReturnRequest request) {
+        log.info("REST: User {} creating return handover (json) for booking {}", userId, request.getBookingId());
+        return ApiResponse.success("Biên bản hoàn tất, tính phụ phí phát sinh",
+                handoverService.createReturnHandover(userId, request, null));
+    }
+
+    /**
+     * Contract 6.3: POST /handovers/:id/confirm
+     */
+    @PostMapping("/{id}/confirm")
+    public ApiResponse<Object> confirmHandover(
+            @PathVariable Long id,
+            @RequestAttribute("userId") Long userId,
+            @RequestBody(required = false) Map<String, String> body) {
+        String signature = null;
+        if (body != null) {
+            signature = body.get("signature") != null ? body.get("signature") : body.get("signatureUrl");
+        }
+        log.info("REST: User {} confirming handover {}", userId, id);
+        handoverService.confirmHandover(id, userId, signature);
+        return ApiResponse.success("Đã xác nhận biên bản");
+    }
+
+    /**
+     * Tạo biên bản giao/nhận xe (Legacy frontend compatibility).
      * POST /api/v1/handovers
      * Chỉ OWNER của booking mới tạo được.
      */

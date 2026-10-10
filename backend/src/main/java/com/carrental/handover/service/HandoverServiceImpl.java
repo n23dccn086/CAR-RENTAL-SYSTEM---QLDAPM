@@ -51,6 +51,7 @@ public class HandoverServiceImpl implements HandoverService {
     HandoverMapper handoverMapper;
     NotificationService notificationService;
     ConfigHelper configHelper;
+    com.carrental.common.service.FileStorageService fileStorageService;
 
     private static final long FREE_MINUTES = 15L;
     private static final long HOURLY_THRESHOLD = 60L;
@@ -168,14 +169,29 @@ public class HandoverServiceImpl implements HandoverService {
                 .status(HandoverStatus.PENDING)
                 .build();
 
+        if (request.getSignature() != null && !request.getSignature().isBlank()) {
+            if (booking.getOwnerId().equals(userId)) {
+                record.setOwnerSignature(request.getSignature());
+                record.setOwnerSignedAt(LocalDateTime.now());
+            } else if (booking.getCustomerId().equals(userId)) {
+                record.setCustomerSignature(request.getSignature());
+                record.setCustomerSignedAt(LocalDateTime.now());
+            }
+        }
+
         HandoverRecord saved = handoverRepository.save(record);
+        if (saved.getOwnerSignature() != null || saved.getCustomerSignature() != null) {
+            saved.setRecordHash(generateHash(saved));
+            saved = handoverRepository.save(saved);
+        }
         log.info("Handover created: id={}, lateFee={}, kmOverageFee={}",
                 saved.getId(), saved.getLateFee(), saved.getKmOverageFee());
 
+        final Long savedId = saved.getId();
         if (request.getImages() != null && !request.getImages().isEmpty()) {
             List<HandoverImage> images = request.getImages().stream()
                     .map(img -> HandoverImage.builder()
-                            .handoverId(saved.getId())
+                            .handoverId(savedId)
                             .imageUrl(img.getImageUrl())
                             .imageType(img.getImageType() != null ? img.getImageType() : "OTHER")
                             .note(img.getNote())
@@ -631,4 +647,311 @@ public class HandoverServiceImpl implements HandoverService {
 
     private record LateFeeResult(BigDecimal fee, int minutesLate) {}
     private record KmOverageResult(int kmDriven, int kmAllowed, int kmOverage, BigDecimal fee) {}
+
+    // ===== CONTRACT MODULE 6: HANDOVER IMPLEMENTATION =====
+
+    @Override
+    @Transactional
+    public java.util.Map<String, Object> createPickupHandover(
+            Long userId,
+            com.carrental.handover.dto.HandoverPickupRequest request,
+            List<org.springframework.web.multipart.MultipartFile> imageFiles) {
+
+        log.info("createPickupHandover: user={}, booking={}", userId, request.getBookingId());
+
+        Booking booking = bookingRepository.findById(request.getBookingId())
+                .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.BOOKING_NOT_FOUND));
+
+        if (!booking.getOwnerId().equals(userId) && !booking.getCustomerId().equals(userId)) {
+            throw new UnauthorizedException(ErrorCode.PERMISSION_DENIED,
+                    "Bạn không có quyền tạo biên bản cho đơn này");
+        }
+
+        if (booking.getStatus() != BookingStatus.APPROVED) {
+            throw new BadRequestException(ErrorCode.BOOKING_STATUS_INVALID,
+                    "Chỉ tạo biên bản giao xe khi đơn ở trạng thái APPROVED");
+        }
+
+        if (handoverRepository.existsByBookingIdAndHandoverType(request.getBookingId(), "PICKUP")) {
+            throw new BadRequestException(ErrorCode.VALIDATION_ERROR,
+                    "Biên bản giao xe đã tồn tại cho đơn này");
+        }
+
+        if (request.getKmReading() == null || request.getKmReading() < 0) {
+            throw new BadRequestException(ErrorCode.VALIDATION_ERROR, "Số km không hợp lệ");
+        }
+
+        if (request.getFuelLevel() != null
+                && (request.getFuelLevel() < 0 || request.getFuelLevel() > 100)) {
+            throw new BadRequestException(ErrorCode.VALIDATION_ERROR, "Mức xăng phải từ 0 đến 100");
+        }
+
+        HandoverRecord record = HandoverRecord.builder()
+                .bookingId(request.getBookingId())
+                .handoverType("PICKUP")
+                .kmReading(request.getKmReading())
+                .fuelLevel(request.getFuelLevel())
+                .exteriorNote(request.getExteriorNote())
+                .interiorNote(request.getInteriorNote())
+                .damages(request.getDamages())
+                .status(HandoverStatus.PENDING)
+                .build();
+
+        if (request.getSignature() != null && !request.getSignature().isBlank()) {
+            if (booking.getOwnerId().equals(userId)) {
+                record.setOwnerSignature(request.getSignature());
+                record.setOwnerSignedAt(LocalDateTime.now());
+            } else {
+                record.setCustomerSignature(request.getSignature());
+                record.setCustomerSignedAt(LocalDateTime.now());
+            }
+        }
+
+        HandoverRecord saved = handoverRepository.save(record);
+        saved.setRecordHash(generateHash(saved));
+        saved = handoverRepository.save(saved);
+
+        // Lưu ảnh upload (multipart) nếu có
+        if (imageFiles != null && !imageFiles.isEmpty()) {
+            for (org.springframework.web.multipart.MultipartFile file : imageFiles) {
+                if (file != null && !file.isEmpty()) {
+                    try {
+                        String url = fileStorageService.storeFile(file, "handovers/" + userId);
+                        imageRepository.save(HandoverImage.builder()
+                                .handoverId(saved.getId())
+                                .imageUrl(url)
+                                .imageType("PICKUP")
+                                .build());
+                    } catch (Exception e) {
+                        log.warn("Failed to store handover pickup image: {}", e.getMessage());
+                    }
+                }
+            }
+        }
+
+        // Lưu ảnh từ URL (nếu có từ JSON request)
+        if (request.getImageUrls() != null) {
+            for (String url : request.getImageUrls()) {
+                if (url != null && !url.isBlank()) {
+                    imageRepository.save(HandoverImage.builder()
+                            .handoverId(saved.getId())
+                            .imageUrl(url)
+                            .imageType("PICKUP")
+                            .build());
+                }
+            }
+        }
+
+        // Thông báo
+        try {
+            Long recipientId = booking.getOwnerId().equals(userId)
+                    ? booking.getCustomerId()
+                    : booking.getOwnerId();
+            notificationService.createNotification(
+                    recipientId,
+                    NotificationType.HANDOVER_PICKUP_CREATED,
+                    "Có biên bản giao xe cần xác nhận",
+                    String.format("Biên bản giao xe cho đơn #%d đã được tạo. Vui lòng vào kiểm tra và ký xác nhận.", booking.getId()),
+                    saved.getId()
+            );
+        } catch (Exception e) {
+            log.warn("Failed to send notification: {}", e.getMessage());
+        }
+
+        java.util.Map<String, Object> data = new java.util.LinkedHashMap<>();
+        data.put("handover_id", saved.getId());
+        data.put("booking_id", saved.getBookingId());
+        data.put("handover_type", "pickup");
+        data.put("km_reading", saved.getKmReading());
+        data.put("owner_signed_at", saved.getOwnerSignedAt());
+        data.put("record_hash", saved.getRecordHash());
+        data.put("message", "Chờ khách xác nhận");
+        return data;
+    }
+
+    @Override
+    @Transactional
+    public java.util.Map<String, Object> createReturnHandover(
+            Long userId,
+            com.carrental.handover.dto.HandoverReturnRequest request,
+            List<org.springframework.web.multipart.MultipartFile> imageFiles) {
+
+        log.info("createReturnHandover: user={}, booking={}", userId, request.getBookingId());
+
+        Booking booking = bookingRepository.findById(request.getBookingId())
+                .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.BOOKING_NOT_FOUND));
+
+        if (!booking.getOwnerId().equals(userId) && !booking.getCustomerId().equals(userId)) {
+            throw new UnauthorizedException(ErrorCode.PERMISSION_DENIED,
+                    "Bạn không có quyền tạo biên bản cho đơn này");
+        }
+
+        if (booking.getStatus() != BookingStatus.RENTED) {
+            throw new BadRequestException(ErrorCode.BOOKING_STATUS_INVALID,
+                    "Chỉ tạo biên bản nhận xe khi đơn ở trạng thái RENTED");
+        }
+
+        if (handoverRepository.existsByBookingIdAndHandoverType(request.getBookingId(), "RETURN")) {
+            throw new BadRequestException(ErrorCode.VALIDATION_ERROR,
+                    "Biên bản nhận xe đã tồn tại cho đơn này");
+        }
+
+        if (request.getKmReading() == null || request.getKmReading() < 0) {
+            throw new BadRequestException(ErrorCode.VALIDATION_ERROR, "Số km không hợp lệ");
+        }
+
+        if (request.getFuelLevel() != null
+                && (request.getFuelLevel() < 0 || request.getFuelLevel() > 100)) {
+            throw new BadRequestException(ErrorCode.VALIDATION_ERROR, "Mức xăng phải từ 0 đến 100");
+        }
+
+        LocalDateTime actualReturnTime = request.getActualReturnTime() != null
+                ? request.getActualReturnTime()
+                : LocalDateTime.now();
+
+        LateFeeResult lateResult = calculateLateFee(booking, actualReturnTime);
+        BigDecimal lateFee = lateResult.fee;
+        int lateMinutes = lateResult.minutesLate;
+
+        Integer kmDriven = null;
+        Integer kmAllowed = null;
+        int kmOverage = 0;
+        BigDecimal kmOverageFee = BigDecimal.ZERO;
+
+        if (booking.getRentalMode() == RentalMode.SELF_DRIVE) {
+            HandoverRecord pickupRecord = handoverRepository
+                    .findByBookingIdAndHandoverType(booking.getId(), "PICKUP")
+                    .orElse(null);
+
+            if (pickupRecord != null && pickupRecord.getKmReading() != null) {
+                KmOverageResult kmResult = calculateKmOverage(
+                        booking, pickupRecord.getKmReading(), request.getKmReading());
+
+                kmDriven = kmResult.kmDriven;
+                kmAllowed = kmResult.kmAllowed;
+                kmOverage = kmResult.kmOverage;
+                kmOverageFee = kmResult.fee;
+            }
+        }
+
+        BigDecimal extraFees = request.getExtraFees() != null ? request.getExtraFees() : BigDecimal.ZERO;
+
+        HandoverRecord record = HandoverRecord.builder()
+                .bookingId(request.getBookingId())
+                .handoverType("RETURN")
+                .kmReading(request.getKmReading())
+                .fuelLevel(request.getFuelLevel())
+                .exteriorNote(request.getExteriorNote())
+                .interiorNote(request.getInteriorNote())
+                .damages(request.getDamages())
+                .extraFees(extraFees)
+                .extraFeesNote(request.getExtraFeesNote())
+                .actualReturnTime(actualReturnTime)
+                .lateFee(lateFee)
+                .lateMinutes(lateMinutes)
+                .kmDriven(kmDriven)
+                .kmAllowed(kmAllowed)
+                .kmOverage(kmOverage)
+                .kmOverageFee(kmOverageFee)
+                .status(HandoverStatus.PENDING)
+                .build();
+
+        if (request.getSignature() != null && !request.getSignature().isBlank()) {
+            if (booking.getOwnerId().equals(userId)) {
+                record.setOwnerSignature(request.getSignature());
+                record.setOwnerSignedAt(LocalDateTime.now());
+            } else {
+                record.setCustomerSignature(request.getSignature());
+                record.setCustomerSignedAt(LocalDateTime.now());
+            }
+        }
+
+        HandoverRecord saved = handoverRepository.save(record);
+        saved.setRecordHash(generateHash(saved));
+        saved = handoverRepository.save(saved);
+
+        // Lưu ảnh upload (multipart) nếu có
+        if (imageFiles != null && !imageFiles.isEmpty()) {
+            for (org.springframework.web.multipart.MultipartFile file : imageFiles) {
+                if (file != null && !file.isEmpty()) {
+                    try {
+                        String url = fileStorageService.storeFile(file, "handovers/" + userId);
+                        imageRepository.save(HandoverImage.builder()
+                                .handoverId(saved.getId())
+                                .imageUrl(url)
+                                .imageType("RETURN")
+                                .build());
+                    } catch (Exception e) {
+                        log.warn("Failed to store handover return image: {}", e.getMessage());
+                    }
+                }
+            }
+        }
+
+        // Lưu ảnh từ URL (nếu có từ JSON request)
+        if (request.getImageUrls() != null) {
+            for (String url : request.getImageUrls()) {
+                if (url != null && !url.isBlank()) {
+                    imageRepository.save(HandoverImage.builder()
+                            .handoverId(saved.getId())
+                            .imageUrl(url)
+                            .imageType("RETURN")
+                            .build());
+                }
+            }
+        }
+
+        BigDecimal totalExtra = kmOverageFee.add(lateFee).add(extraFees);
+
+        // Thông báo
+        try {
+            Long recipientId = booking.getOwnerId().equals(userId)
+                    ? booking.getCustomerId()
+                    : booking.getOwnerId();
+            notificationService.createNotification(
+                    recipientId,
+                    NotificationType.HANDOVER_RETURN_CREATED,
+                    "Có biên bản nhận xe cần xác nhận",
+                    String.format("Biên bản nhận xe cho đơn #%d đã được tạo (tổng phụ phí: %sđ). Vui lòng vào kiểm tra và ký.",
+                            booking.getId(), formatMoney(totalExtra)),
+                    saved.getId()
+            );
+        } catch (Exception e) {
+            log.warn("Failed to send notification: {}", e.getMessage());
+        }
+
+        java.util.Map<String, Object> data = new java.util.LinkedHashMap<>();
+        data.put("handover_id", saved.getId());
+        data.put("booking_id", saved.getBookingId());
+        data.put("handover_type", "return");
+        data.put("km_reading", saved.getKmReading());
+        data.put("overage_km", saved.getKmOverage());
+        data.put("overage_km_fee", saved.getKmOverageFee());
+        data.put("late_fee", saved.getLateFee());
+        data.put("extra_fees", saved.getExtraFees());
+        data.put("total_extra", totalExtra);
+        data.put("record_hash", saved.getRecordHash());
+        return data;
+    }
+
+    @Override
+    @Transactional
+    public void confirmHandover(Long id, Long userId, String signature) {
+        log.info("confirmHandover: id={}, user={}", id, userId);
+
+        HandoverRecord record = getEntityById(id);
+        Booking booking = bookingRepository.findById(record.getBookingId())
+                .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.BOOKING_NOT_FOUND));
+
+        String role;
+        if (booking.getCustomerId().equals(userId)) {
+            role = "CUSTOMER";
+        } else if (booking.getOwnerId().equals(userId)) {
+            role = "OWNER";
+        } else {
+            throw new UnauthorizedException(ErrorCode.PERMISSION_DENIED, "Bạn không thuộc đơn này");
+        }
+
+        signHandover(id, userId, role, signature);
+    }
 }
