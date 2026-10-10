@@ -192,22 +192,14 @@ paths:
           $ref: '#/components/responses/BadRequest'
 
   # ==========================================================
+  # ==========================================================
   # MODULE 2: USER & DOCUMENTS (5 endpoints)
   # ==========================================================
   /users/me:
-    get:
-      tags: [2. User & Documents]
-      summary: Lấy thông tin hồ sơ người dùng (2.1)
-      responses:
-        '200':
-          description: Hồ sơ người dùng
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/UserApiResponse'
     put:
       tags: [2. User & Documents]
       summary: Cập nhật thông tin cá nhân (2.1)
+      description: Khách hàng hoặc chủ xe cập nhật thông tin họ tên, email, ngày sinh, địa chỉ
       requestBody:
         required: true
         content:
@@ -221,11 +213,132 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/UserApiResponse'
+    get:
+      tags: [2. User & Documents]
+      summary: Lấy thông tin hồ sơ người dùng hiện tại (1.5)
+      responses:
+        '200':
+          description: Hồ sơ người dùng
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserApiResponse'
+
+  /users/documents/gplx:
+    post:
+      tags: [2. User & Documents]
+      summary: Upload Giấy phép lái xe (2.2)
+      description: Upload 2 mặt GPLX và thông tin số GPLX, hạng bằng lái
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [gplx_front, gplx_back]
+              properties:
+                gplx_front:
+                  type: string
+                  format: binary
+                  description: Ảnh mặt trước GPLX
+                gplx_back:
+                  type: string
+                  format: binary
+                  description: Ảnh mặt sau GPLX
+                gplx_number:
+                  type: string
+                  description: Số GPLX
+                gplx_class:
+                  type: string
+                  description: Hạng bằng lái (B1, B2, C...)
+      responses:
+        '200':
+          description: Upload GPLX thành công
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserDocumentGplxResponse'
+
+  /users/documents/cccd:
+    post:
+      tags: [2. User & Documents]
+      summary: Upload Căn cước công dân (2.3)
+      description: Upload 2 mặt CCCD và số CCCD
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [cccd_front, cccd_back]
+              properties:
+                cccd_front:
+                  type: string
+                  format: binary
+                  description: Ảnh mặt trước CCCD
+                cccd_back:
+                  type: string
+                  format: binary
+                  description: Ảnh mặt sau CCCD
+                cccd_number:
+                  type: string
+                  description: Số CCCD
+      responses:
+        '200':
+          description: Upload CCCD thành công
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserDocumentCccdResponse'
+
+  /users/documents/selfie:
+    post:
+      tags: [2. User & Documents]
+      summary: Upload ảnh chân dung selfie (2.4)
+      description: Upload ảnh chụp chân dung khuôn mặt đối chiếu với CCCD/GPLX
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [selfie]
+              properties:
+                selfie:
+                  type: string
+                  format: binary
+                  description: Ảnh chân dung selfie
+      responses:
+        '200':
+          description: Upload selfie thành công
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserDocumentSelfieResponse'
+
+  /users/submit-verification:
+    post:
+      tags: [2. User & Documents]
+      summary: Gửi hồ sơ xác thực (2.5)
+      description: Gửi danh sách ID tài liệu đã upload để Admin phê duyệt xác minh danh tính
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SubmitVerificationRequest'
+      responses:
+        '200':
+          description: Hồ sơ đã được gửi, chờ Admin duyệt
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SubmitVerificationResponse'
 
   /users/change-password:
     post:
       tags: [2. User & Documents]
-      summary: Đổi mật khẩu tài khoản (2.1)
+      summary: Đổi mật khẩu tài khoản
       requestBody:
         required: true
         content:
@@ -243,7 +356,7 @@ paths:
   /verification/upload:
     post:
       tags: [2. User & Documents]
-      summary: Upload tài liệu xác minh (GPLX, CCCD, Selfie) (2.2, 2.3, 2.4, UC-C03)
+      summary: Upload tài liệu xác minh theo lô (Legacy)
       requestBody:
         required: true
         content:
@@ -272,10 +385,10 @@ paths:
   /verification/submit:
     post:
       tags: [2. User & Documents]
-      summary: Gửi toàn bộ 5 ảnh để Admin phê duyệt (2.5)
+      summary: Gửi toàn bộ 5 ảnh để Admin phê duyệt (Legacy)
       responses:
         '200':
-          description: Hồ sơ đã được gửi, trạng thái chuyển sang PENDING_VERIFICATION
+          description: Hồ sơ đã được gửi
           content:
             application/json:
               schema:
@@ -284,7 +397,7 @@ paths:
   /verification/me:
     get:
       tags: [2. User & Documents]
-      summary: Xem trạng thái hồ sơ xác thực cá nhân (2.5)
+      summary: Xem trạng thái hồ sơ xác thực cá nhân
       responses:
         '200':
           description: Trạng thái xác minh
@@ -2168,6 +2281,71 @@ components:
           type: object
           properties:
             verification_status: { type: string, example: PENDING_VERIFICATION }
+
+    UserDocumentItemDto:
+      type: object
+      properties:
+        id: { type: integer, example: 1 }
+        doc_type: { type: string, example: gplx_front }
+        file_url: { type: string, example: "https://example.com/uploads/gplx_front.jpg" }
+
+    UserDocumentGplxResponse:
+      type: object
+      properties:
+        success: { type: boolean, example: true }
+        message: { type: string, example: "Upload GPLX thành công" }
+        data:
+          type: object
+          properties:
+            documents:
+              type: array
+              items: { $ref: '#/components/schemas/UserDocumentItemDto' }
+
+    UserDocumentCccdResponse:
+      type: object
+      properties:
+        success: { type: boolean, example: true }
+        data:
+          type: object
+          properties:
+            documents:
+              type: array
+              items: { $ref: '#/components/schemas/UserDocumentItemDto' }
+
+    UserDocumentSelfieResponse:
+      type: object
+      properties:
+        success: { type: boolean, example: true }
+        data:
+          type: object
+          properties:
+            file_url: { type: string, example: "https://example.com/uploads/selfie.jpg" }
+
+    SubmitVerificationRequest:
+      type: object
+      required: [gplx_doc_ids, cccd_doc_ids, selfie_doc_id]
+      properties:
+        gplx_doc_ids:
+          type: array
+          items: { type: integer }
+          example: [1, 2]
+        cccd_doc_ids:
+          type: array
+          items: { type: integer }
+          example: [3, 4]
+        selfie_doc_id:
+          type: integer
+          example: 5
+
+    SubmitVerificationResponse:
+      type: object
+      properties:
+        success: { type: boolean, example: true }
+        message: { type: string, example: "Hồ sơ đã được gửi, chờ Admin duyệt" }
+        data:
+          type: object
+          properties:
+            verification_status: { type: string, example: pending }
 
     # Car Schemas
     CarDto:
