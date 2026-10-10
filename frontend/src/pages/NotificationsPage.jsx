@@ -159,7 +159,12 @@ export default function NotificationsPage() {
       if (unreadOnly) params.unreadOnly = true;
 
       const res = await api.get("/notifications", { params });
-      setNotifications(res.data.data || []);
+      const notifData = res.data.data;
+      const list = Array.isArray(notifData) ? notifData : (notifData?.notifications || []);
+      setNotifications(list);
+      if (notifData && typeof notifData === "object" && notifData.unread_count !== undefined) {
+        setUnreadCount(notifData.unread_count);
+      }
       setSelectedIds(new Set()); // reset selection khi reload
     } catch (err) {
       console.error(err);

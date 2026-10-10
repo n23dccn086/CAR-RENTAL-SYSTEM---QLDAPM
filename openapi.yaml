@@ -1751,19 +1751,51 @@ paths:
                 $ref: '#/components/schemas/AIChatHistoryApiResponse'
 
   # ==========================================================
-  # MODULE 13: NOTIFICATIONS (2 endpoints)
+  # ==========================================================
+  # MODULE 13: NOTIFICATIONS (2 endpoints / 3 operations)
   # ==========================================================
   /notifications:
     get:
       tags: [13. Notifications]
-      summary: Lấy danh sách thông báo của người dùng (13.1)
+      summary: Danh sách thông báo (13.1)
+      parameters:
+        - name: unread_only
+          in: query
+          schema: { type: boolean, example: true }
+        - name: page
+          in: query
+          schema: { type: integer, default: 1 }
+        - name: limit
+          in: query
+          schema: { type: integer, default: 20 }
+        - name: type
+          in: query
+          schema: { type: string }
       responses:
         '200':
           description: Danh sách thông báo
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/NotificationListApiResponse'
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  data:
+                    type: object
+                    properties:
+                      notifications:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            id: { type: integer, example: 1 }
+                            type: { type: string, example: "booking_approved" }
+                            title: { type: string, example: "Đơn đặt xe đã được duyệt" }
+                            message: { type: string, example: "Đơn CR-2026-1001 của bạn đã được chủ xe xác nhận" }
+                            link: { type: string, example: "/bookings/100" }
+                            is_read: { type: boolean, example: false }
+                            created_at: { type: string, format: date-time, example: "2026-10-01T10:30:00Z" }
+                      unread_count: { type: integer, example: 5 }
 
   /notifications/{id}/read:
     put:
@@ -1776,11 +1808,29 @@ paths:
           schema: { type: integer }
       responses:
         '200':
-          description: Đã đánh dấu thông báo
+          description: Đã đánh dấu đã đọc
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ApiResponseVoid'
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  message: { type: string, example: "Đã đánh dấu đã đọc" }
+
+  /notifications/read-all:
+    put:
+      tags: [13. Notifications]
+      summary: Đánh dấu tất cả thông báo đã đọc (13.2)
+      responses:
+        '200':
+          description: Đã đánh dấu đã đọc
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  message: { type: string, example: "Đã đánh dấu đã đọc" }
 
   # ==========================================================
   # MODULE 14: UPLOAD & EXCEL (2 endpoints)

@@ -19,6 +19,10 @@ public interface NotificationService {
     /** Lấy danh sách thông báo theo type */
     List<NotificationResponse> getMyNotificationsByType(Long userId, NotificationType type);
 
+    /** Phân trang danh sách thông báo chuẩn Module 13 */
+    org.springframework.data.domain.Page<NotificationResponse> getMyNotificationsPaged(
+            Long userId, boolean unreadOnly, NotificationType type, org.springframework.data.domain.Pageable pageable);
+
     /** Đếm số thông báo chưa đọc */
     long countUnread(Long userId);
 
