@@ -37,8 +37,9 @@ public class SecurityConfig {
                         "/api/v1/auth/**", "/auth/**",
                         "/api/v1/health", "/health",
                         "/api/v1/public/**", "/public/**", 
+                        "/api/v1/payments/callback/**", "/payments/callback/**",
                         "/error",
-                        "/files/**",                    // ← THÊM MỚI
+                        "/files/**",
                         "/api/v1/files/**",
                         "/api/v1/uploads/**",
                         "/uploads/**",
@@ -66,10 +67,7 @@ public class SecurityConfig {
                 .securityMatcher(
                         "/api/v1/cars/**", "/cars/**",
                         "/api/v1/reviews/cars/**", "/reviews/cars/**",
-                        "/api/v1/reviews/owner/**", "/reviews/owner/**",
-                        "/files/**",                     // ← THÊM MỚI
-                        "/api/v1/files/**",
-                        "/uploads/**"
+                        "/api/v1/reviews/owner/**", "/reviews/owner/**"
                 )
                 .csrf(AbstractHttpConfigurer::disable)
                 .cors(cors -> cors.configurationSource(corsConfigurationSource()))

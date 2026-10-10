@@ -89,6 +89,11 @@ public class BookingServiceImpl implements BookingService {
             throw new BadRequestException(ErrorCode.CAR_NOT_AVAILABLE);
         }
 
+        if (car.getOwnerId().equals(customerId)) {
+            throw new BadRequestException(ErrorCode.VALIDATION_ERROR,
+                    "Chủ xe không thể tự thuê xe của chính mình.");
+        }
+
         if (!request.getEndDate().isAfter(request.getStartDate())) {
             throw new BadRequestException(ErrorCode.INVALID_BOOKING_DATES);
         }

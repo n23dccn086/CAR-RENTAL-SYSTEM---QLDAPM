@@ -3,29 +3,37 @@ spring:
     name: car-rental-backend
 
   datasource:
-    url: jdbc:postgresql://localhost:5432/car_rental
-    username: postgres
-    password: yourpassword
+    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://${HOST_POSTGRES:localhost}:${PORT_POSTGRES:5432}/${DB_POSTGRES:car_rental}?sslmode=${SSLMODE_POSTGRES:disable}}
+    username: ${USER_POSTGRES:${SPRING_DATASOURCE_USERNAME:postgres}}
+    password: ${PASSWORD_POSTGRES:${SPRING_DATASOURCE_PASSWORD:123456}}
     driver-class-name: org.postgresql.Driver
 
   jpa:
     hibernate:
-      ddl-auto: validate
-    show-sql: false
+      ddl-auto: ${SPRING_JPA_HIBERNATE_DDL_AUTO:update}
+    show-sql: ${SPRING_JPA_SHOW_SQL:false}
     open-in-view: false
     properties:
       hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
         format_sql: false
+        jdbc:
+          time_zone: UTC
 
   flyway:
-    enabled: true
+    enabled: ${SPRING_FLYWAY_ENABLED:true}
     baseline-on-migrate: true
+    baseline-version: "0"
+    validate-on-migrate: false
+    out-of-order: true
     locations: classpath:db/migration
 
   data:
     redis:
-      host: localhost
-      port: 6379
+      host: ${HOST_REDIS:${SPRING_DATA_REDIS_HOST:localhost}}
+      port: ${PORT_REDIS:${SPRING_DATA_REDIS_PORT:6379}}
+      password: ${PASSWORD_REDIS:}
+      database: ${DB_REDIS:0}
       repositories:
         enabled: false
 
@@ -36,9 +44,9 @@ spring:
       max-request-size: 100MB
 
 server:
-  port: 8080
+  port: ${SERVER_PORT:8080}
   servlet:
-    context-path: /api/v1
+    context-path: ${SERVER_SERVLET_CONTEXT_PATH:/api/v1}
 
 springdoc:
   api-docs:
@@ -51,9 +59,21 @@ springdoc:
     tags-sorter: alpha
 
 jwt:
-  secret: Y2FyLXJlbnRhbC1zeXN0ZW0tc3VwZXItc2VjcmV0LWtleS0yMDI2LTI1Ni1iaXRz
-  expiration: 3600000
-  refresh-expiration: 604800000
+  secret: ${JWT_SECRET:Y2FyLXJlbnRhbC1zeXN0ZW0tc3VwZXItc2VjcmV0LWtleS0yMDI2LTI1Ni1iaXRz}
+  expiration: ${JWT_EXPIRATION:3600000}
+  refresh-expiration: ${JWT_REFRESH_EXPIRATION:604800000}
+
+payment:
+  momo:
+    partner-code: ${PAYMENT_MOMO_PARTNER_CODE:DEMO}
+    access-key: ${PAYMENT_MOMO_ACCESS_KEY:DEMO_ACCESS}
+    secret-key: ${PAYMENT_MOMO_SECRET_KEY:DEMO_SECRET}
+    endpoint: ${PAYMENT_MOMO_ENDPOINT:https://test-payment.momo.vn/v2/gateway/api/create}
+    return-url: ${PAYMENT_MOMO_RETURN_URL:http://localhost:8080/api/v1/payments/callback/momo}
+    notify-url: ${PAYMENT_MOMO_NOTIFY_URL:http://localhost:8080/api/v1/payments/callback/momo}
+
+app:
+  upload-dir: ${APP_UPLOAD_DIR:uploads}
 
 logging:
   level:

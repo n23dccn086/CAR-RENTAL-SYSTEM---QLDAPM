@@ -3,7 +3,7 @@
 -- ============================================================
 
 -- 1. HANDOVER_RECORDS — Biên bản giao/nhận xe
-CREATE TABLE handover_records (
+CREATE TABLE IF NOT EXISTS handover_records (
     id                  BIGSERIAL PRIMARY KEY,
     booking_id          BIGINT NOT NULL,
     handover_type       VARCHAR(20) NOT NULL,  -- PICKUP, RETURN
@@ -27,11 +27,11 @@ CREATE TABLE handover_records (
     CONSTRAINT uk_booking_type UNIQUE (booking_id, handover_type)
 );
 
-CREATE INDEX idx_handover_booking ON handover_records(booking_id);
-CREATE INDEX idx_handover_type ON handover_records(handover_type);
+CREATE INDEX IF NOT EXISTS idx_handover_booking ON handover_records(booking_id);
+CREATE INDEX IF NOT EXISTS idx_handover_type ON handover_records(handover_type);
 
 -- 2. HANDOVER_IMAGES — Ảnh biên bản
-CREATE TABLE handover_images (
+CREATE TABLE IF NOT EXISTS handover_images (
     id              BIGSERIAL PRIMARY KEY,
     handover_id     BIGINT NOT NULL,
     image_url       VARCHAR(500) NOT NULL,
@@ -42,4 +42,4 @@ CREATE TABLE handover_images (
     CONSTRAINT fk_image_handover FOREIGN KEY (handover_id) REFERENCES handover_records(id) ON DELETE CASCADE
 );
 
-CREATE INDEX idx_image_handover ON handover_images(handover_id);
+CREATE INDEX IF NOT EXISTS idx_image_handover ON handover_images(handover_id);

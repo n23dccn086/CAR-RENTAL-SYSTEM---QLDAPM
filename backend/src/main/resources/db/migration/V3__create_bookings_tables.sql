@@ -1,7 +1,7 @@
 -- =====================================================
 -- Bảng bookings — Đơn đặt xe
 -- =====================================================
-CREATE TABLE bookings (
+CREATE TABLE IF NOT EXISTS bookings (
     id BIGSERIAL PRIMARY KEY,
     customer_id BIGINT NOT NULL,
     car_id BIGINT NOT NULL,
@@ -28,16 +28,16 @@ CREATE TABLE bookings (
     CONSTRAINT fk_bookings_owner FOREIGN KEY (owner_id) REFERENCES users(id)
 );
 
-CREATE INDEX idx_bookings_customer ON bookings(customer_id);
-CREATE INDEX idx_bookings_car ON bookings(car_id);
-CREATE INDEX idx_bookings_owner ON bookings(owner_id);
-CREATE INDEX idx_bookings_status ON bookings(status);
-CREATE INDEX idx_bookings_dates ON bookings(start_date, end_date);
+CREATE INDEX IF NOT EXISTS idx_bookings_customer ON bookings(customer_id);
+CREATE INDEX IF NOT EXISTS idx_bookings_car ON bookings(car_id);
+CREATE INDEX IF NOT EXISTS idx_bookings_owner ON bookings(owner_id);
+CREATE INDEX IF NOT EXISTS idx_bookings_status ON bookings(status);
+CREATE INDEX IF NOT EXISTS idx_bookings_dates ON bookings(start_date, end_date);
 
 -- =====================================================
 -- Bảng booking_details — Chi tiết phí
 -- =====================================================
-CREATE TABLE booking_details (
+CREATE TABLE IF NOT EXISTS booking_details (
     id BIGSERIAL PRIMARY KEY,
     booking_id BIGINT NOT NULL,
     rental_days INT NOT NULL,
@@ -53,4 +53,4 @@ CREATE TABLE booking_details (
     CONSTRAINT fk_booking_details_booking FOREIGN KEY (booking_id) REFERENCES bookings(id) ON DELETE CASCADE
 );
 
-CREATE INDEX idx_booking_details_booking ON booking_details(booking_id);
+CREATE INDEX IF NOT EXISTS idx_booking_details_booking ON booking_details(booking_id);

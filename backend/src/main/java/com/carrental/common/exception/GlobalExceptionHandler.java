@@ -20,6 +20,48 @@ import java.util.UUID;
 @RestControllerAdvice
 public class GlobalExceptionHandler {
 
+    // ===== Xử lý ResourceNotFoundException (404) =====
+    @ExceptionHandler(ResourceNotFoundException.class)
+    public ResponseEntity<ApiResponse<Object>> handleResourceNotFoundException(
+            ResourceNotFoundException ex, HttpServletRequest request) {
+
+        String traceId = UUID.randomUUID().toString();
+        ErrorCode errorCode = ex.getErrorCode();
+
+        log.warn("[{}] ResourceNotFoundException at {} - Code: {} - Message: {}",
+                traceId, request.getRequestURI(), errorCode.getCode(), ex.getMessage());
+
+        ApiResponse<Object> response = ApiResponse.error(
+                errorCode.getCode(),
+                ex.getMessage(),
+                request.getRequestURI(),
+                traceId
+        );
+
+        return ResponseEntity.status(HttpStatus.NOT_FOUND).body(response);
+    }
+
+    // ===== Xử lý UnauthorizedException (401) =====
+    @ExceptionHandler(UnauthorizedException.class)
+    public ResponseEntity<ApiResponse<Object>> handleUnauthorizedException(
+            UnauthorizedException ex, HttpServletRequest request) {
+
+        String traceId = UUID.randomUUID().toString();
+        ErrorCode errorCode = ex.getErrorCode();
+
+        log.warn("[{}] UnauthorizedException at {} - Code: {} - Message: {}",
+                traceId, request.getRequestURI(), errorCode.getCode(), ex.getMessage());
+
+        ApiResponse<Object> response = ApiResponse.error(
+                errorCode.getCode(),
+                ex.getMessage(),
+                request.getRequestURI(),
+                traceId
+        );
+
+        return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(response);
+    }
+
     // ===== Xử lý AppException (custom exception) =====
     @ExceptionHandler(AppException.class)
     public ResponseEntity<ApiResponse<Object>> handleAppException(
