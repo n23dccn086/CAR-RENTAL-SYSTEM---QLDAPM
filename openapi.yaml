@@ -305,36 +305,84 @@ paths:
         - name: location
           in: query
           schema: { type: string }
+        - name: date_start
+          in: query
+          schema: { type: string, format: date-time }
+        - name: date_end
+          in: query
+          schema: { type: string, format: date-time }
+        - name: rental_type
+          in: query
+          schema: { type: string, enum: [SELF_DRIVE, WITH_DRIVER, BOTH] }
         - name: brand
           in: query
           schema: { type: string }
         - name: seats
           in: query
           schema: { type: integer }
-        - name: rental_type
-          in: query
-          schema: { type: string, enum: [SELF_DRIVE, WITH_DRIVER, BOTH] }
-        - name: min_price
-          in: query
-          schema: { type: number }
-        - name: max_price
-          in: query
-          schema: { type: number }
         - name: transmission
           in: query
           schema: { type: string, enum: [AUTOMATIC, MANUAL] }
         - name: fuel_type
           in: query
           schema: { type: string, enum: [GASOLINE, DIESEL, ELECTRIC] }
+        - name: min_price
+          in: query
+          schema: { type: number }
+        - name: max_price
+          in: query
+          schema: { type: number }
+        - name: sort
+          in: query
+          schema: { type: string, default: "price_asc", enum: [price_asc, price_desc, rating_desc, newest] }
         - name: page
           in: query
           schema: { type: integer, default: 0 }
-        - name: size
+        - name: limit
           in: query
           schema: { type: integer, default: 20 }
       responses:
         '200':
-          description: Danh sách xe tìm kiếm thành công
+          description: Danh sách xe tìm kiếm thành công theo Contract
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CarPageApiResponse'
+
+    post:
+      tags: [3. Cars]
+      summary: Chủ xe tạo xe mới (3.3, UC-O02)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CarCreateRequest'
+      responses:
+        '201':
+          description: Đăng tải xe thành công, trạng thái PENDING_APPROVAL
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CarDetailApiResponse'
+
+  /cars/my:
+    get:
+      tags: [3. Cars]
+      summary: Chủ xe xem danh sách toàn bộ xe của mình (3.10, UC-O02)
+      parameters:
+        - name: status
+          in: query
+          schema: { type: string }
+        - name: page
+          in: query
+          schema: { type: integer, default: 0 }
+        - name: limit
+          in: query
+          schema: { type: integer, default: 20 }
+      responses:
+        '200':
+          description: Danh sách xe của chủ xe
           content:
             application/json:
               schema:
@@ -357,62 +405,6 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/CarDetailApiResponse'
-
-  /cars/{id}/availability:
-    get:
-      tags: [3. Cars]
-      summary: Kiểm tra tính khả dụng của xe theo khoảng thời gian thuê (3.10)
-      security: []
-      parameters:
-        - name: id
-          in: path
-          required: true
-          schema: { type: integer }
-        - name: startDate
-          in: query
-          required: true
-          schema: { type: string, format: date-time }
-        - name: endDate
-          in: query
-          required: true
-          schema: { type: string, format: date-time }
-      responses:
-        '200':
-          description: Kết quả kiểm tra lịch xe
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/AvailabilityApiResponse'
-
-  /owner/cars:
-    get:
-      tags: [3. Cars]
-      summary: Chủ xe xem danh sách toàn bộ xe của mình (3.7, UC-O02)
-      responses:
-        '200':
-          description: Danh sách xe của chủ xe
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/CarListApiResponse'
-    post:
-      tags: [3. Cars]
-      summary: Chủ xe đăng ký xe mới lên sàn (chờ duyệt) (3.3, UC-O02)
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/CarCreateRequest'
-      responses:
-        '201':
-          description: Đăng tải xe thành công, trạng thái PENDING_APPROVAL
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/CarDetailApiResponse'
-
-  /owner/cars/{id}:
     put:
       tags: [3. Cars]
       summary: Chủ xe cập nhật thông tin và tiện ích xe (3.4, UC-O02)
@@ -450,44 +442,76 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiResponseVoid'
 
-  /owner/cars/{id}/toggle-status:
-    patch:
+  /cars/{id}/images:
+    post:
       tags: [3. Cars]
-      summary: Bật/tắt trạng thái Sẵn sàng hoạt động của xe (3.6)
+      summary: Upload hình ảnh xe (3.6)
       parameters:
         - name: id
           in: path
           required: true
           schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                images:
+                  type: array
+                  items:
+                    type: string
+                    format: binary
+                image_types:
+                  type: array
+                  items:
+                    type: string
       responses:
         '200':
-          description: Trạng thái xe đã được chuyển đổi
+          description: Upload ảnh thành công
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/CarDetailApiResponse'
 
-  /owner/cars/{id}/calendar:
-    get:
+  /cars/{id}/documents:
+    post:
       tags: [3. Cars]
-      summary: Xem lịch bận và các khoảng thời gian đã đặt của xe (3.8, UC-O04)
+      summary: Upload giấy tờ xe (Đăng ký, Đăng kiểm, Bảo hiểm) (3.7)
       parameters:
         - name: id
           in: path
           required: true
           schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                registration:
+                  type: string
+                  format: binary
+                inspection:
+                  type: string
+                  format: binary
+                insurance:
+                  type: string
+                  format: binary
       responses:
         '200':
-          description: Lịch hoạt động của xe
+          description: Upload giấy tờ xe thành công
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/CalendarApiResponse'
+                $ref: '#/components/schemas/ApiResponseVoid'
 
-  /owner/cars/{id}/pricing:
+  /cars/{id}/pricing:
     put:
       tags: [3. Cars]
-      summary: Cấu hình giá ngày thường, cuối tuần và phụ phí (3.9, UC-O04)
+      summary: Cấu hình bảng giá và phụ phí của xe (3.8, UC-O04)
       parameters:
         - name: id
           in: path
@@ -506,6 +530,131 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/CarDetailApiResponse'
+
+  /cars/{id}/blocked-dates:
+    post:
+      tags: [3. Cars]
+      summary: Chủ xe chặn ngày bận / bảo dưỡng của xe (3.9)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [start_date, end_date]
+              properties:
+                start_date: { type: string, format: date }
+                end_date: { type: string, format: date }
+                reason: { type: string, example: "Bảo dưỡng định kỳ" }
+                note: { type: string, example: "Thay dầu động cơ" }
+      responses:
+        '200':
+          description: Chặn ngày thành công
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponseVoid'
+
+  /cars/{id}/availability:
+    get:
+      tags: [3. Cars]
+      summary: Kiểm tra tính khả dụng của xe theo khoảng thời gian thuê (UC-C04)
+      security: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+        - name: startDate
+          in: query
+          required: true
+          schema: { type: string, format: date-time }
+        - name: endDate
+          in: query
+          required: true
+          schema: { type: string, format: date-time }
+      responses:
+        '200':
+          description: Kết quả kiểm tra lịch xe
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AvailabilityApiResponse'
+
+  /owner/cars:
+    get:
+      tags: [3. Cars]
+      summary: Chủ xe xem danh sách toàn bộ xe của mình (Owner UI Dashboard)
+      parameters:
+        - name: status
+          in: query
+          schema: { type: string }
+        - name: carType
+          in: query
+          schema: { type: string }
+        - name: search
+          in: query
+          schema: { type: string }
+      responses:
+        '200':
+          description: Danh sách xe của chủ xe
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CarPageApiResponse'
+
+  /owner/cars/{id}/status:
+    patch:
+      tags: [3. Cars]
+      summary: Chủ xe cập nhật trạng thái xe (AVAILABLE, MAINTENANCE, BROKEN, INACTIVE)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [status]
+              properties:
+                status: { type: string, enum: [AVAILABLE, MAINTENANCE, BROKEN, INACTIVE] }
+      responses:
+        '200':
+          description: Trạng thái xe đã được cập nhật
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CarDetailApiResponse'
+
+  /owner/cars/import:
+    post:
+      tags: [3. Cars]
+      summary: Chủ xe import danh sách xe hàng loạt bằng file Excel (.xlsx)
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                file:
+                  type: string
+                  format: binary
+      responses:
+        '200':
+          description: Import hoàn tất
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponseVoid'
 
   # ==========================================================
   # MODULE 4: BOOKINGS (7 endpoints)

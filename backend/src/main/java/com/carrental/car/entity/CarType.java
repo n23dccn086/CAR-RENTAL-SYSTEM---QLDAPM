@@ -1,5 +1,6 @@
 package com.carrental.car.entity;
 
+import com.fasterxml.jackson.annotation.JsonCreator;
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;
 
@@ -16,4 +17,25 @@ public enum CarType {
     LUXURY("Xe cao cấp");
 
     private final String description;
+
+    @JsonCreator
+    public static CarType fromString(String val) {
+        if (val == null || val.isBlank()) return null;
+        String s = val.trim().toUpperCase();
+        return switch (s) {
+            case "SEDAN" -> SEDAN;
+            case "SUV" -> SUV;
+            case "MPV" -> MPV;
+            case "HATCHBACK" -> HATCHBACK;
+            case "PICKUP", "BAN_TAI" -> PICKUP;
+            case "VAN" -> VAN;
+            case "LUXURY" -> LUXURY;
+            default -> {
+                for (CarType t : values()) {
+                    if (t.name().equalsIgnoreCase(val.trim())) yield t;
+                }
+                yield SEDAN;
+            }
+        };
+    }
 }

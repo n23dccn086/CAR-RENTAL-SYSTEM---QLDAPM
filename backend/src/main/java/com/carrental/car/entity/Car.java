@@ -83,6 +83,21 @@ public class Car {
     @Builder.Default
     Long cleaningFee = 0L;
 
+    @Column(name = "price_with_driver")
+    Long priceWithDriver;
+
+    @Column(name = "base_km_per_day")
+    @Builder.Default
+    Integer baseKmPerDay = 300;
+
+    @Column(name = "deposit_percent")
+    @Builder.Default
+    Integer depositPercent = 30;
+
+    @Column(name = "insurance_fee_per_day")
+    @Builder.Default
+    Long insuranceFeePerDay = 100000L;
+
     @Enumerated(EnumType.STRING)
     @Column(name = "car_type", nullable = false, length = 20)
     CarType carType;
