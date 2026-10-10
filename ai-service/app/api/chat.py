@@ -3,8 +3,12 @@ from app.models.schemas import (
     ChatRequest, ChatResponse, HistoryResponse,
     HistoryMessage, FeedbackRequest
 )
-from app.services.llm_service import generate_reply, detect_intent
-from app.services.backend_client import get_my_bookings, search_cars
+from app.services.llm_service import (
+    generate_reply, detect_intent, decode_role_from_token, SUGGESTIONS_BY_ROLE
+)
+from app.services.backend_client import (
+    get_my_bookings, search_cars, get_owner_bookings, get_admin_stats
+)
 from app.services.rag_service import (
     retrieve_context,
     retrieve_by_source,
@@ -48,6 +52,34 @@ SOURCE_FILTER_MAP = {
         "bảo mật", "privacy", "dữ liệu cá nhân", "chính sách bảo mật",
         "quyền riêng tư",
     ],
+    "07-huong-dan-chu-xe-quan-ly-xe": [
+        "thêm xe", "nhập excel", "file excel", "quản lý xe",
+        "khóa xe", "mở khóa xe", "11 cột", "cột excel", "chuẩn excel"
+    ],
+    "08-quy-trinh-duyet-don-va-giao-nhan-xe-owner": [
+        "duyệt đơn", "từ chối đơn", "biên bản giao xe", "biên bản nhận xe",
+        "pickup", "giao xe", "nhận xe", "gán tài xế", "magic link"
+    ],
+    "09-doanh-thu-va-rut-tien-owner": [
+        "doanh thu chủ xe", "rút tiền", "lệnh rút", "yêu cầu rút tiền",
+        "số dư khả dụng", "đang chờ rút", "phí rút tiền"
+    ],
+    "10-quy-trinh-xet-duyet-va-quan-tri-admin": [
+        "duyệt xe admin", "duyệt chủ xe", "owner request", "nâng role",
+        "xác minh gplx", "xác minh cccd", "duyệt rút tiền"
+    ],
+    "11-quy-trinh-giai-quyet-tranh-chap-admin": [
+        "tranh chấp", "khiếu nại", "giải quyết tranh chấp", "bằng chứng",
+        "phản bác 48h", "bổ sung 24h", "hợp đồng tranh chấp", "dispute"
+    ],
+    "12-cau-hinh-nen-tang-va-chi-so-admin": [
+        "doanh thu sàn", "csat", "thực nhận nền tảng", "tỉ lệ hủy",
+        "cấu hình nền tảng", "cấu hình sàn", "hoa hồng sàn"
+    ],
+    "13-huong-dan-xac-thuc-tai-khoan-va-khieu-nai": [
+        "xác thực tài khoản", "5 ảnh", "thuê tự lái cần", "đăng ký làm chủ xe",
+        "tạo tranh chấp", "khách khiếu nại"
+    ],
 }
 
 
@@ -66,17 +98,19 @@ async def chat(
     request: ChatRequest,
     authorization: str = Header(None)
 ):
-    """Gửi tin nhắn cho chatbot. Nhận JWT để tra cứu dữ liệu backend."""
+    """Gửi tin nhắn cho chatbot. Nhận diện Role qua JWT để tối ưu hóa câu trả lời và tra cứu dữ liệu."""
     session_id = request.session_id or str(uuid4())
     history = _sessions.get(session_id, [])
-    intent = detect_intent(request.message)
 
-    # ===== Extract JWT từ header =====
+    # ===== Extract JWT và Role =====
     token = None
     if authorization and authorization.startswith("Bearer "):
-        token = authorization[7:]
+        token = authorization[7:].strip()
 
-    # ===== Gọi backend nếu cần =====
+    role = decode_role_from_token(token)
+    intent = detect_intent(request.message, role=role)
+
+    # ===== Gọi backend nếu cần theo Role & Intent =====
     context = {}
 
     if intent == "check_booking" and token:
@@ -84,17 +118,25 @@ async def chat(
         if bookings and not (isinstance(bookings, dict) and bookings.get("error")):
             context["bookings"] = bookings
 
+    elif intent == "check_owner_booking" and token:
+        obookings = await get_owner_bookings(token)
+        if obookings and not (isinstance(obookings, dict) and obookings.get("error")):
+            context["owner_bookings"] = obookings
+
+    elif intent == "check_admin_stats" and token:
+        astats = await get_admin_stats(token)
+        if astats and not (isinstance(astats, dict) and astats.get("error")):
+            context["admin_stats"] = astats
+
     elif intent == "search_car":
         cars = await search_cars()
         if cars and not (isinstance(cars, dict) and cars.get("error")):
             context["cars"] = cars
 
-    # ===== RAG: retrieve knowledge base cho policy / emergency / general =====
-    if intent in ("policy_inquiry", "emergency", "general"):
+    # ===== RAG: retrieve knowledge base cho policy / emergency / general / operation =====
+    source_filter = _detect_source_filter(request.message)
+    if source_filter or intent in ("policy_inquiry", "emergency", "general", "check_revenue"):
         try:
-            # ★ Detect source filter từ message
-            source_filter = _detect_source_filter(request.message)
-
             rag_context = retrieve_by_source(
                 request.message,
                 source_filter=source_filter,
@@ -103,14 +145,14 @@ async def chat(
             if rag_context:
                 context["rag"] = rag_context
                 print(
-                    f"[Chat] RAG retrieved {len(rag_context)} chars "
+                    f"[Chat] [{role}] RAG retrieved {len(rag_context)} chars "
                     f"(source: {source_filter or 'similarity'})"
                 )
         except Exception as e:
             print(f"[Chat] RAG retrieve failed: {e}")
 
-    # ===== Gọi Gemini với context =====
-    result = generate_reply(request.message, history, context)
+    # ===== Gọi Gemini với context và role tương ứng =====
+    result = generate_reply(request.message, history, context, role=role)
 
     # ===== Lưu history =====
     history.append({
@@ -125,15 +167,14 @@ async def chat(
     })
     _sessions[session_id] = history
 
+    suggestions = SUGGESTIONS_BY_ROLE.get(role, SUGGESTIONS_BY_ROLE["GUEST"])
+
     return ChatResponse(
         reply=result["reply"],
         intent=intent,
+        role=role,
         session_id=session_id,
-        suggestions=[
-            "Đơn hàng của tôi thế nào?",
-            "Tìm xe 7 chỗ",
-            "Chính sách hủy cọc",
-        ]
+        suggestions=suggestions
     )
 
 

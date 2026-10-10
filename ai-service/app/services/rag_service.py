@@ -185,9 +185,13 @@ def retrieve_by_source(query: str, source_filter: str = None, top_k: int = 15) -
     # Nếu có source_filter, lấy TẤT CẢ chunks từ file đó
     if source_filter:
         try:
-            data = collection.get(
-                where={"source": {"$contains": source_filter}}
-            )
+            filename = f"{source_filter}.md" if not source_filter.endswith(".md") else source_filter
+            data = collection.get(where={"source": filename})
+            if not data or not data.get("documents"):
+                try:
+                    data = collection.get(where={"source": {"$contains": source_filter}})
+                except Exception:
+                    pass
             docs = data.get("documents", [])
             metadatas = data.get("metadatas", [])
 
