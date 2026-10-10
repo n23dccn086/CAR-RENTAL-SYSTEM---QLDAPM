@@ -15,6 +15,7 @@ import lombok.experimental.FieldDefaults;
 public class PaymentRequest {
 
     @NotNull(message = "ID booking không được để trống")
+    @com.fasterxml.jackson.annotation.JsonAlias({"booking_id", "bookingId"})
     Long bookingId;
 
     @NotNull(message = "Số tiền không được để trống")
@@ -22,8 +23,13 @@ public class PaymentRequest {
     Long amount;
 
     @NotNull(message = "Phương thức thanh toán không được để trống")
+    @com.fasterxml.jackson.annotation.JsonAlias({"method", "paymentMethod", "payment_method"})
     PaymentMethod paymentMethod;
 
     @NotNull(message = "Loại thanh toán không được để trống")
+    @com.fasterxml.jackson.annotation.JsonAlias({"payment_type", "paymentType"})
     PaymentType paymentType;
+
+    @com.fasterxml.jackson.annotation.JsonAlias({"return_url", "returnUrl"})
+    String returnUrl;
 }

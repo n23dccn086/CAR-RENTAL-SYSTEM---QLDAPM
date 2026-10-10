@@ -12,4 +12,15 @@ public enum PaymentType {
     REMAINING("Thanh toán còn lại");
 
     private final String description;
+
+    @com.fasterxml.jackson.annotation.JsonCreator
+    public static PaymentType fromString(String value) {
+        if (value == null || value.isBlank()) return null;
+        for (PaymentType t : PaymentType.values()) {
+            if (t.name().equalsIgnoreCase(value.trim())) {
+                return t;
+            }
+        }
+        return DEPOSIT;
+    }
 }

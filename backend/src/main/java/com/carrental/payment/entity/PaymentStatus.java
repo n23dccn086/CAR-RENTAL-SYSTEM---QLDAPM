@@ -14,4 +14,15 @@ public enum PaymentStatus {
     REFUNDED("Đã hoàn tiền");
 
     private final String description;
+
+    @com.fasterxml.jackson.annotation.JsonCreator
+    public static PaymentStatus fromString(String value) {
+        if (value == null || value.isBlank()) return null;
+        for (PaymentStatus s : PaymentStatus.values()) {
+            if (s.name().equalsIgnoreCase(value.trim())) {
+                return s;
+            }
+        }
+        return PENDING;
+    }
 }

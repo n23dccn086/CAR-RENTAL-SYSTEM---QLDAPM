@@ -893,25 +893,69 @@ paths:
   /payments:
     post:
       tags: [5. Payments]
-      summary: Tạo giao dịch thanh toán đặt cọc hoặc tất toán tiền thuê (5.1, UC-C07)
+      summary: Tạo thanh toán (5.1, UC-C07)
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/PaymentCreateRequest'
+              type: object
+              required: [booking_id, payment_type, method, amount]
+              properties:
+                booking_id: { type: integer, example: 100 }
+                payment_type: { type: string, example: "deposit" }
+                method: { type: string, example: "momo" }
+                amount: { type: integer, example: 1140000 }
+                return_url: { type: string, example: "https://carrental.com/payment/result" }
       responses:
         '200':
           description: Khởi tạo thanh toán thành công, trả về Payment URL/QR
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/PaymentApiResponse'
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  data:
+                    type: object
+                    properties:
+                      payment_id: { type: integer, example: 200 }
+                      transaction_id: { type: string, example: "PAY-20261001-001" }
+                      payment_url: { type: string, example: "https://payment.momo.vn/pay/..." }
+                      qr_code: { type: string, example: "data:image/png;base64,..." }
+                      expires_at: { type: string, format: date-time, example: "2026-10-01T10:15:00Z" }
+
+  /payments/callback/{gateway}:
+    post:
+      tags: [5. Payments]
+      summary: Callback từ cổng thanh toán (5.2)
+      security: []
+      parameters:
+        - name: gateway
+          in: path
+          required: true
+          schema: { type: string, example: "momo" }
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        '200':
+          description: Xác nhận đã nhận callback
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  message: { type: string, example: "OK" }
 
   /payments/{id}:
     get:
       tags: [5. Payments]
-      summary: Xem thông tin chi tiết biên lai giao dịch thanh toán (5.2)
+      summary: Kiểm tra trạng thái thanh toán (5.3)
       parameters:
         - name: id
           in: path
@@ -919,47 +963,66 @@ paths:
           schema: { type: integer }
       responses:
         '200':
-          description: Thông tin giao dịch
+          description: Thông tin thanh toán
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/PaymentApiResponse'
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  data:
+                    type: object
+                    properties:
+                      id: { type: integer, example: 200 }
+                      booking_id: { type: integer, example: 100 }
+                      transaction_id: { type: string, example: "PAY-20261001-001" }
+                      payment_type: { type: string, example: "deposit" }
+                      method: { type: string, example: "momo" }
+                      amount: { type: integer, example: 1140000 }
+                      status: { type: string, example: "success" }
+                      paid_at: { type: string, format: date-time, example: "2026-10-01T10:05:00Z" }
 
-  /payments/booking/{bookingId}:
+  /payments/my:
     get:
       tags: [5. Payments]
-      summary: Lấy danh sách toàn bộ các khoản thanh toán của một đơn thuê (5.4)
+      summary: Lịch sử thanh toán của tôi (5.4)
       parameters:
-        - name: bookingId
-          in: path
-          required: true
-          schema: { type: integer }
+        - name: page
+          in: query
+          schema: { type: integer, default: 1 }
+        - name: limit
+          in: query
+          schema: { type: integer, default: 20 }
       responses:
         '200':
-          description: Danh sách giao dịch của đơn thuê
+          description: Danh sách lịch sử giao dịch
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/PaymentListApiResponse'
-
-  /payments/callback/momo:
-    post:
-      tags: [5. Payments]
-      summary: Webhook tiếp nhận IPN thông báo trạng thái thanh toán từ MoMo (5.3)
-      security: []
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-      responses:
-        '200':
-          description: Xác nhận đã nhận IPN từ cổng thanh toán
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiResponseVoid'
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  data:
+                    type: object
+                    properties:
+                      payments:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            id: { type: integer, example: 200 }
+                            booking_id: { type: integer, example: 100 }
+                            transaction_id: { type: string, example: "PAY-20261001-001" }
+                            amount: { type: integer, example: 1140000 }
+                            status: { type: string, example: "success" }
+                            created_at: { type: string, format: date-time, example: "2026-10-01T10:00:00Z" }
+                      pagination:
+                        type: object
+                        properties:
+                          page: { type: integer, example: 1 }
+                          limit: { type: integer, example: 20 }
+                          total: { type: integer, example: 1 }
+                          total_pages: { type: integer, example: 1 }
 
   # ==========================================================
   # ==========================================================
