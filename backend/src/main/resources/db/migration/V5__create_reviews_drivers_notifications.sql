@@ -1,7 +1,7 @@
 -- =====================================================
 -- Bảng reviews — Đánh giá sau chuyến
 -- =====================================================
-CREATE TABLE reviews (
+CREATE TABLE IF NOT EXISTS reviews (
     id BIGSERIAL PRIMARY KEY,
     booking_id BIGINT NOT NULL,
     customer_id BIGINT NOT NULL,
@@ -19,15 +19,15 @@ CREATE TABLE reviews (
     CONSTRAINT fk_reviews_owner FOREIGN KEY (owner_id) REFERENCES users(id)
 );
 
-CREATE INDEX idx_reviews_booking ON reviews(booking_id);
-CREATE INDEX idx_reviews_customer ON reviews(customer_id);
-CREATE INDEX idx_reviews_car ON reviews(car_id);
-CREATE INDEX idx_reviews_owner ON reviews(owner_id);
+CREATE INDEX IF NOT EXISTS idx_reviews_booking ON reviews(booking_id);
+CREATE INDEX IF NOT EXISTS idx_reviews_customer ON reviews(customer_id);
+CREATE INDEX IF NOT EXISTS idx_reviews_car ON reviews(car_id);
+CREATE INDEX IF NOT EXISTS idx_reviews_owner ON reviews(owner_id);
 
 -- =====================================================
 -- Bảng drivers — Tài xế
 -- =====================================================
-CREATE TABLE drivers (
+CREATE TABLE IF NOT EXISTS drivers (
     id BIGSERIAL PRIMARY KEY,
     owner_id BIGINT NOT NULL,
     name VARCHAR(100) NOT NULL,
@@ -50,14 +50,14 @@ CREATE TABLE drivers (
     CONSTRAINT fk_drivers_owner FOREIGN KEY (owner_id) REFERENCES users(id)
 );
 
-CREATE INDEX idx_drivers_owner ON drivers(owner_id);
-CREATE INDEX idx_drivers_phone ON drivers(phone);
-CREATE INDEX idx_drivers_status ON drivers(status);
+CREATE INDEX IF NOT EXISTS idx_drivers_owner ON drivers(owner_id);
+CREATE INDEX IF NOT EXISTS idx_drivers_phone ON drivers(phone);
+CREATE INDEX IF NOT EXISTS idx_drivers_status ON drivers(status);
 
 -- =====================================================
 -- Bảng notifications — Thông báo
 -- =====================================================
-CREATE TABLE notifications (
+CREATE TABLE IF NOT EXISTS notifications (
     id BIGSERIAL PRIMARY KEY,
     user_id BIGINT NOT NULL,
     title VARCHAR(255) NOT NULL,
@@ -69,6 +69,6 @@ CREATE TABLE notifications (
     CONSTRAINT fk_notifications_user FOREIGN KEY (user_id) REFERENCES users(id)
 );
 
-CREATE INDEX idx_notifications_user ON notifications(user_id);
-CREATE INDEX idx_notifications_is_read ON notifications(is_read);
-CREATE INDEX idx_notifications_type ON notifications(type);
+CREATE INDEX IF NOT EXISTS idx_notifications_user ON notifications(user_id);
+CREATE INDEX IF NOT EXISTS idx_notifications_is_read ON notifications(is_read);
+CREATE INDEX IF NOT EXISTS idx_notifications_type ON notifications(type);

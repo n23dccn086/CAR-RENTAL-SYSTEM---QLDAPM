@@ -1,7 +1,7 @@
 -- =====================================================
 -- Bảng payments — Giao dịch thanh toán
 -- =====================================================
-CREATE TABLE payments (
+CREATE TABLE IF NOT EXISTS payments (
     id BIGSERIAL PRIMARY KEY,
     booking_id BIGINT NOT NULL,
     customer_id BIGINT NOT NULL,
@@ -21,16 +21,16 @@ CREATE TABLE payments (
     CONSTRAINT fk_payments_customer FOREIGN KEY (customer_id) REFERENCES users(id)
 );
 
-CREATE INDEX idx_payments_booking ON payments(booking_id);
-CREATE INDEX idx_payments_customer ON payments(customer_id);
-CREATE INDEX idx_payments_status ON payments(status);
-CREATE INDEX idx_payments_transaction ON payments(transaction_id);
-CREATE INDEX idx_payments_method ON payments(payment_method);
+CREATE INDEX IF NOT EXISTS idx_payments_booking ON payments(booking_id);
+CREATE INDEX IF NOT EXISTS idx_payments_customer ON payments(customer_id);
+CREATE INDEX IF NOT EXISTS idx_payments_status ON payments(status);
+CREATE INDEX IF NOT EXISTS idx_payments_transaction ON payments(transaction_id);
+CREATE INDEX IF NOT EXISTS idx_payments_method ON payments(payment_method);
 
 -- =====================================================
 -- Bảng refunds — Hoàn tiền
 -- =====================================================
-CREATE TABLE refunds (
+CREATE TABLE IF NOT EXISTS refunds (
     id BIGSERIAL PRIMARY KEY,
     payment_id BIGINT NOT NULL,
     booking_id BIGINT NOT NULL,
@@ -44,6 +44,6 @@ CREATE TABLE refunds (
     CONSTRAINT fk_refunds_booking FOREIGN KEY (booking_id) REFERENCES bookings(id)
 );
 
-CREATE INDEX idx_refunds_payment ON refunds(payment_id);
-CREATE INDEX idx_refunds_booking ON refunds(booking_id);
-CREATE INDEX idx_refunds_status ON refunds(status);
+CREATE INDEX IF NOT EXISTS idx_refunds_payment ON refunds(payment_id);
+CREATE INDEX IF NOT EXISTS idx_refunds_booking ON refunds(booking_id);
+CREATE INDEX IF NOT EXISTS idx_refunds_status ON refunds(status);

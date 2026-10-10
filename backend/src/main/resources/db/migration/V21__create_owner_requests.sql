@@ -1,5 +1,5 @@
 -- V21: Owner registration requests
-CREATE TABLE owner_requests (
+CREATE TABLE IF NOT EXISTS owner_requests (
     id              BIGSERIAL PRIMARY KEY,
     user_id         BIGINT NOT NULL,
     full_name       VARCHAR(100) NOT NULL,
@@ -21,11 +21,11 @@ CREATE TABLE owner_requests (
     CONSTRAINT fk_owner_req_user FOREIGN KEY (user_id) REFERENCES users(id)
 );
 
-CREATE INDEX idx_owner_req_user ON owner_requests(user_id);
-CREATE INDEX idx_owner_req_status ON owner_requests(status);
+CREATE INDEX IF NOT EXISTS idx_owner_req_user ON owner_requests(user_id);
+CREATE INDEX IF NOT EXISTS idx_owner_req_status ON owner_requests(status);
 
 -- Bảng ảnh cho owner request
-CREATE TABLE owner_request_documents (
+CREATE TABLE IF NOT EXISTS owner_request_documents (
     id              BIGSERIAL PRIMARY KEY,
     request_id      BIGINT NOT NULL,
     document_type   VARCHAR(30) NOT NULL,
@@ -34,4 +34,4 @@ CREATE TABLE owner_request_documents (
     CONSTRAINT fk_owner_doc_req FOREIGN KEY (request_id) REFERENCES owner_requests(id) ON DELETE CASCADE
 );
 
-CREATE INDEX idx_owner_doc_req ON owner_request_documents(request_id);
+CREATE INDEX IF NOT EXISTS idx_owner_doc_req ON owner_request_documents(request_id);

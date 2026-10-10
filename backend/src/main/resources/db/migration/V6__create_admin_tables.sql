@@ -3,7 +3,7 @@
 -- ============================================================
 
 -- 1. DISPUTES — Tranh chấp
-CREATE TABLE disputes (
+CREATE TABLE IF NOT EXISTS disputes (
     id              BIGSERIAL PRIMARY KEY,
     dispute_code    VARCHAR(20) NOT NULL UNIQUE,
     booking_id      BIGINT NOT NULL,
@@ -29,12 +29,12 @@ CREATE TABLE disputes (
     CONSTRAINT fk_disputes_resolved_by FOREIGN KEY (resolved_by) REFERENCES users(id)
 );
 
-CREATE INDEX idx_disputes_booking ON disputes(booking_id);
-CREATE INDEX idx_disputes_status ON disputes(status);
-CREATE INDEX idx_disputes_raised_by ON disputes(raised_by);
+CREATE INDEX IF NOT EXISTS idx_disputes_booking ON disputes(booking_id);
+CREATE INDEX IF NOT EXISTS idx_disputes_status ON disputes(status);
+CREATE INDEX IF NOT EXISTS idx_disputes_raised_by ON disputes(raised_by);
 
 -- 2. WITHDRAWALS — Yêu cầu rút tiền
-CREATE TABLE withdrawals (
+CREATE TABLE IF NOT EXISTS withdrawals (
     id              BIGSERIAL PRIMARY KEY,
     owner_id        BIGINT NOT NULL,
     amount          DECIMAL(12,0) NOT NULL,
@@ -54,11 +54,11 @@ CREATE TABLE withdrawals (
     CONSTRAINT fk_withdrawals_processed_by FOREIGN KEY (processed_by) REFERENCES users(id)
 );
 
-CREATE INDEX idx_withdrawals_owner ON withdrawals(owner_id);
-CREATE INDEX idx_withdrawals_status ON withdrawals(status);
+CREATE INDEX IF NOT EXISTS idx_withdrawals_owner ON withdrawals(owner_id);
+CREATE INDEX IF NOT EXISTS idx_withdrawals_status ON withdrawals(status);
 
 -- 3. PLATFORM_CONFIG — Cấu hình nền tảng
-CREATE TABLE platform_config (
+CREATE TABLE IF NOT EXISTS platform_config (
     id              BIGSERIAL PRIMARY KEY,
     config_key      VARCHAR(100) NOT NULL UNIQUE,
     config_value    TEXT NOT NULL,
@@ -71,10 +71,10 @@ CREATE TABLE platform_config (
     CONSTRAINT fk_config_updated_by FOREIGN KEY (updated_by) REFERENCES users(id)
 );
 
-CREATE INDEX idx_config_key ON platform_config(config_key);
+CREATE INDEX IF NOT EXISTS idx_config_key ON platform_config(config_key);
 
 -- 4. APPROVAL_LOGS — Log duyệt hồ sơ
-CREATE TABLE approval_logs (
+CREATE TABLE IF NOT EXISTS approval_logs (
     id              BIGSERIAL PRIMARY KEY,
     target_type     VARCHAR(30) NOT NULL,
     target_id       BIGINT NOT NULL,
@@ -86,8 +86,8 @@ CREATE TABLE approval_logs (
     CONSTRAINT fk_approval_approved_by FOREIGN KEY (approved_by) REFERENCES users(id)
 );
 
-CREATE INDEX idx_approval_target ON approval_logs(target_type, target_id);
-CREATE INDEX idx_approval_approved_by ON approval_logs(approved_by);
+CREATE INDEX IF NOT EXISTS idx_approval_target ON approval_logs(target_type, target_id);
+CREATE INDEX IF NOT EXISTS idx_approval_approved_by ON approval_logs(approved_by);
 
 -- ============================================================
 -- SEED DATA — Cấu hình mặc định
@@ -100,4 +100,5 @@ INSERT INTO platform_config (config_key, config_value, config_type, description)
 ('default_overage_km_price', '5000', 'NUMBER', 'Phí vượt km mặc định (VNĐ/km)'),
 ('default_late_fee_per_hour', '100000', 'NUMBER', 'Phí trả muộn mỗi giờ (VNĐ)'),
 ('support_hotline', '1900-xxxx', 'STRING', 'Hotline hỗ trợ'),
-('support_email', 'support@carrental.com', 'STRING', 'Email hỗ trợ');
+('support_email', 'support@carrental.com', 'STRING', 'Email hỗ trợ')
+ON CONFLICT (config_key) DO NOTHING;
