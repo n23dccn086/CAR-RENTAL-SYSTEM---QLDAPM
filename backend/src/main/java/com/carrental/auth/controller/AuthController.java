@@ -36,18 +36,19 @@ public class AuthController {
     OtpService otpService;  // ★ MỚI
 
     /**
-     * Đăng ký tài khoản mới
+     * Đăng ký tài khoản mới (UC-C01)
      * POST /api/v1/auth/register
      */
     @PostMapping("/register")
-    public ApiResponse<UserDto> register(@Valid @RequestBody RegisterRequest request) {
+    @ResponseStatus(org.springframework.http.HttpStatus.CREATED)
+    public ApiResponse<AuthResponse> register(@Valid @RequestBody RegisterRequest request) {
         log.info("REST request to register user: {}", request.getPhone());
-        UserDto user = authService.register(request);
-        return ApiResponse.success("Đăng ký thành công. Vui lòng xác thực GPLX.", user);
+        AuthResponse response = authService.register(request);
+        return ApiResponse.success("Đăng ký thành công", response);
     }
 
     /**
-     * Đăng nhập
+     * Đăng nhập (UC-C02)
      * POST /api/v1/auth/login
      */
     @PostMapping("/login")
@@ -58,14 +59,52 @@ public class AuthController {
     }
 
     /**
-     * Refresh access token
+     * Refresh access token (1.3)
      * POST /api/v1/auth/refresh
      */
     @PostMapping("/refresh")
-    public ApiResponse<AuthResponse> refresh(@RequestParam("token") String refreshToken) {
+    public ApiResponse<AuthResponse> refresh(
+            @RequestBody(required = false) com.carrental.auth.dto.RefreshTokenRequest body,
+            @RequestParam(value = "token", required = false) String tokenParam,
+            @RequestParam(value = "refresh_token", required = false) String refreshTokenParam) {
+        String token = null;
+        if (body != null && body.getRefreshToken() != null && !body.getRefreshToken().isBlank()) {
+            token = body.getRefreshToken();
+        } else if (tokenParam != null && !tokenParam.isBlank()) {
+            token = tokenParam;
+        } else if (refreshTokenParam != null && !refreshTokenParam.isBlank()) {
+            token = refreshTokenParam;
+        }
+
+        if (token == null || token.isBlank()) {
+            throw new com.carrental.common.exception.BadRequestException(
+                    com.carrental.common.constant.ErrorCode.VALIDATION_ERROR,
+                    "Refresh token không được để trống"
+            );
+        }
+
         log.info("REST request to refresh token");
-        AuthResponse response = authService.refreshToken(refreshToken);
+        AuthResponse response = authService.refreshToken(token);
         return ApiResponse.success("Token đã được làm mới", response);
+    }
+
+    /**
+     * Đăng xuất (1.4)
+     * POST /api/v1/auth/logout
+     */
+    @PostMapping("/logout")
+    public ApiResponse<Void> logout(HttpServletRequest request) {
+        log.info("REST request to logout");
+        String authHeader = request.getHeader("Authorization");
+        if (authHeader != null && authHeader.startsWith("Bearer ")) {
+            try {
+                Long userId = jwtService.extractUserId(authHeader.substring(7));
+                authService.logout(userId);
+            } catch (Exception e) {
+                log.debug("Logout token extraction ignored: {}", e.getMessage());
+            }
+        }
+        return ApiResponse.success("Đăng xuất thành công", null);
     }
 
     /**

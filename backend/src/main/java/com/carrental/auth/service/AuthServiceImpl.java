@@ -37,7 +37,7 @@ public class AuthServiceImpl implements AuthService {
 
     @Override
     @Transactional
-    public UserDto register(RegisterRequest request) {
+    public AuthResponse register(RegisterRequest request) {
         log.info("Register request for phone: {}", request.getPhone());
 
         if (userRepository.existsByPhone(request.getPhone())) {
@@ -49,22 +49,39 @@ public class AuthServiceImpl implements AuthService {
             throw new BadRequestException(ErrorCode.EMAIL_EXISTED);
         }
 
+        Role role = Role.CUSTOMER;
+        if (request.getRole() != null && "owner".equalsIgnoreCase(request.getRole().trim())) {
+            role = Role.OWNER;
+        }
+
         User user = User.builder()
-                .name(request.getName())
-                .phone(request.getPhone())
-                .email(request.getEmail())
+                .name(request.getName().trim())
+                .phone(request.getPhone().trim())
+                .email(request.getEmail() != null && !request.getEmail().isBlank() ? request.getEmail().trim() : null)
                 .passwordHash(passwordEncoder.encode(request.getPassword()))
-                .role(Role.CUSTOMER)
+                .role(role)
                 .verificationStatus(VerificationStatus.UNVERIFIED)
+                .isActive(true)
                 .build();
 
         User saved = userRepository.save(user);
         log.info("Registered new user with id: {}", saved.getId());
 
-        return userMapper.toDto(saved);
+        String accessToken = jwtService.generateAccessToken(
+                saved.getId(), saved.getPhone(), saved.getRole().name());
+        String refreshToken = jwtService.generateRefreshToken(saved.getId(), saved.getPhone());
+
+        return AuthResponse.builder()
+                .accessToken(accessToken)
+                .refreshToken(refreshToken)
+                .tokenType("Bearer")
+                .expiresIn(3600L)
+                .user(userMapper.toDto(saved))
+                .build();
     }
 
     @Override
+    @Transactional
     public AuthResponse login(LoginRequest request) {
         log.info("Login request for phone: {}", request.getPhone());
 
@@ -75,9 +92,13 @@ public class AuthServiceImpl implements AuthService {
             throw new UnauthorizedException(ErrorCode.INVALID_CREDENTIALS);
         }
 
-        if (user.getDeletedAt() != null) {
+        if (user.getDeletedAt() != null || Boolean.FALSE.equals(user.getIsActive())) {
             throw new UnauthorizedException(ErrorCode.ACCOUNT_DISABLED);
         }
+
+        // Cập nhật thời điểm đăng nhập gần nhất
+        user.setLastLoginAt(java.time.LocalDateTime.now());
+        userRepository.save(user);
 
         String accessToken = jwtService.generateAccessToken(
                 user.getId(), user.getPhone(), user.getRole().name());
@@ -92,6 +113,11 @@ public class AuthServiceImpl implements AuthService {
                 .expiresIn(3600L)
                 .user(userMapper.toDto(user))
                 .build();
+    }
+
+    @Override
+    public void logout(Long userId) {
+        log.info("Logout request for user id: {}", userId);
     }
 
     @Override

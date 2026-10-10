@@ -27,6 +27,13 @@ public class UserDto {
     // ===== MỚI THÊM =====
     String address;
     LocalDate dateOfBirth;
+    String avatarUrl;
+    Boolean isActive;
+
+    @com.fasterxml.jackson.annotation.JsonProperty("avatar_url")
+    public String getAvatarUrlAlias() {
+        return avatarUrl;
+    }
     // ====================
 
     LocalDateTime createdAt;

@@ -9,13 +9,15 @@ import java.time.LocalDate;
 
 public interface AuthService {
 
-    UserDto register(RegisterRequest request);
+    AuthResponse register(RegisterRequest request);
 
     AuthResponse login(LoginRequest request);
 
     AuthResponse refreshToken(String refreshToken);
 
     UserDto getCurrentUser(Long userId);
+
+    void logout(Long userId);
 
     // ===== MỚI THÊM =====
 
