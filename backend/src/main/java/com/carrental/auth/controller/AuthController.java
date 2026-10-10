@@ -212,16 +212,19 @@ public class AuthController {
         @Size(max = 255, message = "Địa chỉ tối đa 255 ký tự")
         private String address;
 
+        @com.fasterxml.jackson.annotation.JsonAlias({"date_of_birth", "dateOfBirth"})
         private LocalDate dateOfBirth;
     }
 
     @Data
     public static class ChangePasswordRequest {
         @NotBlank(message = "Mật khẩu hiện tại không được để trống")
+        @com.fasterxml.jackson.annotation.JsonAlias({"current_password", "currentPassword"})
         private String currentPassword;
 
         @NotBlank(message = "Mật khẩu mới không được để trống")
         @Size(min = 8, message = "Mật khẩu mới phải có ít nhất 8 ký tự")
+        @com.fasterxml.jackson.annotation.JsonAlias({"new_password", "newPassword"})
         private String newPassword;
     }
 }

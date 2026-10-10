@@ -23,5 +23,6 @@ public class ResetPasswordRequest {
 
     @NotBlank(message = "Mật khẩu mới không được để trống")
     @Size(min = 8, max = 100, message = "Mật khẩu phải từ 8 đến 100 ký tự")
+    @com.fasterxml.jackson.annotation.JsonAlias({"new_password", "newPassword"})
     String newPassword;
 }
