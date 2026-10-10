@@ -1029,17 +1029,7 @@ paths:
   # ==========================================================
   # MODULE 7: DRIVERS (5 endpoints)
   # ==========================================================
-  /owner/drivers:
-    get:
-      tags: [7. Drivers]
-      summary: Chủ xe xem danh sách đội ngũ tài xế của mình (7.2, UC-O08)
-      responses:
-        '200':
-          description: Danh sách tài xế
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/DriverListApiResponse'
+  /drivers:
     post:
       tags: [7. Drivers]
       summary: Chủ xe thêm hồ sơ tài xế mới (7.1, UC-O08)
@@ -1048,39 +1038,113 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/DriverCreateRequest'
+              type: object
+              required: [name, phone, cccd_number, gplx_number, gplx_class]
+              properties:
+                name: { type: string, example: "Trần Văn Bình" }
+                phone: { type: string, example: "0901111111" }
+                cccd_number: { type: string, example: "012345678901" }
+                gplx_number: { type: string, example: "B2-123456" }
+                gplx_class: { type: string, example: "B2" }
+                gplx_issue_date: { type: string, format: date, example: "2020-01-01" }
+                gplx_expiry_date: { type: string, format: date, example: "2030-01-01" }
+                date_of_birth: { type: string, format: date, example: "1990-05-15" }
+                experience_years: { type: integer, example: 5 }
+                vehicle_types:
+                  type: array
+                  items: { type: string }
+                  example: ["sedan", "suv"]
+                operating_area: { type: string, example: "TP.HCM" }
       responses:
         '201':
-          description: Hồ sơ tài xế đã được gửi xét duyệt
+          description: Tài xế đã được tạo, chờ Admin duyệt
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/DriverApiResponse'
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  data:
+                    type: object
+                    properties:
+                      id: { type: integer, example: 10 }
+                      name: { type: string, example: "Trần Văn Bình" }
+                      status: { type: string, example: "pending" }
+                  message: { type: string, example: "Tài xế đã được tạo, chờ Admin duyệt" }
 
-  /owner/drivers/{id}:
-    put:
+  /drivers/my:
+    get:
       tags: [7. Drivers]
-      summary: Chủ xe cập nhật hồ sơ và trạng thái tài xế (7.3, UC-O08)
+      summary: Chủ xe xem danh sách đội ngũ tài xế của mình (7.2, UC-O08)
       parameters:
-        - name: id
-          in: path
-          required: true
-          schema: { type: integer }
+        - name: status
+          in: query
+          schema: { type: string, example: "available" }
+        - name: page
+          in: query
+          schema: { type: integer, default: 1 }
+        - name: limit
+          in: query
+          schema: { type: integer, default: 20 }
+        - name: search
+          in: query
+          schema: { type: string }
+      responses:
+        '200':
+          description: Danh sách tài xế của chủ xe
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  data:
+                    type: object
+                    properties:
+                      drivers:
+                        type: array
+                        items: { $ref: '#/components/schemas/DriverDto' }
+                      pagination:
+                        type: object
+                        properties:
+                          page: { type: integer, example: 1 }
+                          limit: { type: integer, example: 20 }
+                          total: { type: integer, example: 1 }
+                          total_pages: { type: integer, example: 1 }
+
+  /drivers/assign:
+    post:
+      tags: [7. Drivers]
+      summary: Chủ xe gán tài xế vào chuyến (7.3)
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/DriverUpdateRequest'
+              type: object
+              required: [driver_id, booking_id]
+              properties:
+                driver_id: { type: integer, example: 10 }
+                booking_id: { type: integer, example: 100 }
+                car_id: { type: integer, example: 1 }
       responses:
         '200':
-          description: Cập nhật thành công
+          description: Gán tài xế vào chuyến thành công
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/DriverApiResponse'
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  data:
+                    type: object
+                    properties:
+                      assignment_id: { type: integer, example: 30 }
+                      driver_id: { type: integer, example: 10 }
+                      booking_id: { type: integer, example: 100 }
+                      status: { type: string, example: "assigned" }
 
-  /driver/assignments/{id}/accept:
+  /drivers/assignments/{id}/accept:
     post:
       tags: [7. Drivers]
       summary: Tài xế chấp thuận nhiệm vụ lái chuyến được chỉ định (7.4, UC-D01)
@@ -1095,9 +1159,15 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ApiResponseVoid'
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  data:
+                    type: object
+                    properties:
+                      status: { type: string, example: "accepted" }
 
-  /driver/assignments/{id}/reject:
+  /drivers/assignments/{id}/reject:
     post:
       tags: [7. Drivers]
       summary: Tài xế từ chối nhiệm vụ lái chuyến (7.5, UC-D01)
@@ -1113,10 +1183,38 @@ paths:
             schema:
               type: object
               properties:
-                reason: { type: string }
+                reason: { type: string, example: "Bận việc đột xuất" }
       responses:
         '200':
           description: Đã từ chối nhiệm vụ
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  data:
+                    type: object
+                    properties:
+                      status: { type: string, example: "rejected" }
+
+  /owner/drivers/import:
+    post:
+      tags: [7. Drivers]
+      summary: Chủ xe import danh sách tài xế hàng loạt bằng file Excel (.xlsx)
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                file:
+                  type: string
+                  format: binary
+      responses:
+        '200':
+          description: Import hoàn tất
           content:
             application/json:
               schema:

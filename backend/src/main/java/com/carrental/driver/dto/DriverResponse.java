@@ -47,4 +47,17 @@ public class DriverResponse {
 
     LocalDateTime createdAt;
     LocalDateTime updatedAt;
+
+    // ===== DUAL COMPATIBILITY GETTERS (Contract snake_case) =====
+    public String getGplx_class() { return licenseClass; }
+    public String getGplx_number() { return licenseNumber; }
+    public String getCccd_number() { return cccd; }
+    public LocalDate getGplx_expiry_date() { return licenseExpiry; }
+    public LocalDate getDate_of_birth() { return dateOfBirth; }
+    public Integer getExperience_years() { return experienceYears; }
+    public String getAvatar_url() { return avatarUrl; }
+    public Double getAvg_rating() { return rating != null ? rating : 5.0; }
+    public Integer getTotal_trips() { return totalTrips != null ? totalTrips : 0; }
+    public LocalDateTime getCreated_at() { return createdAt; }
+    public LocalDateTime getUpdated_at() { return updatedAt; }
 }

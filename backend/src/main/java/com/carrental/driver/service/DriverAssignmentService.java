@@ -16,9 +16,16 @@ public interface DriverAssignmentService {
     // ★ MỚI: Assign driver cụ thể mà KHÁCH đã chọn
     DriverAssignment assignSelectedDriver(Booking booking);
 
+    // Contract 7.3: Owner gán tài xế vào chuyến
+    DriverAssignment manualAssignDriver(Long ownerId, Long driverId, Long bookingId, Long carId);
+
     void acceptAssignment(Long assignmentId, String token);
 
+    DriverAssignment acceptAssignmentByDriver(Long assignmentId, Long driverUserId, String token);
+
     void rejectAssignment(Long assignmentId, String token, String reason);
+
+    DriverAssignment rejectAssignmentByDriver(Long assignmentId, Long driverUserId, String token, String reason);
 
     void expireAssignment(Long assignmentId);
 
