@@ -29,6 +29,7 @@ import com.carrental.payment.entity.PaymentStatus;
 import com.carrental.payment.entity.Refund;
 import com.carrental.payment.repository.PaymentRepository;
 import com.carrental.payment.repository.RefundRepository;
+import com.carrental.user.entity.Role;
 import com.carrental.user.entity.User;
 import com.carrental.user.entity.VerificationStatus;
 import com.carrental.user.repository.UserRepository;
@@ -121,6 +122,10 @@ public class BookingServiceImpl implements BookingService {
             driverId = null;
         }
 
+        if (request.getReturnAddress() == null || request.getReturnAddress().isBlank()) {
+            request.setReturnAddress(request.getPickupAddress());
+        }
+
         BookingDetail detail = pricingService.calculatePricing(car, request);
         long totalPrice = pricingService.calculateTotal(detail);
         long depositAmount = pricingService.calculateDeposit(totalPrice);
@@ -158,7 +163,23 @@ public class BookingServiceImpl implements BookingService {
 
     @Override
     public BookingResponse getBookingById(Long id) {
+        return getBookingById(id, null);
+    }
+
+    @Override
+    public BookingResponse getBookingById(Long id, Long requesterId) {
         Booking booking = getBookingEntityById(id);
+        if (requesterId != null) {
+            User requester = userRepository.findById(requesterId).orElse(null);
+            boolean isAdmin = requester != null && requester.getRole() == Role.ADMIN;
+            boolean isCustomer = booking.getCustomerId().equals(requesterId);
+            boolean isOwner = booking.getOwnerId().equals(requesterId);
+            boolean isDriver = booking.getDriverId() != null && booking.getDriverId().equals(requesterId);
+
+            if (!isAdmin && !isCustomer && !isOwner && !isDriver) {
+                throw new UnauthorizedException(ErrorCode.UNAUTHORIZED);
+            }
+        }
         BookingDetail detail = bookingDetailRepository.findByBookingId(id).orElse(null);
         return buildResponse(booking, detail);
     }
@@ -171,13 +192,43 @@ public class BookingServiceImpl implements BookingService {
 
     @Override
     public List<BookingResponse> getMyBookings(Long customerId) {
-        List<Booking> bookings = bookingRepository.findByCustomerIdOrderByCreatedAtDesc(customerId);
+        return getMyBookings(customerId, null);
+    }
+
+    @Override
+    public List<BookingResponse> getMyBookings(Long customerId, String status) {
+        List<Booking> bookings;
+        if (status != null && !status.isBlank() && !status.equalsIgnoreCase("ALL")) {
+            try {
+                BookingStatus bs = BookingStatus.fromString(status);
+                bookings = bookingRepository.findByCustomerIdAndStatusOrderByCreatedAtDesc(customerId, bs);
+            } catch (Exception e) {
+                bookings = bookingRepository.findByCustomerIdOrderByCreatedAtDesc(customerId);
+            }
+        } else {
+            bookings = bookingRepository.findByCustomerIdOrderByCreatedAtDesc(customerId);
+        }
         return bookings.stream().map(b -> buildResponse(b, null)).toList();
     }
 
     @Override
     public List<BookingResponse> getOwnerBookings(Long ownerId) {
-        List<Booking> bookings = bookingRepository.findByOwnerIdOrderByCreatedAtDesc(ownerId);
+        return getOwnerBookings(ownerId, null);
+    }
+
+    @Override
+    public List<BookingResponse> getOwnerBookings(Long ownerId, String status) {
+        List<Booking> bookings;
+        if (status != null && !status.isBlank() && !status.equalsIgnoreCase("ALL")) {
+            try {
+                BookingStatus bs = BookingStatus.fromString(status);
+                bookings = bookingRepository.findByOwnerIdAndStatusOrderByCreatedAtDesc(ownerId, bs);
+            } catch (Exception e) {
+                bookings = bookingRepository.findByOwnerIdOrderByCreatedAtDesc(ownerId);
+            }
+        } else {
+            bookings = bookingRepository.findByOwnerIdOrderByCreatedAtDesc(ownerId);
+        }
         return bookings.stream().map(b -> buildResponse(b, null)).toList();
     }
 
@@ -210,6 +261,28 @@ public class BookingServiceImpl implements BookingService {
 
         long refundAmount = calculateRefundAmount(booking);
         long depositPaid = booking.getDepositAmount();
+
+        long hoursUntilStart = Duration.between(
+                LocalDateTime.now(),
+                booking.getStartDate()).toHours();
+
+        int refundPercent = 0;
+        String refundPolicy = "Không hoàn cọc";
+        if (booking.getStatus() != BookingStatus.PENDING && depositPaid > 0) {
+            if (hoursUntilStart >= 24) {
+                refundPercent = configHelper.getRefundBefore24hPercent().intValue();
+                refundPolicy = String.format("Hủy trước 24h - hoàn %d%%", refundPercent);
+            } else if (hoursUntilStart >= 4) {
+                refundPercent = configHelper.getRefund4To24hPercent().intValue();
+                refundPolicy = String.format("Hủy trong 4h - 24h - hoàn %d%%", refundPercent);
+            } else if (hoursUntilStart > 0) {
+                refundPercent = configHelper.getRefundBefore4hPercent().intValue();
+                refundPolicy = String.format("Hủy trước 4h - hoàn %d%%", refundPercent);
+            } else {
+                refundPercent = configHelper.getRefundAfterPickupPercent().intValue();
+                refundPolicy = String.format("Hủy sau giờ nhận xe - hoàn %d%%", refundPercent);
+            }
+        }
 
         log.info("Refund calculation: deposit={}, refund={}", depositPaid, refundAmount);
 
@@ -251,7 +324,7 @@ public class BookingServiceImpl implements BookingService {
 
         // ★ Thông báo cho tất cả Admin (cần duyệt hoàn tiền)
         try {
-            java.util.List<User> admins = userRepository.findByRole(com.carrental.user.entity.Role.ADMIN);
+            List<User> admins = userRepository.findByRole(Role.ADMIN);
             for (User admin : admins) {
                 notificationService.createNotification(
                         admin.getId(),
@@ -266,7 +339,12 @@ public class BookingServiceImpl implements BookingService {
         }
 
         log.info("Booking cancelled: id={}, refundAmount={}", id, refundAmount);
-        return buildResponse(updated, null);
+        BookingResponse resp = buildResponse(updated, null);
+        resp.setRefundRequired(refundAmount > 0);
+        resp.setRefundAmount(refundAmount);
+        resp.setRefundPercent(refundPercent);
+        resp.setRefundPolicy(refundPolicy);
+        return resp;
     }
 
     @Override
@@ -331,7 +409,7 @@ public class BookingServiceImpl implements BookingService {
                 && booking.getStatus() != BookingStatus.PAID
                 && booking.getStatus() != BookingStatus.APPROVED) {
             throw new BadRequestException(ErrorCode.BOOKING_CANNOT_CANCEL,
-                    "Chủ xe chỉ có thể hủy đơn khi đơn ở trạng thái Chưa cọc / Đã cọc / Đã duyệt.");
+                    "Chủ xe chỉ có thể từ chối đơn khi đơn ở trạng thái Chưa cọc / Đã cọc / Đã duyệt.");
         }
 
         long refundAmount = 0;
@@ -380,7 +458,7 @@ public class BookingServiceImpl implements BookingService {
 
         // ★ Thông báo cho tất cả Admin
         try {
-            java.util.List<User> admins = userRepository.findByRole(com.carrental.user.entity.Role.ADMIN);
+            List<User> admins = userRepository.findByRole(Role.ADMIN);
             for (User admin : admins) {
                 notificationService.createNotification(
                         admin.getId(),
@@ -394,7 +472,12 @@ public class BookingServiceImpl implements BookingService {
             log.warn("Failed to notify admins: {}", e.getMessage());
         }
 
-        return buildResponse(updated, null);
+        BookingResponse resp = buildResponse(updated, null);
+        resp.setRefundRequired(refundAmount > 0);
+        resp.setRefundAmount(refundAmount);
+        resp.setRefundPercent(100);
+        resp.setRefundPolicy("Chủ xe hủy - hoàn 100% cọc");
+        return resp;
     }
 
     @Override
@@ -422,7 +505,8 @@ public class BookingServiceImpl implements BookingService {
 
         Booking booking = getBookingEntityById(id);
 
-        if (!booking.getOwnerId().equals(ownerId)) {
+        if (!booking.getOwnerId().equals(ownerId)
+                && (booking.getDriverId() == null || !booking.getDriverId().equals(ownerId))) {
             throw new UnauthorizedException(ErrorCode.UNAUTHORIZED);
         }
 
@@ -432,6 +516,12 @@ public class BookingServiceImpl implements BookingService {
 
         booking.setStatus(BookingStatus.RENTED);
         Booking updated = bookingRepository.save(booking);
+
+        Car car = carRepository.findById(booking.getCarId()).orElse(null);
+        if (car != null) {
+            car.setStatus(CarStatus.RENTED);
+            carRepository.save(car);
+        }
 
         log.info("Rental started: id={}", id);
         return buildResponse(updated, null);
@@ -479,6 +569,77 @@ public class BookingServiceImpl implements BookingService {
         return buildResponse(updated, null);
     }
 
+    @Override
+    @Transactional
+    public BookingResponse updateStatus(Long id, Long requesterId, String statusStr, String note) {
+        log.info("Update booking status: id={}, requesterId={}, targetStatus={}, note={}",
+                id, requesterId, statusStr, note);
+
+        Booking booking = getBookingEntityById(id);
+        BookingStatus targetStatus = BookingStatus.fromString(statusStr);
+
+        User requester = userRepository.findById(requesterId)
+                .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.USER_NOT_FOUND));
+        boolean isAdmin = requester.getRole() == Role.ADMIN;
+        boolean isOwner = booking.getOwnerId().equals(requesterId);
+        boolean isCustomer = booking.getCustomerId().equals(requesterId);
+        boolean isDriver = booking.getDriverId() != null && booking.getDriverId().equals(requesterId);
+
+        return switch (targetStatus) {
+            case APPROVED -> {
+                if (!isOwner && !isAdmin) {
+                    throw new UnauthorizedException(ErrorCode.UNAUTHORIZED);
+                }
+                yield approveBooking(id, booking.getOwnerId(), note);
+            }
+            case CANCELLED -> {
+                if (isCustomer) {
+                    yield cancelBooking(id, requesterId, note != null ? note : "Khách hủy");
+                } else if (isOwner || isAdmin) {
+                    yield rejectBooking(id, booking.getOwnerId(), note != null ? note : "Chủ xe hủy");
+                } else {
+                    throw new UnauthorizedException(ErrorCode.UNAUTHORIZED);
+                }
+            }
+            case RENTED -> {
+                if (!isOwner && !isDriver && !isAdmin) {
+                    throw new UnauthorizedException(ErrorCode.UNAUTHORIZED);
+                }
+                yield startRental(id, booking.getOwnerId());
+            }
+            case RETURNED -> {
+                if (!isOwner && !isDriver && !isAdmin) {
+                    throw new UnauthorizedException(ErrorCode.UNAUTHORIZED);
+                }
+                if (booking.getStatus() != BookingStatus.RENTED) {
+                    throw new BadRequestException(ErrorCode.BOOKING_STATUS_INVALID,
+                            "Chỉ có thể chuyển sang Đã trả xe khi đơn đang trong trạng thái Đang thuê.");
+                }
+                booking.setStatus(BookingStatus.RETURNED);
+                booking.setActualReturnDate(LocalDateTime.now());
+                if (note != null && !note.isBlank()) {
+                    booking.setOwnerNote(note);
+                }
+                Booking updated = bookingRepository.save(booking);
+                yield buildResponse(updated, null);
+            }
+            case COMPLETED -> {
+                if (!isOwner && !isAdmin) {
+                    throw new UnauthorizedException(ErrorCode.UNAUTHORIZED);
+                }
+                yield completeRental(id, booking.getOwnerId());
+            }
+            case PAID -> {
+                if (!isAdmin) {
+                    throw new UnauthorizedException(ErrorCode.UNAUTHORIZED);
+                }
+                yield markAsPaid(id);
+            }
+            default -> throw new BadRequestException(ErrorCode.VALIDATION_ERROR,
+                    "Không hỗ trợ chuyển sang trạng thái: " + targetStatus);
+        };
+    }
+
     // ===== HELPER =====
 
     private long calculateRefundAmount(Booking booking) {
@@ -518,15 +679,22 @@ public class BookingServiceImpl implements BookingService {
         if (car != null) {
             response.setCarName(car.getBrand() + " " + car.getModel());
             response.setCarPlate(car.getPlate());
+            if (car.getImages() != null && !car.getImages().isEmpty()) {
+                response.setCarThumbnail(car.getImages().get(0).getImageUrl());
+            }
         }
 
         User customer = userRepository.findById(booking.getCustomerId()).orElse(null);
-        if (customer != null)
+        if (customer != null) {
             response.setCustomerName(customer.getName());
+            response.setCustomerPhone(customer.getPhone());
+        }
 
         User owner = userRepository.findById(booking.getOwnerId()).orElse(null);
-        if (owner != null)
+        if (owner != null) {
             response.setOwnerName(owner.getName());
+            response.setOwnerPhone(owner.getPhone());
+        }
 
         if (detail != null) {
             response.setDetails(bookingMapper.toDetailResponse(detail));

@@ -577,27 +577,10 @@ paths:
               schema:
                 $ref: '#/components/schemas/BookingApiResponse'
 
-  /bookings/{id}/confirm:
-    put:
+  /bookings/{id}/approve:
+    post:
       tags: [4. Bookings]
-      summary: Chủ xe xác nhận duyệt đơn đặt xe (4.5, UC-O06)
-      parameters:
-        - name: id
-          in: path
-          required: true
-          schema: { type: integer }
-      responses:
-        '200':
-          description: Đơn đặt xe đã được chủ xe chấp thuận
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/BookingApiResponse'
-
-  /bookings/{id}/reject:
-    put:
-      tags: [4. Bookings]
-      summary: Chủ xe từ chối đơn đặt xe và nêu lý do (4.6, UC-O06)
+      summary: Chủ xe xác nhận duyệt đơn đặt xe (4.4, UC-O06)
       parameters:
         - name: id
           in: path
@@ -610,7 +593,68 @@ paths:
             schema:
               type: object
               properties:
-                reason: { type: string, example: Xe cần bảo dưỡng đột xuất }
+                note: { type: string, example: "Đã xác nhận, giao xe đúng giờ" }
+      responses:
+        '200':
+          description: Đơn đặt xe đã được chủ xe chấp thuận
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BookingApiResponse'
+    put:
+      tags: [4. Bookings]
+      summary: Chủ xe xác nhận duyệt đơn đặt xe (PUT compatibility)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+        - name: note
+          in: query
+          schema: { type: string }
+      responses:
+        '200':
+          description: Đơn đặt xe đã được chủ xe chấp thuận
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BookingApiResponse'
+
+  /bookings/{id}/reject:
+    post:
+      tags: [4. Bookings]
+      summary: Chủ xe từ chối đơn đặt xe và nêu lý do (4.5, UC-O06)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                reason: { type: string, example: "Xe đang bảo dưỡng đột xuất" }
+      responses:
+        '200':
+          description: Đơn đặt xe đã bị từ chối, hoàn 100% cọc
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BookingApiResponse'
+    put:
+      tags: [4. Bookings]
+      summary: Chủ xe từ chối đơn đặt xe (PUT compatibility)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+        - name: reason
+          in: query
+          schema: { type: string }
       responses:
         '200':
           description: Đơn đặt xe đã bị từ chối
@@ -622,7 +666,7 @@ paths:
   /bookings/{id}/cancel:
     post:
       tags: [4. Bookings]
-      summary: Hủy đơn đặt xe và tự động tính hoàn cọc theo BR-11 (4.7, UC-C11)
+      summary: Hủy đơn đặt xe và tự động tính hoàn cọc theo chính sách (4.6, UC-C11)
       parameters:
         - name: id
           in: path
@@ -635,10 +679,60 @@ paths:
             schema:
               type: object
               properties:
-                reason: { type: string, example: Thay đổi kế hoạch công tác }
+                reason: { type: string, example: "Thay đổi kế hoạch công tác" }
       responses:
         '200':
-          description: Hủy đơn thành công, ghi nhận tỷ lệ hoàn cọc (100%, 70%, 50%, 0%)
+          description: Hủy đơn thành công, ghi nhận hoàn cọc
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BookingApiResponse'
+    put:
+      tags: [4. Bookings]
+      summary: Hủy đơn đặt xe (PUT compatibility)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+        - name: reason
+          in: query
+          schema: { type: string }
+      responses:
+        '200':
+          description: Hủy đơn thành công
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BookingApiResponse'
+
+  /bookings/{id}/status:
+    put:
+      tags: [4. Bookings]
+      summary: Cập nhật trạng thái vòng đời đơn thuê xe (4.7, State Machine)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [status]
+              properties:
+                status:
+                  type: string
+                  enum: [pending_payment, paid_pending_approval, approved_pending_pickup, in_progress, returned_pending_review, completed, cancelled]
+                  example: in_progress
+                note:
+                  type: string
+                  example: "Đã giao xe cho khách tại địa chỉ hẹn"
+      responses:
+        '200':
+          description: Trạng thái đơn được cập nhật thành công
           content:
             application/json:
               schema:

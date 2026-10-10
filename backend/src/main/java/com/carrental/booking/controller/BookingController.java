@@ -1,7 +1,6 @@
 package com.carrental.booking.controller;
 
-import com.carrental.booking.dto.BookingRequest;
-import com.carrental.booking.dto.BookingResponse;
+import com.carrental.booking.dto.*;
 import com.carrental.booking.entity.BookingStatus;
 import com.carrental.booking.service.BookingService;
 import com.carrental.common.constant.ErrorCode;
@@ -14,6 +13,7 @@ import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -35,6 +35,7 @@ public class BookingController {
      * POST /api/v1/bookings
      */
     @PostMapping
+    @ResponseStatus(HttpStatus.CREATED)
     public ApiResponse<BookingResponse> createBooking(
             @Valid @RequestBody BookingRequest request,
             HttpServletRequest httpRequest) {
@@ -44,7 +45,7 @@ public class BookingController {
                 customerId, request.getCarId());
 
         BookingResponse response = bookingService.createBooking(customerId, request);
-        return ApiResponse.success("Tạo đơn đặt xe thành công. Vui lòng thanh toán cọc.", response);
+        return ApiResponse.success("Đơn đã được tạo, vui lòng thanh toán cọc", response);
     }
 
     // ===== READ =====
@@ -54,9 +55,16 @@ public class BookingController {
      * GET /api/v1/bookings/{id}
      */
     @GetMapping("/{id}")
-    public ApiResponse<BookingResponse> getBookingById(@PathVariable Long id) {
+    public ApiResponse<BookingResponse> getBookingById(
+            @PathVariable Long id,
+            HttpServletRequest httpRequest) {
         log.info("REST request to get booking: {}", id);
-        return ApiResponse.success(bookingService.getBookingById(id));
+        Long userId = null;
+        try {
+            userId = extractUserId(httpRequest);
+        } catch (Exception ignored) {
+        }
+        return ApiResponse.success(bookingService.getBookingById(id, userId));
     }
 
     /**
@@ -64,11 +72,13 @@ public class BookingController {
      * GET /api/v1/bookings/my
      */
     @GetMapping("/my")
-    public ApiResponse<List<BookingResponse>> getMyBookings(HttpServletRequest httpRequest) {
+    public ApiResponse<List<BookingResponse>> getMyBookings(
+            @RequestParam(required = false) String status,
+            HttpServletRequest httpRequest) {
         Long customerId = extractUserId(httpRequest);
-        log.info("REST request to get my bookings: customerId={}", customerId);
+        log.info("REST request to get my bookings: customerId={}, status={}", customerId, status);
 
-        return ApiResponse.success(bookingService.getMyBookings(customerId));
+        return ApiResponse.success(bookingService.getMyBookings(customerId, status));
     }
 
     /**
@@ -76,11 +86,13 @@ public class BookingController {
      * GET /api/v1/bookings/owner
      */
     @GetMapping("/owner")
-    public ApiResponse<List<BookingResponse>> getOwnerBookings(HttpServletRequest httpRequest) {
+    public ApiResponse<List<BookingResponse>> getOwnerBookings(
+            @RequestParam(required = false) String status,
+            HttpServletRequest httpRequest) {
         Long ownerId = extractUserId(httpRequest);
-        log.info("REST request to get owner bookings: ownerId={}", ownerId);
+        log.info("REST request to get owner bookings: ownerId={}, status={}", ownerId, status);
 
-        return ApiResponse.success(bookingService.getOwnerBookings(ownerId));
+        return ApiResponse.success(bookingService.getOwnerBookings(ownerId, status));
     }
 
     /**
@@ -96,54 +108,90 @@ public class BookingController {
     // ===== ACTIONS =====
 
     /**
-     * Khách hủy đơn
-     * PUT /api/v1/bookings/{id}/cancel?reason=...
+     * Khách hủy đơn (hỗ trợ cả POST theo API contract và PUT theo frontend)
+     * POST /api/v1/bookings/{id}/cancel
+     * PUT  /api/v1/bookings/{id}/cancel?reason=...
      */
-    @PutMapping("/{id}/cancel")
+    @RequestMapping(value = "/{id}/cancel", method = {RequestMethod.POST, RequestMethod.PUT})
     public ApiResponse<BookingResponse> cancelBooking(
             @PathVariable Long id,
+            @RequestBody(required = false) CancelBookingRequest requestBody,
             @RequestParam(required = false) String reason,
             HttpServletRequest httpRequest) {
 
         Long customerId = extractUserId(httpRequest);
-        log.info("REST request to cancel booking: id={}, customerId={}", id, customerId);
+        String effectiveReason = (requestBody != null && requestBody.getReason() != null && !requestBody.getReason().isBlank())
+                ? requestBody.getReason()
+                : (reason != null ? reason : "Khách hủy");
+
+        log.info("REST request to cancel booking: id={}, customerId={}, reason={}", id, customerId, effectiveReason);
 
         return ApiResponse.success("Hủy đơn thành công",
-                bookingService.cancelBooking(id, customerId, reason));
+                bookingService.cancelBooking(id, customerId, effectiveReason));
     }
 
     /**
-     * Chủ xe duyệt đơn
-     * PUT /api/v1/bookings/{id}/approve
+     * Chủ xe duyệt đơn (hỗ trợ cả POST theo API contract và PUT theo frontend)
+     * POST /api/v1/bookings/{id}/approve
+     * PUT  /api/v1/bookings/{id}/approve?note=...
      */
-    @PutMapping("/{id}/approve")
+    @RequestMapping(value = "/{id}/approve", method = {RequestMethod.POST, RequestMethod.PUT})
     public ApiResponse<BookingResponse> approveBooking(
             @PathVariable Long id,
+            @RequestBody(required = false) ApproveBookingRequest requestBody,
             @RequestParam(required = false) String note,
             HttpServletRequest httpRequest) {
 
         Long ownerId = extractUserId(httpRequest);
-        log.info("REST request to approve booking: id={}, ownerId={}", id, ownerId);
+        String effectiveNote = (requestBody != null && requestBody.getNote() != null)
+                ? requestBody.getNote()
+                : note;
 
-        return ApiResponse.success("Duyệt đơn thành công",
-                bookingService.approveBooking(id, ownerId, note));
+        log.info("REST request to approve booking: id={}, ownerId={}, note={}", id, ownerId, effectiveNote);
+
+        return ApiResponse.success("Đã duyệt đơn",
+                bookingService.approveBooking(id, ownerId, effectiveNote));
     }
 
     /**
-     * Chủ xe từ chối đơn
-     * PUT /api/v1/bookings/{id}/reject?reason=...
+     * Chủ xe từ chối đơn (hỗ trợ cả POST theo API contract và PUT theo frontend)
+     * POST /api/v1/bookings/{id}/reject
+     * PUT  /api/v1/bookings/{id}/reject?reason=...
      */
-    @PutMapping("/{id}/reject")
+    @RequestMapping(value = "/{id}/reject", method = {RequestMethod.POST, RequestMethod.PUT})
     public ApiResponse<BookingResponse> rejectBooking(
             @PathVariable Long id,
-            @RequestParam String reason,
+            @RequestBody(required = false) RejectBookingRequest requestBody,
+            @RequestParam(required = false) String reason,
             HttpServletRequest httpRequest) {
 
         Long ownerId = extractUserId(httpRequest);
-        log.info("REST request to reject booking: id={}, ownerId={}", id, ownerId);
+        String effectiveReason = (requestBody != null && requestBody.getReason() != null && !requestBody.getReason().isBlank())
+                ? requestBody.getReason()
+                : (reason != null ? reason : "Chủ xe từ chối");
 
-        return ApiResponse.success("Từ chối đơn thành công",
-                bookingService.rejectBooking(id, ownerId, reason));
+        log.info("REST request to reject booking: id={}, ownerId={}, reason={}", id, ownerId, effectiveReason);
+
+        return ApiResponse.success("Đã từ chối đơn, hoàn cọc cho khách",
+                bookingService.rejectBooking(id, ownerId, effectiveReason));
+    }
+
+    /**
+     * Cập nhật trạng thái đơn (Unified Status Transition - Contract Section 4.7)
+     * PUT /api/v1/bookings/{id}/status
+     */
+    @PutMapping("/{id}/status")
+    public ApiResponse<BookingResponse> updateBookingStatus(
+            @PathVariable Long id,
+            @Valid @RequestBody UpdateBookingStatusRequest request,
+            HttpServletRequest httpRequest) {
+
+        Long userId = extractUserId(httpRequest);
+        log.info("REST request to update booking status: id={}, userId={}, status={}, note={}",
+                id, userId, request.getStatus(), request.getNote());
+
+        return ApiResponse.success("Cập nhật trạng thái đơn thành công",
+                bookingService.updateStatus(id, userId, request.getStatus(), request.getNote()));
     }
 
     /**
