@@ -11,11 +11,25 @@ import java.util.List;
 
 public interface DisputeService {
 
-    /** User tạo tranh chấp */
+    /** User tạo tranh chấp qua JSON */
     DisputeResponse createDispute(Long userId, DisputeRequest request);
+
+    /** User tạo tranh chấp qua multipart/form-data (Contract 9.1) */
+    DisputeResponse createDisputeMultipart(
+            Long userId,
+            Long bookingId,
+            Long againstUserId,
+            String category,
+            String description,
+            java.math.BigDecimal claimedAmount,
+            List<MultipartFile> evidenceFiles);
 
     /** User xem danh sách tranh chấp của mình */
     List<DisputeResponse> getMyDisputes(Long userId);
+
+    /** User xem danh sách tranh chấp phân trang theo Contract 9.2 */
+    org.springframework.data.domain.Page<DisputeResponse> getMyDisputesPaged(
+            Long userId, String status, org.springframework.data.domain.Pageable pageable);
 
     /** User xem chi tiết tranh chấp */
     DisputeResponse getMyDisputeById(Long id, Long userId);

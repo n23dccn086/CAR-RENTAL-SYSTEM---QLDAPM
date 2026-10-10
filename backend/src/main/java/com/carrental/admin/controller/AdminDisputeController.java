@@ -24,9 +24,30 @@ public class AdminDisputeController {
     AdminDisputeService disputeService;
 
     @GetMapping
-    public ApiResponse<List<DisputeResponse>> getAllDisputes(
-            @RequestParam(required = false) String status) {
-        if (status != null) {
+    public ApiResponse<Object> getAllDisputes(
+            @RequestParam(required = false) String status,
+            @RequestParam(required = false) Integer page,
+            @RequestParam(required = false) Integer limit) {
+        if (page != null || limit != null) {
+            int pageIdx = page != null ? Math.max(0, page - 1) : 0;
+            int pageSize = limit != null ? limit : 20;
+            org.springframework.data.domain.Pageable pageable =
+                    org.springframework.data.domain.PageRequest.of(pageIdx, pageSize);
+            org.springframework.data.domain.Page<DisputeResponse> paged =
+                    disputeService.getDisputesPaged(status, pageable);
+
+            java.util.Map<String, Object> data = new java.util.LinkedHashMap<>();
+            data.put("disputes", paged.getContent());
+            java.util.Map<String, Object> pagination = new java.util.LinkedHashMap<>();
+            pagination.put("page", paged.getNumber() + 1);
+            pagination.put("limit", paged.getSize());
+            pagination.put("total", paged.getTotalElements());
+            pagination.put("total_pages", paged.getTotalPages());
+            data.put("pagination", pagination);
+            return ApiResponse.success(data);
+        }
+
+        if (status != null && !status.isBlank()) {
             return ApiResponse.success(disputeService.getDisputesByStatus(status));
         }
         return ApiResponse.success(disputeService.getAllDisputes());
@@ -62,6 +83,22 @@ public class AdminDisputeController {
                 disputeService.approveAgainst(id, adminId));
     }
 
+    /**
+     * Contract 11.5: POST /admin/disputes/:id/resolve
+     */
+    @PostMapping("/{id}/resolve")
+    public ApiResponse<DisputeResponse> resolveDisputePost(
+            @PathVariable Long id,
+            @RequestAttribute("userId") Long adminId,
+            @jakarta.validation.Valid @RequestBody com.carrental.admin.dto.ResolveDisputeRequest request) {
+        log.info("REST: Admin {} resolving dispute {} via POST body: {}", adminId, id, request);
+        return ApiResponse.success("Giải quyết tranh chấp thành công",
+                disputeService.resolveDispute(id, adminId, request));
+    }
+
+    /**
+     * Frontend compatibility: PUT /admin/disputes/:id/resolve
+     */
     @PutMapping("/{id}/resolve")
     public ApiResponse<DisputeResponse> resolveDispute(
             @PathVariable Long id,

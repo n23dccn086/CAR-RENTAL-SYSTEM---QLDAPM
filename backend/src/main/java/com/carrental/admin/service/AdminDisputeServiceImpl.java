@@ -43,6 +43,17 @@ public class AdminDisputeServiceImpl implements AdminDisputeService {
     }
 
     @Override
+    public org.springframework.data.domain.Page<DisputeResponse> getDisputesPaged(String status, org.springframework.data.domain.Pageable pageable) {
+        org.springframework.data.domain.Page<Dispute> pageResult;
+        if (status != null && !status.isBlank()) {
+            pageResult = disputeRepository.findByStatusOrderByCreatedAtDesc(status, pageable);
+        } else {
+            pageResult = disputeRepository.findAllByOrderByCreatedAtDesc(pageable);
+        }
+        return pageResult.map(disputeMapper::toResponse);
+    }
+
+    @Override
     public DisputeResponse getDisputeById(Long id) {
         return disputeMapper.toResponse(getEntityById(id));
     }
@@ -126,8 +137,10 @@ public class AdminDisputeServiceImpl implements AdminDisputeService {
         }
 
         if (!"READY_TO_FINALIZE".equals(dispute.getStatus())) {
-            throw new BadRequestException(ErrorCode.DISPUTE_INVALID_STATUS,
-                    "Phải duyệt CẢ 2 form (Bên A + Bên B) trước khi giải quyết");
+            log.info("Admin directly resolving dispute {} from status {}", disputeId, dispute.getStatus());
+            String actionNote = String.format("{\"at\":\"%s\",\"by\":%d,\"action\":\"ADMIN_DIRECT_RESOLVE\"}",
+                    LocalDateTime.now(), adminId);
+            appendHistory(dispute, actionNote);
         }
 
         if (resolvedAmount != null) {
@@ -181,6 +194,21 @@ public class AdminDisputeServiceImpl implements AdminDisputeService {
         }
 
         return disputeMapper.toResponse(updated);
+    }
+
+    @Override
+    @Transactional
+    public DisputeResponse resolveDispute(Long disputeId, Long adminId,
+                                           com.carrental.admin.dto.ResolveDisputeRequest request) {
+        DisputeResponse resp = resolveDispute(disputeId, adminId, request.getResolution(), request.getResolvedAmount());
+        if (request.getNote() != null && !request.getNote().isBlank()) {
+            Dispute dispute = getEntityById(disputeId);
+            String noteEntry = String.format("{\"at\":\"%s\",\"by\":%d,\"note\":\"%s\"}",
+                    LocalDateTime.now(), adminId, request.getNote().replace("\"", "'"));
+            appendHistory(dispute, noteEntry);
+            disputeRepository.save(dispute);
+        }
+        return resp;
     }
 
     // ===== REQUEST EVIDENCE =====

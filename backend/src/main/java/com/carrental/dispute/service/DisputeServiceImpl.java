@@ -83,6 +83,7 @@ public class DisputeServiceImpl implements DisputeService {
                 .status("PENDING")
                 .lastSubmittedAt(LocalDateTime.now())
                 .counterDeadlineAt(LocalDateTime.now().plusHours(48))
+                .deadlineAt(LocalDateTime.now().plusHours(48))
                 .build();
 
         Dispute saved = disputeRepository.save(dispute);
@@ -122,12 +123,71 @@ public class DisputeServiceImpl implements DisputeService {
         return disputeMapper.toResponse(saved);
     }
 
+    @Override
+    @Transactional
+    public DisputeResponse createDisputeMultipart(
+            Long userId,
+            Long bookingId,
+            Long againstUserId,
+            String category,
+            String description,
+            java.math.BigDecimal claimedAmount,
+            List<MultipartFile> evidenceFiles) {
+
+        String evidenceJson = null;
+        if (evidenceFiles != null && !evidenceFiles.isEmpty()) {
+            List<java.util.Map<String, String>> evidenceList = new java.util.ArrayList<>();
+            for (MultipartFile file : evidenceFiles) {
+                if (file != null && !file.isEmpty()) {
+                    try {
+                        String url = fileStorageService.storeFile(file, "disputes/" + userId);
+                        java.util.Map<String, String> item = new java.util.LinkedHashMap<>();
+                        item.put("url", url);
+                        item.put("note", file.getOriginalFilename());
+                        evidenceList.add(item);
+                    } catch (Exception e) {
+                        log.warn("Failed to save evidence file {}: {}", file.getOriginalFilename(), e.getMessage());
+                    }
+                }
+            }
+            try {
+                com.fasterxml.jackson.databind.ObjectMapper mapper = new com.fasterxml.jackson.databind.ObjectMapper();
+                evidenceJson = mapper.writeValueAsString(evidenceList);
+            } catch (Exception e) {
+                log.warn("Failed to serialize evidence files: {}", e.getMessage());
+            }
+        }
+
+        DisputeRequest request = DisputeRequest.builder()
+                .bookingId(bookingId)
+                .againstUserId(againstUserId)
+                .category(category)
+                .description(description)
+                .evidence(evidenceJson)
+                .claimedAmount(claimedAmount)
+                .build();
+
+        return createDispute(userId, request);
+    }
+
     // ===== READ =====
 
     @Override
     public List<DisputeResponse> getMyDisputes(Long userId) {
         List<Dispute> disputes = disputeRepository.findByRaisedByOrderByCreatedAtDesc(userId);
         return disputeMapper.toResponseList(disputes);
+    }
+
+    @Override
+    public org.springframework.data.domain.Page<DisputeResponse> getMyDisputesPaged(
+            Long userId, String status, org.springframework.data.domain.Pageable pageable) {
+        org.springframework.data.domain.Page<Dispute> paged;
+        if (status != null && !status.isBlank()) {
+            paged = disputeRepository.findByRaisedByAndStatusOrderByCreatedAtDesc(userId, status, pageable);
+        } else {
+            paged = disputeRepository.findByRaisedByOrderByCreatedAtDesc(userId, pageable);
+        }
+        return paged.map(disputeMapper::toResponse);
     }
 
     @Override
@@ -141,7 +201,10 @@ public class DisputeServiceImpl implements DisputeService {
         Dispute dispute = disputeRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.DISPUTE_NOT_FOUND));
 
-        if (!dispute.getRaisedBy().equals(userId) && !dispute.getAgainstUser().equals(userId)) {
+        User caller = userRepository.findById(userId).orElse(null);
+        boolean isAdmin = caller != null && caller.getRole() == Role.ADMIN;
+
+        if (!isAdmin && !dispute.getRaisedBy().equals(userId) && !dispute.getAgainstUser().equals(userId)) {
             throw new UnauthorizedException(ErrorCode.PERMISSION_DENIED);
         }
 

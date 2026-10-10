@@ -1180,7 +1180,7 @@ paths:
                 $ref: '#/components/schemas/ReviewListApiResponse'
 
   # ==========================================================
-  # MODULE 9: DISPUTES (2 endpoints)
+  # MODULE 9: DISPUTES (3 endpoints)
   # ==========================================================
   /disputes:
     post:
@@ -1189,6 +1189,21 @@ paths:
       requestBody:
         required: true
         content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [booking_id, category, description]
+              properties:
+                booking_id: { type: integer, example: 10 }
+                against_user_id: { type: integer, example: 5 }
+                category: { type: string, example: damage }
+                description: { type: string, example: "Xe bị trầy xước cản trước khi nhận lại xe" }
+                claimed_amount: { type: number, example: 2000000 }
+                evidence:
+                  type: array
+                  items:
+                    type: string
+                    format: binary
           application/json:
             schema:
               $ref: '#/components/schemas/DisputeCreateRequest'
@@ -1199,6 +1214,28 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/DisputeApiResponse'
+
+  /disputes/my:
+    get:
+      tags: [9. Disputes]
+      summary: Danh sách tranh chấp của tôi (9.2)
+      parameters:
+        - name: status
+          in: query
+          schema: { type: string, example: pending }
+        - name: page
+          in: query
+          schema: { type: integer, default: 1 }
+        - name: limit
+          in: query
+          schema: { type: integer, default: 10 }
+      responses:
+        '200':
+          description: Danh sách tranh chấp của người dùng
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DisputeListApiResponse'
 
   /disputes/{id}:
     get:
@@ -1379,10 +1416,72 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiResponseVoid'
 
+  /admin/disputes:
+    get:
+      tags: [11. Admin]
+      summary: Admin quản lý danh sách tranh chấp (11.4)
+      parameters:
+        - name: status
+          in: query
+          schema: { type: string, example: pending }
+        - name: page
+          in: query
+          schema: { type: integer, default: 1 }
+        - name: limit
+          in: query
+          schema: { type: integer, default: 20 }
+      responses:
+        '200':
+          description: Danh sách tranh chấp
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DisputeListApiResponse'
+
   /admin/disputes/{id}/resolve:
+    post:
+      tags: [11. Admin]
+      summary: Admin phân xử tranh chấp bồi thường (11.5, UC-AD-04)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [resolution]
+              properties:
+                resolution:
+                  type: string
+                  enum: [customer_wins, owner_wins, split, insufficient_evidence]
+                  example: customer_wins
+                resolved_amount:
+                  type: number
+                  example: 2000000
+                note:
+                  type: string
+                  example: "Khách hàng có bằng chứng đầy đủ"
+      responses:
+        '200':
+          description: Phán quyết đã được thi hành
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  data:
+                    type: object
+                    properties:
+                      status: { type: string, example: resolved }
+                      resolved_amount: { type: number, example: 2000000 }
     put:
       tags: [11. Admin]
-      summary: Admin ra phán quyết giải quyết vụ tranh chấp bồi thường (11.7, UC-AD-04)
+      summary: Admin ra phán quyết giải quyết vụ tranh chấp bồi thường (Frontend PUT compatibility)
       parameters:
         - name: id
           in: path
@@ -1999,6 +2098,24 @@ components:
       properties:
         success: { type: boolean, example: true }
         data: { $ref: '#/components/schemas/DisputeDto' }
+
+    DisputeListApiResponse:
+      type: object
+      properties:
+        success: { type: boolean, example: true }
+        data:
+          type: object
+          properties:
+            disputes:
+              type: array
+              items: { $ref: '#/components/schemas/DisputeDto' }
+            pagination:
+              type: object
+              properties:
+                page: { type: integer, example: 1 }
+                limit: { type: integer, example: 10 }
+                total: { type: integer, example: 15 }
+                total_pages: { type: integer, example: 2 }
 
     # Withdrawal Schemas
     WithdrawalCreateRequest:
