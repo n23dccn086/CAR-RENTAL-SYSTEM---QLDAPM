@@ -25,6 +25,10 @@ public class DotenvEnvironmentPostProcessor implements EnvironmentPostProcessor,
 
     @Override
     public void postProcessEnvironment(ConfigurableEnvironment environment, SpringApplication application) {
+        // Enforce UTC timezone to prevent PostgreSQL driver "Asia/Saigon" mismatch
+        java.util.TimeZone.setDefault(java.util.TimeZone.getTimeZone("UTC"));
+        System.setProperty("user.timezone", "UTC");
+
         Path envPath = findEnvFile();
         if (envPath == null || !Files.exists(envPath)) {
             return;
