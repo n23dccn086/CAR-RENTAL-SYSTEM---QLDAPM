@@ -1,0 +1,1895 @@
+openapi: 3.0.3
+info:
+  title: Car Rental System API (Maison)
+  version: 1.0.0
+  description: |
+    Tài liệu OpenAPI 3.0 đặc tả đầy đủ 14 Modules (64 REST API endpoints) của Hệ thống Cho thuê xe ô tô tự lái & có tài xế (Car Rental System).
+    Đồng bộ 100% với tài liệu SRS QLDAPM (Phần 4: API Contract, Trang 207 - 256).
+  contact:
+    name: Car Rental System Support
+    email: support@carrental.vn
+  license:
+    name: Apache 2.0
+    url: https://springdoc.org
+
+servers:
+  - url: http://localhost:8080/api/v1
+    description: Local Spring Boot API Server (Base Context Path: /api/v1)
+
+tags:
+  - name: 1. Authentication
+    description: Đăng ký, đăng nhập, refresh token, đổi mật khẩu, OTP
+  - name: 2. User & Documents
+    description: Hồ sơ cá nhân và xác minh 5 ảnh GPLX/CCCD/Selfie
+  - name: 3. Cars
+    description: Tìm kiếm, lọc danh mục xe, thông tin chi tiết và quản lý xe của chủ xe
+  - name: 4. Bookings
+    description: Tạo đơn thuê xe, duyệt đơn, hủy đơn và tính phí phạt/hoàn cọc
+  - name: 5. Payments
+    description: Thanh toán tiền cọc, tất toán, webhook tích hợp MoMo
+  - name: 6. Handover
+    description: Biên bản giao xe (Pickup) và nhận lại xe (Return), chốt km/xăng
+  - name: 7. Drivers
+    description: Quản lý tài xế, phân công chuyến đi và tài xế nhận chuyến
+  - name: 8. Reviews
+    description: Đánh giá xe và đánh giá đối tác chủ xe sau chuyến đi
+  - name: 9. Disputes
+    description: Khiếu nại chuyến đi, giải quyết tranh chấp bồi thường
+  - name: 10. Withdrawals
+    description: Yêu cầu rút tiền từ ví chủ xe về tài khoản ngân hàng
+  - name: 11. Admin
+    description: Quản trị hệ thống, phê duyệt xe, người dùng, hoàn tiền, rút tiền
+  - name: 12. AI Chatbot
+    description: Trợ lý ảo AI tư vấn xe, chính sách và thống kê theo Role
+  - name: 13. Notifications
+    description: Hệ thống thông báo đẩy cho khách hàng, chủ xe, admin
+  - name: 14. Upload & Excel
+    description: Upload file phương tiện và import danh sách xe hàng loạt qua Excel
+
+security:
+  - BearerAuth: []
+
+paths:
+  # ==========================================================
+  # MODULE 1: AUTHENTICATION (7 endpoints)
+  # ==========================================================
+  /auth/register:
+    post:
+      tags: [1. Authentication]
+      summary: Đăng ký tài khoản khách thuê hoặc chủ xe (1.1, UC-C01)
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RegisterRequest'
+      responses:
+        '201':
+          description: Đăng ký thành công, trả về JWT Token và User DTO
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthApiResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '409':
+          $ref: '#/components/responses/Conflict'
+
+  /auth/login:
+    post:
+      tags: [1. Authentication]
+      summary: Đăng nhập bằng SĐT và mật khẩu (1.2, UC-C02)
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+      responses:
+        '200':
+          description: Đăng nhập thành công, trả về Access Token + Refresh Token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthApiResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /auth/refresh:
+    post:
+      tags: [1. Authentication]
+      summary: Cấp lại Access Token mới từ Refresh Token (1.3)
+      security: []
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RefreshTokenRequest'
+      parameters:
+        - name: token
+          in: query
+          required: false
+          schema:
+            type: string
+          description: Refresh Token truyền qua query parameter (fallback)
+      responses:
+        '200':
+          description: Token đã được làm mới
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthApiResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /auth/logout:
+    post:
+      tags: [1. Authentication]
+      summary: Đăng xuất và thu hồi session/token (1.4)
+      responses:
+        '200':
+          description: Đăng xuất thành công
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponseVoid'
+
+  /auth/me:
+    get:
+      tags: [1. Authentication]
+      summary: Lấy thông tin tài khoản hiện tại (1.5)
+      responses:
+        '200':
+          description: Thông tin người dùng hiện tại
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserApiResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /auth/forgot-password:
+    post:
+      tags: [1. Authentication]
+      summary: Quên mật khẩu - gửi mã OTP qua SĐT (1.6)
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ForgotPasswordRequest'
+      responses:
+        '200':
+          description: OTP đã được gửi qua tin nhắn
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponseVoid'
+
+  /auth/reset-password:
+    post:
+      tags: [1. Authentication]
+      summary: Đặt lại mật khẩu bằng OTP (1.7)
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ResetPasswordRequest'
+      responses:
+        '200':
+          description: Đặt lại mật khẩu thành công
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponseVoid'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+
+  # ==========================================================
+  # MODULE 2: USER & DOCUMENTS (5 endpoints)
+  # ==========================================================
+  /users/me:
+    get:
+      tags: [2. User & Documents]
+      summary: Lấy thông tin hồ sơ người dùng (2.1)
+      responses:
+        '200':
+          description: Hồ sơ người dùng
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserApiResponse'
+    put:
+      tags: [2. User & Documents]
+      summary: Cập nhật thông tin cá nhân (2.1)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateProfileRequest'
+      responses:
+        '200':
+          description: Cập nhật thành công
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserApiResponse'
+
+  /users/change-password:
+    post:
+      tags: [2. User & Documents]
+      summary: Đổi mật khẩu tài khoản (2.1)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ChangePasswordRequest'
+      responses:
+        '200':
+          description: Đổi mật khẩu thành công
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponseVoid'
+
+  /verification/upload:
+    post:
+      tags: [2. User & Documents]
+      summary: Upload tài liệu xác minh (GPLX, CCCD, Selfie) (2.2, 2.3, 2.4, UC-C03)
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                files:
+                  type: array
+                  items:
+                    type: string
+                    format: binary
+                types:
+                  type: array
+                  items:
+                    type: string
+                    example: GPLX_FRONT
+      responses:
+        '200':
+          description: Upload thành công danh sách ảnh
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VerificationApiResponse'
+
+  /verification/submit:
+    post:
+      tags: [2. User & Documents]
+      summary: Gửi toàn bộ 5 ảnh để Admin phê duyệt (2.5)
+      responses:
+        '200':
+          description: Hồ sơ đã được gửi, trạng thái chuyển sang PENDING_VERIFICATION
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VerificationApiResponse'
+
+  /verification/me:
+    get:
+      tags: [2. User & Documents]
+      summary: Xem trạng thái hồ sơ xác thực cá nhân (2.5)
+      responses:
+        '200':
+          description: Trạng thái xác minh
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VerificationApiResponse'
+
+  # ==========================================================
+  # MODULE 3: CARS (10 endpoints)
+  # ==========================================================
+  /cars:
+    get:
+      tags: [3. Cars]
+      summary: Tìm kiếm và lọc danh mục xe khả dụng (3.1, UC-C04)
+      security: []
+      parameters:
+        - name: location
+          in: query
+          schema: { type: string }
+        - name: brand
+          in: query
+          schema: { type: string }
+        - name: seats
+          in: query
+          schema: { type: integer }
+        - name: rental_type
+          in: query
+          schema: { type: string, enum: [SELF_DRIVE, WITH_DRIVER, BOTH] }
+        - name: min_price
+          in: query
+          schema: { type: number }
+        - name: max_price
+          in: query
+          schema: { type: number }
+        - name: transmission
+          in: query
+          schema: { type: string, enum: [AUTOMATIC, MANUAL] }
+        - name: fuel_type
+          in: query
+          schema: { type: string, enum: [GASOLINE, DIESEL, ELECTRIC] }
+        - name: page
+          in: query
+          schema: { type: integer, default: 0 }
+        - name: size
+          in: query
+          schema: { type: integer, default: 20 }
+      responses:
+        '200':
+          description: Danh sách xe tìm kiếm thành công
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CarPageApiResponse'
+
+  /cars/{id}:
+    get:
+      tags: [3. Cars]
+      summary: Xem chi tiết xe, thông số kỹ thuật và hình ảnh (3.2, UC-C05)
+      security: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        '200':
+          description: Chi tiết xe
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CarDetailApiResponse'
+
+  /cars/{id}/availability:
+    get:
+      tags: [3. Cars]
+      summary: Kiểm tra tính khả dụng của xe theo khoảng thời gian thuê (3.10)
+      security: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+        - name: startDate
+          in: query
+          required: true
+          schema: { type: string, format: date-time }
+        - name: endDate
+          in: query
+          required: true
+          schema: { type: string, format: date-time }
+      responses:
+        '200':
+          description: Kết quả kiểm tra lịch xe
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AvailabilityApiResponse'
+
+  /owner/cars:
+    get:
+      tags: [3. Cars]
+      summary: Chủ xe xem danh sách toàn bộ xe của mình (3.7, UC-O02)
+      responses:
+        '200':
+          description: Danh sách xe của chủ xe
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CarListApiResponse'
+    post:
+      tags: [3. Cars]
+      summary: Chủ xe đăng ký xe mới lên sàn (chờ duyệt) (3.3, UC-O02)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CarCreateRequest'
+      responses:
+        '201':
+          description: Đăng tải xe thành công, trạng thái PENDING_APPROVAL
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CarDetailApiResponse'
+
+  /owner/cars/{id}:
+    put:
+      tags: [3. Cars]
+      summary: Chủ xe cập nhật thông tin và tiện ích xe (3.4, UC-O02)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CarUpdateRequest'
+      responses:
+        '200':
+          description: Cập nhật xe thành công
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CarDetailApiResponse'
+    delete:
+      tags: [3. Cars]
+      summary: Chủ xe xóa hoặc gỡ xe khỏi sàn (3.5, UC-O02)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        '200':
+          description: Xóa xe thành công
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponseVoid'
+
+  /owner/cars/{id}/toggle-status:
+    patch:
+      tags: [3. Cars]
+      summary: Bật/tắt trạng thái Sẵn sàng hoạt động của xe (3.6)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        '200':
+          description: Trạng thái xe đã được chuyển đổi
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CarDetailApiResponse'
+
+  /owner/cars/{id}/calendar:
+    get:
+      tags: [3. Cars]
+      summary: Xem lịch bận và các khoảng thời gian đã đặt của xe (3.8, UC-O04)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        '200':
+          description: Lịch hoạt động của xe
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CalendarApiResponse'
+
+  /owner/cars/{id}/pricing:
+    put:
+      tags: [3. Cars]
+      summary: Cấu hình giá ngày thường, cuối tuần và phụ phí (3.9, UC-O04)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CarPricingRequest'
+      responses:
+        '200':
+          description: Cấu hình bảng giá thành công
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CarDetailApiResponse'
+
+  # ==========================================================
+  # MODULE 4: BOOKINGS (7 endpoints)
+  # ==========================================================
+  /bookings:
+    post:
+      tags: [4. Bookings]
+      summary: Khách hàng tạo đơn đặt xe mới (4.1, UC-C06)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BookingCreateRequest'
+      responses:
+        '201':
+          description: Đơn đặt xe đã được tạo, tính cọc 30%
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BookingApiResponse'
+
+  /bookings/my:
+    get:
+      tags: [4. Bookings]
+      summary: Khách hàng xem danh sách các chuyến đi của mình (4.2, UC-C08)
+      parameters:
+        - name: status
+          in: query
+          schema: { type: string }
+      responses:
+        '200':
+          description: Danh sách đơn đặt xe của khách hàng
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BookingListApiResponse'
+
+  /bookings/owner:
+    get:
+      tags: [4. Bookings]
+      summary: Chủ xe xem danh sách các đơn đặt xe của đội xe mình (4.3, UC-O05)
+      parameters:
+        - name: status
+          in: query
+          schema: { type: string }
+      responses:
+        '200':
+          description: Danh sách đơn thuê xe chờ xử lý
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BookingListApiResponse'
+
+  /bookings/{id}:
+    get:
+      tags: [4. Bookings]
+      summary: Xem chi tiết đơn đặt xe (4.4, UC-C08)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        '200':
+          description: Chi tiết hợp đồng và lộ trình đơn thuê
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BookingApiResponse'
+
+  /bookings/{id}/confirm:
+    put:
+      tags: [4. Bookings]
+      summary: Chủ xe xác nhận duyệt đơn đặt xe (4.5, UC-O06)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        '200':
+          description: Đơn đặt xe đã được chủ xe chấp thuận
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BookingApiResponse'
+
+  /bookings/{id}/reject:
+    put:
+      tags: [4. Bookings]
+      summary: Chủ xe từ chối đơn đặt xe và nêu lý do (4.6, UC-O06)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                reason: { type: string, example: Xe cần bảo dưỡng đột xuất }
+      responses:
+        '200':
+          description: Đơn đặt xe đã bị từ chối
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BookingApiResponse'
+
+  /bookings/{id}/cancel:
+    post:
+      tags: [4. Bookings]
+      summary: Hủy đơn đặt xe và tự động tính hoàn cọc theo BR-11 (4.7, UC-C11)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                reason: { type: string, example: Thay đổi kế hoạch công tác }
+      responses:
+        '200':
+          description: Hủy đơn thành công, ghi nhận tỷ lệ hoàn cọc (100%, 70%, 50%, 0%)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BookingApiResponse'
+
+  # ==========================================================
+  # MODULE 5: PAYMENTS (4 endpoints)
+  # ==========================================================
+  /payments:
+    post:
+      tags: [5. Payments]
+      summary: Tạo giao dịch thanh toán đặt cọc hoặc tất toán tiền thuê (5.1, UC-C07)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PaymentCreateRequest'
+      responses:
+        '200':
+          description: Khởi tạo thanh toán thành công, trả về Payment URL/QR
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaymentApiResponse'
+
+  /payments/{id}:
+    get:
+      tags: [5. Payments]
+      summary: Xem thông tin chi tiết biên lai giao dịch thanh toán (5.2)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        '200':
+          description: Thông tin giao dịch
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaymentApiResponse'
+
+  /payments/booking/{bookingId}:
+    get:
+      tags: [5. Payments]
+      summary: Lấy danh sách toàn bộ các khoản thanh toán của một đơn thuê (5.4)
+      parameters:
+        - name: bookingId
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        '200':
+          description: Danh sách giao dịch của đơn thuê
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaymentListApiResponse'
+
+  /payments/callback/momo:
+    post:
+      tags: [5. Payments]
+      summary: Webhook tiếp nhận IPN thông báo trạng thái thanh toán từ MoMo (5.3)
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        '200':
+          description: Xác nhận đã nhận IPN từ cổng thanh toán
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponseVoid'
+
+  # ==========================================================
+  # MODULE 6: HANDOVER (3 endpoints)
+  # ==========================================================
+  /handovers/pickup:
+    post:
+      tags: [6. Handover]
+      summary: Tạo biên bản bàn giao xe ban đầu (chốt km, xăng, ảnh vết xước) (6.1, UC-C09)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/HandoverPickupRequest'
+      responses:
+        '201':
+          description: Biên bản giao xe đã được tạo
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HandoverApiResponse'
+
+  /handovers/return:
+    post:
+      tags: [6. Handover]
+      summary: Tạo biên bản nhận lại xe (tự động tính km vượt và giờ trễ) (6.2, UC-C09, UC-C12, UC-C13)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/HandoverReturnRequest'
+      responses:
+        '201':
+          description: Biên bản hoàn tất, tính phụ phí phát sinh
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HandoverApiResponse'
+
+  /handovers/{id}/sign:
+    put:
+      tags: [6. Handover]
+      summary: Ký biên bản giao nhận điện tử (6.3)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [signatureUrl]
+              properties:
+                signatureUrl: { type: string, example: https://uploads.vn/signatures/sig_01.png }
+      responses:
+        '200':
+          description: Ký biên bản thành công
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HandoverApiResponse'
+
+  # ==========================================================
+  # MODULE 7: DRIVERS (5 endpoints)
+  # ==========================================================
+  /owner/drivers:
+    get:
+      tags: [7. Drivers]
+      summary: Chủ xe xem danh sách đội ngũ tài xế của mình (7.2, UC-O08)
+      responses:
+        '200':
+          description: Danh sách tài xế
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DriverListApiResponse'
+    post:
+      tags: [7. Drivers]
+      summary: Chủ xe thêm hồ sơ tài xế mới (7.1, UC-O08)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DriverCreateRequest'
+      responses:
+        '201':
+          description: Hồ sơ tài xế đã được gửi xét duyệt
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DriverApiResponse'
+
+  /owner/drivers/{id}:
+    put:
+      tags: [7. Drivers]
+      summary: Chủ xe cập nhật hồ sơ và trạng thái tài xế (7.3, UC-O08)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DriverUpdateRequest'
+      responses:
+        '200':
+          description: Cập nhật thành công
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DriverApiResponse'
+
+  /driver/assignments/{id}/accept:
+    post:
+      tags: [7. Drivers]
+      summary: Tài xế chấp thuận nhiệm vụ lái chuyến được chỉ định (7.4, UC-D01)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        '200':
+          description: Tài xế đã nhận nhiệm vụ chuyến đi
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponseVoid'
+
+  /driver/assignments/{id}/reject:
+    post:
+      tags: [7. Drivers]
+      summary: Tài xế từ chối nhiệm vụ lái chuyến (7.5, UC-D01)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                reason: { type: string }
+      responses:
+        '200':
+          description: Đã từ chối nhiệm vụ
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponseVoid'
+
+  # ==========================================================
+  # MODULE 8: REVIEWS (3 endpoints)
+  # ==========================================================
+  /reviews:
+    post:
+      tags: [8. Reviews]
+      summary: Khách hàng đánh giá chất lượng xe và phục vụ của chủ xe (8.1, UC-C10)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReviewCreateRequest'
+      responses:
+        '201':
+          description: Đánh giá thành công
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReviewApiResponse'
+
+  /reviews/cars/{carId}:
+    get:
+      tags: [8. Reviews]
+      summary: Xem danh sách đánh giá của chiếc xe cụ thể (8.2, UC-C05)
+      security: []
+      parameters:
+        - name: carId
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        '200':
+          description: Danh sách đánh giá xe
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReviewListApiResponse'
+
+  /reviews/owner/{ownerId}:
+    get:
+      tags: [8. Reviews]
+      summary: Xem danh sách và điểm số đánh giá của chủ xe (8.3)
+      security: []
+      parameters:
+        - name: ownerId
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        '200':
+          description: Danh sách đánh giá chủ xe
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReviewListApiResponse'
+
+  # ==========================================================
+  # MODULE 9: DISPUTES (2 endpoints)
+  # ==========================================================
+  /disputes:
+    post:
+      tags: [9. Disputes]
+      summary: Khách hàng hoặc Chủ xe tạo khiếu nại tranh chấp chuyến đi (9.1, BR-08)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DisputeCreateRequest'
+      responses:
+        '201':
+          description: Khiếu nại đã được ghi nhận, deadline phản hồi 48h
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DisputeApiResponse'
+
+  /disputes/{id}:
+    get:
+      tags: [9. Disputes]
+      summary: Xem diễn biến chi tiết vụ tranh chấp và bằng chứng hai bên (9.2)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        '200':
+          description: Chi tiết hồ sơ khiếu nại
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DisputeApiResponse'
+
+  # ==========================================================
+  # MODULE 10: WITHDRAWALS (3 endpoints)
+  # ==========================================================
+  /owner/withdrawals:
+    get:
+      tags: [10. Withdrawals]
+      summary: Chủ xe xem lịch sử các yêu cầu rút tiền (10.2, BR-10)
+      responses:
+        '200':
+          description: Lịch sử yêu cầu rút tiền
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WithdrawalListApiResponse'
+    post:
+      tags: [10. Withdrawals]
+      summary: Chủ xe tạo lệnh rút tiền từ ví về tài khoản ngân hàng (10.1, BR-10)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/WithdrawalCreateRequest'
+      responses:
+        '201':
+          description: Lệnh rút tiền đã được tạo, tiền đã phong tỏa chờ duyệt
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WithdrawalApiResponse'
+
+  /owner/wallet:
+    get:
+      tags: [10. Withdrawals]
+      summary: Xem số dư ví chủ xe và lịch sử biến động số dư (10.3)
+      responses:
+        '200':
+          description: Thông tin ví và số dư khả dụng
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WalletApiResponse'
+
+  # ==========================================================
+  # MODULE 11: ADMIN (8 endpoints)
+  # ==========================================================
+  /admin/dashboard:
+    get:
+      tags: [11. Admin]
+      summary: Báo cáo số liệu tổng quan, doanh thu sàn, CSAT và tỷ lệ hủy (11.1, UC-AD-01)
+      responses:
+        '200':
+          description: Thống kê KPI hệ thống
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminDashboardApiResponse'
+
+  /admin/users:
+    get:
+      tags: [11. Admin]
+      summary: Quản lý danh sách người dùng, lọc theo vai trò và trạng thái (11.2, UC-AD-03)
+      parameters:
+        - name: role
+          in: query
+          schema: { type: string }
+        - name: status
+          in: query
+          schema: { type: string }
+      responses:
+        '200':
+          description: Danh sách người dùng
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminUserListApiResponse'
+
+  /admin/users/{id}/verify:
+    put:
+      tags: [11. Admin]
+      summary: Admin phê duyệt hồ sơ giấy tờ xác minh của người dùng (11.3, UC-AD-03)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        '200':
+          description: Đã xác thực thành công người dùng
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponseVoid'
+
+  /admin/users/{id}/reject-verification:
+    put:
+      tags: [11. Admin]
+      summary: Admin từ chối hồ sơ giấy tờ và nêu rõ lý do (11.4, UC-AD-03)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [reason]
+              properties:
+                reason: { type: string, example: Ảnh chụp GPLX bị mờ, lóa đèn }
+      responses:
+        '200':
+          description: Đã từ chối hồ sơ
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponseVoid'
+
+  /cars/{id}/approve:
+    put:
+      tags: [11. Admin]
+      summary: Admin xét duyệt xe đối tác được phép đăng sàn (11.5, UC-AD-02, BR-03)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        '200':
+          description: Xe chuyển sang trạng thái AVAILABLE
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponseVoid'
+
+  /cars/{id}/reject:
+    put:
+      tags: [11. Admin]
+      summary: Admin từ chối xe và gửi lý do cho chủ xe (11.6, UC-AD-02)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                reason: { type: string, example: Đăng kiểm xe đã hết hạn }
+      responses:
+        '200':
+          description: Đã từ chối duyệt xe
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponseVoid'
+
+  /admin/disputes/{id}/resolve:
+    put:
+      tags: [11. Admin]
+      summary: Admin ra phán quyết giải quyết vụ tranh chấp bồi thường (11.7, UC-AD-04)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DisputeResolveRequest'
+      responses:
+        '200':
+          description: Phán quyết đã được thi hành
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponseVoid'
+
+  /admin/withdrawals/{id}/approve:
+    put:
+      tags: [11. Admin]
+      summary: Admin phê duyệt lệnh rút tiền và hoàn tất chuyển khoản (11.8, BR-10)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        '200':
+          description: Lệnh rút tiền đã hoàn thành
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponseVoid'
+
+  # ==========================================================
+  # MODULE 12: AI CHATBOT (3 endpoints)
+  # ==========================================================
+  /ai/chat:
+    post:
+      tags: [12. AI Chatbot]
+      summary: Hỏi đáp trợ lý AI theo ngữ cảnh vai trò (Guest, Customer, Owner, Admin) (12.1)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AIChatRequest'
+      responses:
+        '200':
+          description: Phản hồi thông minh kèm gợi ý hành động tiếp theo
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AIChatApiResponse'
+
+  /ai/suggestions:
+    get:
+      tags: [12. AI Chatbot]
+      summary: Lấy danh sách câu hỏi gợi ý nhanh theo vai trò của người dùng (12.2)
+      responses:
+        '200':
+          description: Danh sách gợi ý câu hỏi
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AISuggestionsApiResponse'
+
+  /ai/history:
+    get:
+      tags: [12. AI Chatbot]
+      summary: Xem lịch sử hội thoại gần nhất với trợ lý ảo (12.3)
+      responses:
+        '200':
+          description: Lịch sử tin nhắn
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AIChatHistoryApiResponse'
+
+  # ==========================================================
+  # MODULE 13: NOTIFICATIONS (2 endpoints)
+  # ==========================================================
+  /notifications:
+    get:
+      tags: [13. Notifications]
+      summary: Lấy danh sách thông báo của người dùng (13.1)
+      responses:
+        '200':
+          description: Danh sách thông báo
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NotificationListApiResponse'
+
+  /notifications/{id}/read:
+    put:
+      tags: [13. Notifications]
+      summary: Đánh dấu thông báo đã đọc (13.2)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        '200':
+          description: Đã đánh dấu thông báo
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponseVoid'
+
+  # ==========================================================
+  # MODULE 14: UPLOAD & EXCEL (2 endpoints)
+  # ==========================================================
+  /files/upload:
+    post:
+      tags: [14. Upload & Excel]
+      summary: Tải lên hình ảnh xe, tài liệu và chữ ký điện tử (14.1)
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file:
+                  type: string
+                  format: binary
+      responses:
+        '200':
+          description: File đã tải lên thành công, trả về URL truy cập
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FileUploadApiResponse'
+
+  /owner/cars/import:
+    post:
+      tags: [14. Upload & Excel]
+      summary: Nhập hàng loạt danh sách xe qua file Excel chuẩn 11 cột (14.2)
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file:
+                  type: string
+                  format: binary
+      responses:
+        '200':
+          description: Kết quả import xe, số dòng hợp lệ và chi tiết lỗi nếu có
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ExcelImportApiResponse'
+
+# ==========================================================
+# SCHEMAS & REUSABLE DTOs
+# ==========================================================
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: Nhập Access Token JWT (không cần gõ tiền tố Bearer)
+
+  responses:
+    BadRequest:
+      description: Dữ liệu gửi lên không hợp lệ (Validation Error)
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ApiErrorResponse'
+    Unauthorized:
+      description: Chưa đăng nhập hoặc Token JWT không hợp lệ
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ApiErrorResponse'
+    Conflict:
+      description: Dữ liệu đã tồn tại (SĐT hoặc Email đã đăng ký)
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ApiErrorResponse'
+
+  schemas:
+    # Basic Envelopes
+    ApiResponseVoid:
+      type: object
+      properties:
+        success: { type: boolean, example: true }
+        code: { type: integer, example: 0 }
+        message: { type: string, example: Thao tác thành công }
+
+    ApiErrorResponse:
+      type: object
+      properties:
+        success: { type: boolean, example: false }
+        code: { type: integer, example: 400 }
+        message: { type: string, example: Dữ liệu không hợp lệ }
+        timestamp: { type: string, example: '2026-10-10T14:30:00' }
+
+    # Auth Schemas
+    RegisterRequest:
+      type: object
+      required: [name, phone, password]
+      properties:
+        name: { type: string, example: Nguyễn Văn A }
+        phone: { type: string, example: '0901234567' }
+        password: { type: string, example: Pass123@ }
+        email: { type: string, example: a@test.com }
+        role: { type: string, enum: [customer, owner], default: customer }
+
+    LoginRequest:
+      type: object
+      required: [phone, password]
+      properties:
+        phone: { type: string, example: '0901234567' }
+        password: { type: string, example: Pass123@ }
+
+    RefreshTokenRequest:
+      type: object
+      properties:
+        refresh_token: { type: string, example: eyJhbGciOiJIUzI1NiIs... }
+        refreshToken: { type: string, example: eyJhbGciOiJIUzI1NiIs... }
+
+    ForgotPasswordRequest:
+      type: object
+      required: [phone]
+      properties:
+        phone: { type: string, example: '0901234567' }
+
+    ResetPasswordRequest:
+      type: object
+      required: [phone, otp, newPassword]
+      properties:
+        phone: { type: string, example: '0901234567' }
+        otp: { type: string, example: '123456' }
+        new_password: { type: string, example: NewPass123@ }
+        newPassword: { type: string, example: NewPass123@ }
+
+    UpdateProfileRequest:
+      type: object
+      required: [name]
+      properties:
+        name: { type: string, example: Nguyễn Văn B }
+        email: { type: string, example: b@test.com }
+        address: { type: string, example: 123 Nguyễn Huệ, Q1, TP.HCM }
+        date_of_birth: { type: string, format: date, example: '1995-01-15' }
+        dateOfBirth: { type: string, format: date, example: '1995-01-15' }
+
+    ChangePasswordRequest:
+      type: object
+      required: [currentPassword, newPassword]
+      properties:
+        current_password: { type: string, example: OldPass123@ }
+        currentPassword: { type: string, example: OldPass123@ }
+        new_password: { type: string, example: NewPass123@ }
+        newPassword: { type: string, example: NewPass123@ }
+
+    AuthResponseData:
+      type: object
+      properties:
+        user_id: { type: integer, example: 123 }
+        name: { type: string, example: Nguyễn Văn A }
+        phone: { type: string, example: '0901234567' }
+        role: { type: string, example: customer }
+        token: { type: string, example: eyJhbGciOiJIUzI1NiIs... }
+        accessToken: { type: string, example: eyJhbGciOiJIUzI1NiIs... }
+        refresh_token: { type: string, example: eyJhbGciOiJIUzI1NiIs... }
+        user: { $ref: '#/components/schemas/UserDto' }
+
+    AuthApiResponse:
+      type: object
+      properties:
+        success: { type: boolean, example: true }
+        code: { type: integer, example: 0 }
+        message: { type: string, example: Đăng nhập thành công }
+        data: { $ref: '#/components/schemas/AuthResponseData' }
+
+    UserDto:
+      type: object
+      properties:
+        id: { type: integer, example: 123 }
+        name: { type: string, example: Nguyễn Văn A }
+        phone: { type: string, example: '0901234567' }
+        email: { type: string, example: a@test.com }
+        role: { type: string, example: CUSTOMER }
+        verificationStatus: { type: string, example: VERIFIED }
+        verification_status: { type: string, example: verified }
+        avatar_url: { type: string, example: https://uploads.vn/avatars/u123.jpg }
+        address: { type: string, example: 123 Nguyễn Huệ, TP.HCM }
+        date_of_birth: { type: string, example: '1995-01-15' }
+        created_at: { type: string, example: '2026-09-01T10:00:00' }
+
+    UserApiResponse:
+      type: object
+      properties:
+        success: { type: boolean, example: true }
+        data: { $ref: '#/components/schemas/UserDto' }
+
+    VerificationApiResponse:
+      type: object
+      properties:
+        success: { type: boolean, example: true }
+        message: { type: string, example: Upload thành công }
+        data:
+          type: object
+          properties:
+            verification_status: { type: string, example: PENDING_VERIFICATION }
+
+    # Car Schemas
+    CarDto:
+      type: object
+      properties:
+        id: { type: integer, example: 1 }
+        plateNumber: { type: string, example: 51A-12345 }
+        brand: { type: string, example: Toyota }
+        model: { type: string, example: Camry }
+        year: { type: integer, example: 2023 }
+        color: { type: string, example: Trắng }
+        seats: { type: integer, example: 5 }
+        transmission: { type: string, example: AUTOMATIC }
+        fuelType: { type: string, example: GASOLINE }
+        pricePerDay: { type: number, example: 1200000 }
+        status: { type: string, example: AVAILABLE }
+        location: { type: string, example: TP.HCM }
+        thumbnailUrl: { type: string, example: https://uploads.vn/cars/camry.jpg }
+
+    CarPageApiResponse:
+      type: object
+      properties:
+        success: { type: boolean, example: true }
+        data:
+          type: object
+          properties:
+            content:
+              type: array
+              items: { $ref: '#/components/schemas/CarDto' }
+            totalPages: { type: integer, example: 8 }
+            totalElements: { type: integer, example: 150 }
+
+    CarDetailApiResponse:
+      type: object
+      properties:
+        success: { type: boolean, example: true }
+        data: { $ref: '#/components/schemas/CarDto' }
+
+    CarListApiResponse:
+      type: object
+      properties:
+        success: { type: boolean, example: true }
+        data:
+          type: array
+          items: { $ref: '#/components/schemas/CarDto' }
+
+    CarCreateRequest:
+      type: object
+      required: [plateNumber, brand, model, seats, pricePerDay]
+      properties:
+        plateNumber: { type: string, example: 51A-12345 }
+        brand: { type: string, example: Toyota }
+        model: { type: string, example: Camry }
+        year: { type: integer, example: 2023 }
+        seats: { type: integer, example: 5 }
+        pricePerDay: { type: number, example: 1200000 }
+
+    CarUpdateRequest:
+      type: object
+      properties:
+        pricePerDay: { type: number, example: 1300000 }
+        description: { type: string, example: Xe mới bảo dưỡng định kỳ }
+
+    CarPricingRequest:
+      type: object
+      properties:
+        pricePerDay: { type: number, example: 1200000 }
+        priceWeekend: { type: number, example: 1400000 }
+        overtimeFeePerHour: { type: number, example: 100000 }
+        overKmFee: { type: number, example: 5000 }
+
+    AvailabilityApiResponse:
+      type: object
+      properties:
+        success: { type: boolean, example: true }
+        data:
+          type: object
+          properties:
+            isAvailable: { type: boolean, example: true }
+
+    CalendarApiResponse:
+      type: object
+      properties:
+        success: { type: boolean, example: true }
+        data:
+          type: array
+          items:
+            type: object
+            properties:
+              startDate: { type: string, format: date-time }
+              endDate: { type: string, format: date-time }
+              status: { type: string, example: BOOKED }
+
+    # Booking Schemas
+    BookingCreateRequest:
+      type: object
+      required: [carId, startDate, endDate]
+      properties:
+        carId: { type: integer, example: 1 }
+        startDate: { type: string, format: date-time, example: '2026-10-15T08:00:00' }
+        endDate: { type: string, format: date-time, example: '2026-10-18T18:00:00' }
+        rentalType: { type: string, example: SELF_DRIVE }
+        deliveryAddress: { type: string, example: Sân bay Tân Sơn Nhất }
+
+    BookingDto:
+      type: object
+      properties:
+        id: { type: integer, example: 101 }
+        bookingCode: { type: string, example: BK-20261015-001 }
+        carId: { type: integer, example: 1 }
+        customerId: { type: integer, example: 123 }
+        status: { type: string, example: CONFIRMED }
+        totalAmount: { type: number, example: 3600000 }
+        depositAmount: { type: number, example: 1080000 }
+        startDate: { type: string, example: '2026-10-15T08:00:00' }
+        endDate: { type: string, example: '2026-10-18T18:00:00' }
+
+    BookingApiResponse:
+      type: object
+      properties:
+        success: { type: boolean, example: true }
+        data: { $ref: '#/components/schemas/BookingDto' }
+
+    BookingListApiResponse:
+      type: object
+      properties:
+        success: { type: boolean, example: true }
+        data:
+          type: array
+          items: { $ref: '#/components/schemas/BookingDto' }
+
+    # Payment Schemas
+    PaymentCreateRequest:
+      type: object
+      required: [bookingId, amount, paymentType]
+      properties:
+        bookingId: { type: integer, example: 101 }
+        amount: { type: number, example: 1080000 }
+        paymentType: { type: string, example: DEPOSIT }
+        paymentMethod: { type: string, example: MOMO }
+
+    PaymentDto:
+      type: object
+      properties:
+        id: { type: integer, example: 501 }
+        bookingId: { type: integer, example: 101 }
+        amount: { type: number, example: 1080000 }
+        status: { type: string, example: SUCCESS }
+        paymentUrl: { type: string, example: https://momo.vn/pay/order-123 }
+
+    PaymentApiResponse:
+      type: object
+      properties:
+        success: { type: boolean, example: true }
+        data: { $ref: '#/components/schemas/PaymentDto' }
+
+    PaymentListApiResponse:
+      type: object
+      properties:
+        success: { type: boolean, example: true }
+        data:
+          type: array
+          items: { $ref: '#/components/schemas/PaymentDto' }
+
+    # Handover Schemas
+    HandoverPickupRequest:
+      type: object
+      required: [bookingId, startKm, startFuelPercent]
+      properties:
+        bookingId: { type: integer, example: 101 }
+        startKm: { type: number, example: 25000 }
+        startFuelPercent: { type: integer, example: 100 }
+        notes: { type: string, example: Xe sạch sẽ, không trầy xước }
+        images: { type: array, items: { type: string } }
+
+    HandoverReturnRequest:
+      type: object
+      required: [bookingId, endKm, endFuelPercent]
+      properties:
+        bookingId: { type: integer, example: 101 }
+        endKm: { type: number, example: 25400 }
+        endFuelPercent: { type: integer, example: 90 }
+        notes: { type: string, example: Trả đúng hạn, trầy nhẹ cản sau }
+
+    HandoverApiResponse:
+      type: object
+      properties:
+        success: { type: boolean, example: true }
+        data:
+          type: object
+          properties:
+            id: { type: integer, example: 77 }
+            bookingId: { type: integer, example: 101 }
+            lateHours: { type: number, example: 0 }
+            overKm: { type: number, example: 0 }
+            penaltyFee: { type: number, example: 0 }
+
+    # Driver Schemas
+    DriverCreateRequest:
+      type: object
+      required: [name, phone, licenseNumber]
+      properties:
+        name: { type: string, example: Trần Văn Tài }
+        phone: { type: string, example: '0912345678' }
+        licenseNumber: { type: string, example: B2-998877 }
+        experienceYears: { type: integer, example: 5 }
+
+    DriverUpdateRequest:
+      type: object
+      properties:
+        experienceYears: { type: integer, example: 6 }
+        status: { type: string, example: ACTIVE }
+
+    DriverDto:
+      type: object
+      properties:
+        id: { type: integer, example: 15 }
+        name: { type: string, example: Trần Văn Tài }
+        phone: { type: string, example: '0912345678' }
+        status: { type: string, example: ACTIVE }
+
+    DriverApiResponse:
+      type: object
+      properties:
+        success: { type: boolean, example: true }
+        data: { $ref: '#/components/schemas/DriverDto' }
+
+    DriverListApiResponse:
+      type: object
+      properties:
+        success: { type: boolean, example: true }
+        data:
+          type: array
+          items: { $ref: '#/components/schemas/DriverDto' }
+
+    # Review Schemas
+    ReviewCreateRequest:
+      type: object
+      required: [bookingId, carRating, ownerRating]
+      properties:
+        bookingId: { type: integer, example: 101 }
+        carRating: { type: integer, example: 5 }
+        ownerRating: { type: integer, example: 5 }
+        comment: { type: string, example: Xe chạy rất êm, chủ xe nhiệt tình! }
+
+    ReviewDto:
+      type: object
+      properties:
+        id: { type: integer, example: 88 }
+        carRating: { type: integer, example: 5 }
+        ownerRating: { type: integer, example: 5 }
+        comment: { type: string, example: Rất hài lòng! }
+        customerName: { type: string, example: Nguyễn Văn A }
+
+    ReviewApiResponse:
+      type: object
+      properties:
+        success: { type: boolean, example: true }
+        data: { $ref: '#/components/schemas/ReviewDto' }
+
+    ReviewListApiResponse:
+      type: object
+      properties:
+        success: { type: boolean, example: true }
+        data:
+          type: array
+          items: { $ref: '#/components/schemas/ReviewDto' }
+
+    # Dispute Schemas
+    DisputeCreateRequest:
+      type: object
+      required: [bookingId, reason, claimAmount]
+      properties:
+        bookingId: { type: integer, example: 101 }
+        reason: { type: string, example: Xe bị hỏng điều hòa giữa đường }
+        claimAmount: { type: number, example: 500000 }
+        evidenceImages: { type: array, items: { type: string } }
+
+    DisputeResolveRequest:
+      type: object
+      required: [resolution, refundAmount]
+      properties:
+        resolution: { type: string, example: Đồng ý hoàn lại 50% tiền cọc cho khách }
+        refundAmount: { type: number, example: 500000 }
+
+    DisputeDto:
+      type: object
+      properties:
+        id: { type: integer, example: 33 }
+        bookingId: { type: integer, example: 101 }
+        status: { type: string, example: PENDING }
+        claimAmount: { type: number, example: 500000 }
+
+    DisputeApiResponse:
+      type: object
+      properties:
+        success: { type: boolean, example: true }
+        data: { $ref: '#/components/schemas/DisputeDto' }
+
+    # Withdrawal Schemas
+    WithdrawalCreateRequest:
+      type: object
+      required: [amount, bankName, accountNumber, accountName]
+      properties:
+        amount: { type: number, example: 5000000 }
+        bankName: { type: string, example: Vietcombank }
+        accountNumber: { type: string, example: '0071001234567' }
+        accountName: { type: string, example: NGUYEN VAN A }
+
+    WithdrawalDto:
+      type: object
+      properties:
+        id: { type: integer, example: 91 }
+        amount: { type: number, example: 5000000 }
+        status: { type: string, example: PENDING }
+        bankName: { type: string, example: Vietcombank }
+
+    WithdrawalApiResponse:
+      type: object
+      properties:
+        success: { type: boolean, example: true }
+        data: { $ref: '#/components/schemas/WithdrawalDto' }
+
+    WithdrawalListApiResponse:
+      type: object
+      properties:
+        success: { type: boolean, example: true }
+        data:
+          type: array
+          items: { $ref: '#/components/schemas/WithdrawalDto' }
+
+    WalletApiResponse:
+      type: object
+      properties:
+        success: { type: boolean, example: true }
+        data:
+          type: object
+          properties:
+            balance: { type: number, example: 12500000 }
+            lockedAmount: { type: number, example: 5000000 }
+
+    # Admin Schemas
+    AdminDashboardApiResponse:
+      type: object
+      properties:
+        success: { type: boolean, example: true }
+        data:
+          type: object
+          properties:
+            totalRevenue: { type: number, example: 150000000 }
+            platformRevenue: { type: number, example: 15000000 }
+            cancelRate: { type: number, example: 0.04 }
+            csat: { type: number, example: 4.85 }
+
+    AdminUserListApiResponse:
+      type: object
+      properties:
+        success: { type: boolean, example: true }
+        data:
+          type: array
+          items: { $ref: '#/components/schemas/UserDto' }
+
+    # AI Chatbot Schemas
+    AIChatRequest:
+      type: object
+      required: [message]
+      properties:
+        message: { type: string, example: 'Tôi muốn tìm xe 7 chỗ đi Vũng Tàu' }
+        role: { type: string, example: CUSTOMER }
+
+    AIChatApiResponse:
+      type: object
+      properties:
+        success: { type: boolean, example: true }
+        data:
+          type: object
+          properties:
+            reply: { type: string, example: 'Dưới đây là một số dòng xe 7 chỗ phù hợp...' }
+            suggestions: { type: array, items: { type: string } }
+
+    AISuggestionsApiResponse:
+      type: object
+      properties:
+        success: { type: boolean, example: true }
+        data:
+          type: array
+          items: { type: string }
+
+    AIChatHistoryApiResponse:
+      type: object
+      properties:
+        success: { type: boolean, example: true }
+        data:
+          type: array
+          items:
+            type: object
+            properties:
+              role: { type: string, example: user }
+              content: { type: string, example: Xin chào }
+
+    # Notification Schemas
+    NotificationListApiResponse:
+      type: object
+      properties:
+        success: { type: boolean, example: true }
+        data:
+          type: array
+          items:
+            type: object
+            properties:
+              id: { type: integer, example: 1 }
+              title: { type: string, example: Đơn đặt xe thành công }
+              content: { type: string, example: Đơn BK-101 đã được xác nhận }
+              isRead: { type: boolean, example: false }
+
+    # File & Excel Schemas
+    FileUploadApiResponse:
+      type: object
+      properties:
+        success: { type: boolean, example: true }
+        data:
+          type: object
+          properties:
+            fileUrl: { type: string, example: http://localhost:8080/api/v1/uploads/cars/img1.jpg }
+
+    ExcelImportApiResponse:
+      type: object
+      properties:
+        success: { type: boolean, example: true }
+        data:
+          type: object
+          properties:
+            totalRows: { type: integer, example: 20 }
+            validRows: { type: integer, example: 19 }
+            errorRows: { type: integer, example: 1 }

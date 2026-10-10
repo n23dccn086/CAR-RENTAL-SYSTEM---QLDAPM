@@ -81,6 +81,16 @@ Khi thấy dòng log `Tomcat started on port(s): 8080 (http) with context path '
 
 ---
 
+## 📖 Tài liệu API Chuẩn OpenAPI 3.0 & Swagger UI
+
+Backend tích hợp sẵn chuẩn **OpenAPI 3.0** và **Swagger UI** tương thích 100% với tài liệu đặc tả SRS `CAR RENTAL SYSTEM-QLDAPM.pdf` (64 endpoints thuộc 14 modules):
+
+* **Swagger UI Trực quan:** [http://localhost:8080/api/v1/swagger-ui.html](http://localhost:8080/api/v1/swagger-ui.html)
+* **OpenAPI 3.0 JSON Schema:** [http://localhost:8080/api/v1/v3/api-docs](http://localhost:8080/api/v1/v3/api-docs)
+* **OpenAPI 3.0 YAML Static Spec:** [http://localhost:8080/api/v1/openapi.yaml](http://localhost:8080/api/v1/openapi.yaml) (hoặc xem trực tiếp file [`openapi.yaml`](file:///d:/school/CAR-RENTAL-SYSTEM---QLDAPM/openapi.yaml) tại thư mục gốc của dự án)
+
+---
+
 ## 📡 Danh mục REST API Endpoints cốt lõi
 
 ### 1. Xác thực & Tài khoản (`/api/v1/auth` & `/api/v1/users`)
