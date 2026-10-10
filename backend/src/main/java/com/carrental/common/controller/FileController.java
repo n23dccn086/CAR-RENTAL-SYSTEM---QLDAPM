@@ -22,12 +22,18 @@ public class FileController {
 
     private final Path uploadDir = Paths.get("uploads").toAbsolutePath().normalize();
 
+    public FileController() {
+        try {
+            java.nio.file.Files.createDirectories(uploadDir);
+        } catch (Exception ignored) {}
+    }
+
     @GetMapping("/**")
     public ResponseEntity<Resource> serveFile(HttpServletRequest request) {
         try {
             String fullPath = (String) request.getAttribute(
                     HandlerMapping.PATH_WITHIN_HANDLER_MAPPING_ATTRIBUTE);
-            String filePath = fullPath.replaceFirst("^/files/", "");
+            String filePath = fullPath.replaceFirst("^/(api/v1/)?files/", "");
 
             log.info("Serving file: {}", filePath);
 

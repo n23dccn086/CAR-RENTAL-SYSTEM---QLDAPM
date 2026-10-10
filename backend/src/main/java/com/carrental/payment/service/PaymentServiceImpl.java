@@ -144,9 +144,19 @@ public class PaymentServiceImpl implements PaymentService {
 
         boolean isSuccess = momoGateway.isPaymentSuccess(callbackData);
 
-        Payment payment = paymentRepository.findByStatus(PaymentStatus.PENDING)
-                .stream().findFirst()
-                .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.PAYMENT_NOT_FOUND));
+        Payment payment = null;
+        if (callbackData != null) {
+            String orderId = extractOrderIdFromCallback(callbackData);
+            if (orderId != null && !orderId.isBlank()) {
+                payment = paymentRepository.findByTransactionId(orderId).orElse(null);
+            }
+        }
+
+        if (payment == null) {
+            payment = paymentRepository.findByStatus(PaymentStatus.PENDING)
+                    .stream().findFirst()
+                    .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.PAYMENT_NOT_FOUND));
+        }
 
         if (isSuccess) {
             payment.setStatus(PaymentStatus.SUCCESS);
@@ -306,5 +316,18 @@ public class PaymentServiceImpl implements PaymentService {
     private String formatMoney(Long amount) {
         if (amount == null) return "0";
         return String.format("%,d", amount);
+    }
+
+    private String extractOrderIdFromCallback(String data) {
+        if (data == null) return null;
+        java.util.regex.Matcher jsonMatcher = java.util.regex.Pattern.compile("\"orderId\"\\s*:\\s*\"([^\"]+)\"").matcher(data);
+        if (jsonMatcher.find()) {
+            return jsonMatcher.group(1);
+        }
+        java.util.regex.Matcher paramMatcher = java.util.regex.Pattern.compile("(?:^|[?&])orderId=([^&]+)").matcher(data);
+        if (paramMatcher.find()) {
+            return paramMatcher.group(1);
+        }
+        return null;
     }
 }
