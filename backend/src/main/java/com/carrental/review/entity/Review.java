@@ -45,8 +45,22 @@ public class Review {
     @Column(name = "owner_rating", nullable = false)
     Integer ownerRating;
 
+    @Column(name = "driver_rating")
+    Integer driverRating;
+
     @Column(columnDefinition = "TEXT")
     String comment;
+
+    @Convert(converter = com.carrental.common.util.StringListJsonConverter.class)
+    @Column(name = "images", columnDefinition = "TEXT")
+    @Builder.Default
+    java.util.List<String> images = new java.util.ArrayList<>();
+
+    @Column(name = "owner_reply", columnDefinition = "TEXT")
+    String ownerReply;
+
+    @Column(name = "replied_at")
+    LocalDateTime repliedAt;
 
     @Column(name = "is_anonymous")
     @Builder.Default

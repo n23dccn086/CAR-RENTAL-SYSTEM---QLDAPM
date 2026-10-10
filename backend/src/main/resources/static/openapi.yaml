@@ -1378,7 +1378,8 @@ paths:
   /reviews:
     post:
       tags: [8. Reviews]
-      summary: Khách hàng đánh giá chất lượng xe và phục vụ của chủ xe (8.1, UC-C10)
+      summary: Tạo đánh giá chuyến đi (8.1, UC-C10)
+      description: Khách hàng đánh giá chất lượng xe, chủ xe và tài xế (nếu có) sau khi hoàn tất chuyến đi
       requestBody:
         required: true
         content:
@@ -1387,25 +1388,92 @@ paths:
               $ref: '#/components/schemas/ReviewCreateRequest'
       responses:
         '201':
-          description: Đánh giá thành công
+          description: Đã gửi đánh giá thành công
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ReviewApiResponse'
+                $ref: '#/components/schemas/ReviewCreateApiResponse'
+
+  /cars/{carId}/reviews:
+    get:
+      tags: [8. Reviews]
+      summary: Danh sách đánh giá của xe (8.2, UC-C05)
+      description: Lấy danh sách đánh giá của xe kèm bảng tổng hợp sao và phân trang
+      security: []
+      parameters:
+        - name: carId
+          in: path
+          required: true
+          schema: { type: integer, example: 1 }
+        - name: page
+          in: query
+          schema: { type: integer, default: 1 }
+        - name: limit
+          in: query
+          schema: { type: integer, default: 10 }
+      responses:
+        '200':
+          description: Danh sách đánh giá xe và thống kê sao
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CarReviewListApiResponse'
+
+  /reviews/{id}/reply:
+    post:
+      tags: [8. Reviews]
+      summary: Chủ xe phản hồi đánh giá (8.3)
+      description: Chủ xe phản hồi bình luận đánh giá của khách hàng
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer, example: 50 }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReviewReplyRequest'
+      responses:
+        '200':
+          description: Đã phản hồi thành công
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponseVoid'
 
   /reviews/cars/{carId}:
     get:
       tags: [8. Reviews]
-      summary: Xem danh sách đánh giá của chiếc xe cụ thể (8.2, UC-C05)
+      summary: Alias danh sách đánh giá của xe (8.2)
       security: []
       parameters:
         - name: carId
           in: path
           required: true
           schema: { type: integer }
+        - name: page
+          in: query
+          schema: { type: integer, default: 1 }
+        - name: limit
+          in: query
+          schema: { type: integer, default: 10 }
       responses:
         '200':
           description: Danh sách đánh giá xe
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CarReviewListApiResponse'
+
+  /reviews/my:
+    get:
+      tags: [8. Reviews]
+      summary: Danh sách đánh giá của tôi
+      responses:
+        '200':
+          description: Danh sách đánh giá của tôi
           content:
             application/json:
               schema:
@@ -1414,7 +1482,7 @@ paths:
   /reviews/owner/{ownerId}:
     get:
       tags: [8. Reviews]
-      summary: Xem danh sách và điểm số đánh giá của chủ xe (8.3)
+      summary: Xem danh sách đánh giá của chủ xe
       security: []
       parameters:
         - name: ownerId
@@ -2338,12 +2406,78 @@ components:
     # Review Schemas
     ReviewCreateRequest:
       type: object
-      required: [bookingId, carRating, ownerRating]
+      required: [booking_id, car_rating, owner_rating]
       properties:
-        bookingId: { type: integer, example: 101 }
-        carRating: { type: integer, example: 5 }
-        ownerRating: { type: integer, example: 5 }
-        comment: { type: string, example: Xe chạy rất êm, chủ xe nhiệt tình! }
+        booking_id: { type: integer, example: 100 }
+        car_rating: { type: integer, minimum: 1, maximum: 5, example: 5 }
+        owner_rating: { type: integer, minimum: 1, maximum: 5, example: 5 }
+        driver_rating: { type: integer, minimum: 1, maximum: 5, nullable: true, example: 5 }
+        comment: { type: string, example: "Xe rất tốt, chủ xe thân thiện!" }
+        images:
+          type: array
+          items: { type: string, example: "https://example.com/review1.jpg" }
+        is_anonymous: { type: boolean, example: false }
+
+    ReviewReplyRequest:
+      type: object
+      required: [reply]
+      properties:
+        reply: { type: string, example: "Cảm ơn bạn đã tin tưởng!" }
+
+    ReviewCreatedDto:
+      type: object
+      properties:
+        id: { type: integer, example: 50 }
+        car_rating: { type: integer, example: 5 }
+        owner_rating: { type: integer, example: 5 }
+        created_at: { type: string, format: date-time, example: "2026-10-18T10:00:00Z" }
+
+    ReviewCreateApiResponse:
+      type: object
+      properties:
+        success: { type: boolean, example: true }
+        data: { $ref: '#/components/schemas/ReviewCreatedDto' }
+        message: { type: string, example: "Cảm ơn bạn đã đánh giá" }
+
+    ReviewItemDto:
+      type: object
+      properties:
+        id: { type: integer, example: 50 }
+        reviewer_name: { type: string, example: "Nguyễn Văn A" }
+        reviewer_avatar: { type: string, nullable: true, example: "https://..." }
+        car_rating: { type: integer, example: 5 }
+        comment: { type: string, example: "Xe rất tốt!" }
+        images:
+          type: array
+          items: { type: string }
+        owner_reply: { type: string, nullable: true, example: "Cảm ơn bạn!" }
+        created_at: { type: string, format: date-time, example: "2026-10-18T10:00:00Z" }
+
+    ReviewSummaryDto:
+      type: object
+      properties:
+        avg_rating: { type: number, example: 4.8 }
+        total: { type: integer, example: 45 }
+        star_5: { type: integer, example: 30 }
+        star_4: { type: integer, example: 10 }
+        star_3: { type: integer, example: 3 }
+        star_2: { type: integer, example: 1 }
+        star_1: { type: integer, example: 1 }
+
+    CarReviewListDataDto:
+      type: object
+      properties:
+        reviews:
+          type: array
+          items: { $ref: '#/components/schemas/ReviewItemDto' }
+        summary: { $ref: '#/components/schemas/ReviewSummaryDto' }
+        pagination: { $ref: '#/components/schemas/PaginationMetadata' }
+
+    CarReviewListApiResponse:
+      type: object
+      properties:
+        success: { type: boolean, example: true }
+        data: { $ref: '#/components/schemas/CarReviewListDataDto' }
 
     ReviewDto:
       type: object

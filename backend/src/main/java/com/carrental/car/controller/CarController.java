@@ -42,6 +42,7 @@ public class CarController {
 
     CarService carService;
     JwtService jwtService;
+    com.carrental.review.service.ReviewService reviewService;
 
     // ===== PUBLIC ENDPOINTS =====
 
@@ -108,6 +109,19 @@ public class CarController {
     public ApiResponse<CarResponse> getCarById(@PathVariable Long id) {
         log.info("REST request to get car: {}", id);
         return ApiResponse.success(carService.getCarById(id));
+    }
+
+    /**
+     * 8.2 Danh sách đánh giá của xe
+     * GET /cars/:carId/reviews?page=1&limit=10
+     */
+    @GetMapping("/{id}/reviews")
+    public ApiResponse<Map<String, Object>> getCarReviews(
+            @PathVariable Long id,
+            @RequestParam(defaultValue = "1") int page,
+            @RequestParam(defaultValue = "10") int limit) {
+        log.info("REST request to get reviews for car {}: page={}, limit={}", id, page, limit);
+        return ApiResponse.success(reviewService.getCarReviews(id, page, limit));
     }
 
     @GetMapping("/available")
