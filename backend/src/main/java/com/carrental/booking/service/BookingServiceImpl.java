@@ -167,11 +167,13 @@ public class BookingServiceImpl implements BookingService {
     // ===== READ =====
 
     @Override
+    @Transactional(readOnly = true)
     public BookingResponse getBookingById(Long id) {
         return getBookingById(id, null);
     }
 
     @Override
+    @Transactional(readOnly = true)
     public BookingResponse getBookingById(Long id, Long requesterId) {
         Booking booking = getBookingEntityById(id);
         if (requesterId != null) {
@@ -190,17 +192,20 @@ public class BookingServiceImpl implements BookingService {
     }
 
     @Override
+    @Transactional(readOnly = true)
     public Booking getBookingEntityById(Long id) {
         return bookingRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.BOOKING_NOT_FOUND));
     }
 
     @Override
+    @Transactional(readOnly = true)
     public List<BookingResponse> getMyBookings(Long customerId) {
         return getMyBookings(customerId, null);
     }
 
     @Override
+    @Transactional(readOnly = true)
     public List<BookingResponse> getMyBookings(Long customerId, String status) {
         List<Booking> bookings;
         if (status != null && !status.isBlank() && !status.equalsIgnoreCase("ALL")) {
@@ -217,11 +222,13 @@ public class BookingServiceImpl implements BookingService {
     }
 
     @Override
+    @Transactional(readOnly = true)
     public List<BookingResponse> getOwnerBookings(Long ownerId) {
         return getOwnerBookings(ownerId, null);
     }
 
     @Override
+    @Transactional(readOnly = true)
     public List<BookingResponse> getOwnerBookings(Long ownerId, String status) {
         List<Booking> bookings;
         if (status != null && !status.isBlank() && !status.equalsIgnoreCase("ALL")) {
@@ -238,6 +245,7 @@ public class BookingServiceImpl implements BookingService {
     }
 
     @Override
+    @Transactional(readOnly = true)
     public List<BookingResponse> getBookingsByStatus(BookingStatus status) {
         List<Booking> bookings = bookingRepository.findByStatus(status);
         return bookings.stream().map(b -> buildResponse(b, null)).toList();

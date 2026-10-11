@@ -42,8 +42,7 @@ const imageUrl = hasImage ? car.imageUrls[0] : null
         gridTemplateColumns: '60px 220px minmax(0, 1fr) 200px 40px'  // ← FIX: cột chữ co giãn
       }}
     >
-      <div className="car-num">{['I', 'II', 'III', 'IV', 'V'][index] || index + 1}</div>
-
+      <div className="car-num">{index + 1}</div>
       {/* ẢNH XE — Ảnh thật HOẶC icon đỏ */}
       <div style={{
         width: '200px',
