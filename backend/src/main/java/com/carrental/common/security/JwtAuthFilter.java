@@ -1,5 +1,7 @@
 package com.carrental.common.security;
 
+import io.jsonwebtoken.ExpiredJwtException;
+import io.jsonwebtoken.JwtException;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -22,6 +24,11 @@ import java.util.Collections;
 /**
  * Filter đọc JWT từ header Authorization, xác thực và set user vào SecurityContext.
  * Chạy 1 lần cho mỗi request (OncePerRequestFilter).
+ *
+ * ★ FIX: Phân biệt rõ các loại lỗi JWT:
+ *   - Token hết hạn → trả 401 kèm code 3004
+ *   - Token invalid → trả 401 kèm code 3003
+ *   - Không có token → đi tiếp (public endpoint xử lý)
  */
 @Component
 @RequiredArgsConstructor
@@ -35,50 +42,107 @@ public class JwtAuthFilter extends OncePerRequestFilter {
     protected void doFilterInternal(HttpServletRequest request,
                                     HttpServletResponse response,
                                     FilterChain filterChain) throws ServletException, IOException {
+
+        String token = extractToken(request);
+
+        // Không có token → đi tiếp (endpoint public sẽ cho qua, endpoint cần auth sẽ 403/401)
+        if (!StringUtils.hasText(token)) {
+            filterChain.doFilter(request, response);
+            return;
+        }
+
         try {
-            // 1. Lấy token từ header Authorization
-            String token = extractToken(request);
-
-            if (StringUtils.hasText(token)) {
-                // 2. Check token type — chỉ chấp nhận ACCESS token
-                String tokenType = jwtService.extractTokenType(token);
-                if (!"ACCESS".equals(tokenType)) {
-                    filterChain.doFilter(request, response);
-                    return;
-                }
-
-                // 3. Check token hợp lệ + chưa hết hạn
-                String phone = jwtService.extractPhone(token);
-                if (jwtService.isTokenValid(token, phone)) {
-                    // 4. Lấy thông tin từ token
-                    Long userId = jwtService.extractUserId(token);
-                    String role = jwtService.extractRole(token);
-
-                    // 5. Set userId + role vào request attribute (để controller dùng @RequestAttribute)
-                    request.setAttribute("userId", userId);
-                    request.setAttribute("role", role);
-
-                    // 6. Set authentication vào SecurityContext
-                    UsernamePasswordAuthenticationToken authentication =
-                            new UsernamePasswordAuthenticationToken(
-                                    userId,
-                                    null,
-                                    Collections.singletonList(
-                                            new SimpleGrantedAuthority("ROLE_" + role))
-                            );
-                    authentication.setDetails(
-                            new WebAuthenticationDetailsSource().buildDetails(request));
-                    SecurityContextHolder.getContext().setAuthentication(authentication);
-
-                    log.debug("Authenticated user: {} with role: {}", userId, role);
-                }
+            // 1. Check token type — chỉ chấp nhận ACCESS token
+            String tokenType = jwtService.extractTokenType(token);
+            if (!"ACCESS".equals(tokenType)) {
+                // Token không phải ACCESS (ví dụ REFRESH) → coi như không có token
+                filterChain.doFilter(request, response);
+                return;
             }
+
+            // 2. Check token hợp lệ + chưa hết hạn
+            String phone = jwtService.extractPhone(token);
+            if (jwtService.isTokenValid(token, phone)) {
+                // 3. Lấy thông tin từ token
+                Long userId = jwtService.extractUserId(token);
+                String role = jwtService.extractRole(token);
+
+                // 4. Set userId + role vào request attribute (để controller dùng @RequestAttribute)
+                request.setAttribute("userId", userId);
+                request.setAttribute("role", role);
+
+                // 5. Set authentication vào SecurityContext
+                UsernamePasswordAuthenticationToken authentication =
+                        new UsernamePasswordAuthenticationToken(
+                                userId,
+                                null,
+                                Collections.singletonList(
+                                        new SimpleGrantedAuthority("ROLE_" + role))
+                        );
+                authentication.setDetails(
+                        new WebAuthenticationDetailsSource().buildDetails(request));
+                SecurityContextHolder.getContext().setAuthentication(authentication);
+
+                log.debug("Authenticated user: {} with role: {}", userId, role);
+            } else {
+                // Token không hợp lệ (isTokenValid = false, không throw)
+                log.debug("Token invalid (isTokenValid=false)");
+                writeUnauthorized(response, 3003, "Token không hợp lệ");
+                return;
+            }
+
+        } catch (ExpiredJwtException ex) {
+            // ★ Token hết hạn → 401
+            log.debug("JWT token expired: {}", ex.getMessage());
+            writeUnauthorized(response, 3004, "Token đã hết hạn. Vui lòng đăng nhập lại.");
+            return;
+
+        } catch (JwtException ex) {
+            // ★ Token invalid (chữ ký sai, format sai, ...) → 401
+            log.warn("JWT token invalid: {}", ex.getMessage());
+            writeUnauthorized(response, 3003, "Token không hợp lệ");
+            return;
+
         } catch (Exception ex) {
-            log.error("Cannot set user authentication: {}", ex.getMessage());
+            // ★ Lỗi không xác định → 401
+            log.warn("Cannot set user authentication: {}", ex.getMessage());
+            writeUnauthorized(response, 3003, "Xác thực thất bại");
+            return;
         }
 
         // Tiếp tục filter chain
         filterChain.doFilter(request, response);
+    }
+
+    /**
+     * Ghi response 401 Unauthorized với JSON body theo format ApiResponse
+     */
+    private void writeUnauthorized(HttpServletResponse response, int code, String message)
+            throws IOException {
+        response.setStatus(HttpServletResponse.SC_UNAUTHORIZED); // 401
+        response.setContentType("application/json;charset=UTF-8");
+        response.setCharacterEncoding("UTF-8");
+
+        String json = String.format(
+                "{\"success\":false,\"code\":%d,\"message\":\"%s\"}",
+                code, escapeJson(message)
+        );
+
+        response.getWriter().write(json);
+        response.getWriter().flush();
+    }
+
+    /**
+     * Escape JSON string đơn giản để tránh lỗi format
+     */
+    private String escapeJson(String input) {
+        if (input == null) return "";
+        return input
+                .replace("\\", "\\\\")
+                .replace("\"", "\\\"")
+                .replace("\n", "\\n")
+                .replace("\r", "\\r")
+                .replace("\t", "\\t");
     }
 
     /**
