@@ -32,13 +32,17 @@ public interface DriverRepository extends JpaRepository<Driver, Long> {
     long countByStatusAndDeletedAtIsNull(DriverStatus status);
 
     // ============================================================
-    // ★ OWNER — SEARCH + FILTER + SORT + PHÂN TRANG
+    // ★ MỚI: ADMIN Pagination
     // ============================================================
-    /**
-     * Search tài xế của owner với:
-     * - filter status (exact)
-     * - search text (tên, SĐT, GPLX)
-     */
+
+    Page<Driver> findByDeletedAtIsNull(Pageable pageable);
+
+    Page<Driver> findByStatusAndDeletedAtIsNull(DriverStatus status, Pageable pageable);
+
+    // ============================================================
+    // OWNER — SEARCH + FILTER + SORT + PHÂN TRANG
+    // ============================================================
+
     @Query(
         value = "SELECT * FROM drivers d " +
                 "WHERE d.owner_id = :ownerId " +

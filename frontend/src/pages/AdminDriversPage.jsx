@@ -2,11 +2,11 @@ import { useState, useEffect } from 'react'
 import api from '../services/api'
 
 const STATUS_MAP = {
-  PENDING:  { label: 'Chờ duyệt',      color: 'var(--dong)' },
-  ACTIVE:   { label: 'Đang hoạt động', color: 'var(--xanh-reu)' },
+  PENDING:  { label: 'Chờ duyệt',       color: 'var(--dong)' },
+  ACTIVE:   { label: 'Đang hoạt động',  color: 'var(--xanh-reu)' },
   BUSY:     { label: 'Đang chạy chuyến', color: 'var(--xanh-ngoc)' },
-  INACTIVE: { label: 'Tạm nghỉ',       color: 'var(--muc-mo)' },
-  REJECTED: { label: 'Bị từ chối',     color: 'var(--do)' },
+  INACTIVE: { label: 'Tạm nghỉ',        color: 'var(--muc-mo)' },
+  REJECTED: { label: 'Bị từ chối',      color: 'var(--do)' },
 }
 
 export default function AdminDriversPage() {
@@ -15,9 +15,11 @@ export default function AdminDriversPage() {
   const [filter, setFilter] = useState('PENDING')
   const [message, setMessage] = useState('')
 
-  // Phân trang
-  const [currentPage, setCurrentPage] = useState(1)
-  const ITEMS_PER_PAGE = 10
+  // ★ Phân trang SERVER-SIDE
+  const [currentPage, setCurrentPage] = useState(0)   // ← bắt đầu từ 0
+  const [totalPages, setTotalPages] = useState(0)
+  const [totalElements, setTotalElements] = useState(0)
+  const PAGE_SIZE = 10
 
   // Reject modal
   const [rejectModal, setRejectModal] = useState(false)
@@ -26,14 +28,28 @@ export default function AdminDriversPage() {
   const [rejectSubmitting, setRejectSubmitting] = useState(false)
   const [rejectError, setRejectError] = useState('')
 
+  // ===== FETCH =====
   const fetchDrivers = async () => {
     setLoading(true)
     try {
-      const params = filter ? { status: filter } : {}
+      const params = {
+        page: currentPage,
+        size: PAGE_SIZE,
+      }
+      if (filter) params.status = filter
+
       const res = await api.get('/admin/drivers', { params })
-      setDrivers(res.data.data || [])
+
+      // ★ FIX: Backend trả về Page object — lấy .content
+      const pageData = res.data.data || {}
+      setDrivers(pageData.content || [])
+      setTotalPages(pageData.totalPages || 0)
+      setTotalElements(pageData.totalElements || 0)
     } catch (err) {
       console.error(err)
+      setDrivers([])
+      setTotalPages(0)
+      setTotalElements(0)
     } finally {
       setLoading(false)
     }
@@ -41,10 +57,11 @@ export default function AdminDriversPage() {
 
   useEffect(() => {
     fetchDrivers()
-  }, [filter])
+  }, [filter, currentPage])
 
+  // Reset page khi filter đổi
   useEffect(() => {
-    setCurrentPage(1)
+    setCurrentPage(0)
   }, [filter])
 
   const showMessage = (msg) => {
@@ -52,6 +69,7 @@ export default function AdminDriversPage() {
     setTimeout(() => setMessage(''), 4000)
   }
 
+  // ===== ACTIONS =====
   const handleApprove = async (driver) => {
     if (!window.confirm(`Duyệt tài xế "${driver.name}" (${driver.phone})?`)) return
     try {
@@ -93,12 +111,14 @@ export default function AdminDriversPage() {
     }
   }
 
-  // Phân trang
-  const totalPages = Math.ceil(drivers.length / ITEMS_PER_PAGE)
-  const startIndex = (currentPage - 1) * ITEMS_PER_PAGE
-  const currentDrivers = drivers.slice(startIndex, startIndex + ITEMS_PER_PAGE)
-
+  // ===== PAGINATION =====
   const pendingCount = drivers.filter(d => d.status === 'PENDING').length
+
+  const goToPage = (p) => {
+    if (p >= 0 && p < totalPages) {
+      setCurrentPage(p)
+    }
+  }
 
   const formatDate = (d) =>
     d ? new Date(d).toLocaleString('vi-VN', {
@@ -141,7 +161,7 @@ export default function AdminDriversPage() {
             padding: '8px 16px',
             background: filter === opt.v ? 'var(--muc)' : 'transparent',
             color: filter === opt.v ? 'var(--kem)' : 'var(--muc-mo)',
-            border: `1px solid ${filter === opt.v ? 'var(--muc)' : 'rgba(15,14,12,0.2)'}`,
+            border: `1px solid ${filter === opt.v ? 'var(--muc)' : 'var(--border-2)'}`,
             fontFamily: 'var(--mono)', fontSize: '10px', letterSpacing: '2px',
             textTransform: 'uppercase', cursor: 'pointer'
           }}>
@@ -159,7 +179,7 @@ export default function AdminDriversPage() {
       ) : (
         <>
           <div>
-            {currentDrivers.map(d => {
+            {drivers.map(d => {
               const st = STATUS_MAP[d.status] || { label: d.status, color: 'var(--muc-mo)' }
 
               return (
@@ -167,7 +187,7 @@ export default function AdminDriversPage() {
                   display: 'grid',
                   gridTemplateColumns: '60px 1fr auto auto auto',
                   gap: '24px', alignItems: 'center', padding: '24px 0',
-                  borderBottom: '1px solid rgba(15,14,12,0.12)'
+                  borderBottom: '1px solid var(--border-1)'
                 }}>
                   {/* Avatar */}
                   <div style={{
@@ -230,18 +250,32 @@ export default function AdminDriversPage() {
             })}
           </div>
 
-          {/* Pagination */}
+          {/* ★ Pagination SERVER-SIDE */}
           {totalPages > 1 && (
             <>
               <div style={{ display: 'flex', justifyContent: 'center', gap: '8px', marginTop: '32px', flexWrap: 'wrap' }}>
-                <button onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={currentPage === 1} style={paginationBtnStyle(currentPage === 1)}>← Trước</button>
-                {Array.from({ length: totalPages }, (_, i) => i + 1).map(p => (
-                  <button key={p} onClick={() => setCurrentPage(p)} style={paginationNumStyle(currentPage === p)}>{p}</button>
+                <button
+                  onClick={() => goToPage(currentPage - 1)}
+                  disabled={currentPage === 0}
+                  style={paginationBtnStyle(currentPage === 0)}
+                >
+                  ← Trước
+                </button>
+                {Array.from({ length: totalPages }, (_, i) => i).map(p => (
+                  <button key={p} onClick={() => goToPage(p)} style={paginationNumStyle(currentPage === p)}>
+                    {p + 1}
+                  </button>
                 ))}
-                <button onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages} style={paginationBtnStyle(currentPage === totalPages)}>Sau →</button>
+                <button
+                  onClick={() => goToPage(currentPage + 1)}
+                  disabled={currentPage === totalPages - 1}
+                  style={paginationBtnStyle(currentPage === totalPages - 1)}
+                >
+                  Sau →
+                </button>
               </div>
               <div style={{ textAlign: 'center', fontFamily: 'var(--mono)', fontSize: '11px', color: 'var(--muc-mo)', marginTop: '16px', marginBottom: '24px' }}>
-                Trang {currentPage} / {totalPages} · Tổng {drivers.length} tài xế
+                Trang {currentPage + 1} / {totalPages} · Tổng {totalElements} tài xế
               </div>
             </>
           )}
@@ -289,7 +323,7 @@ export default function AdminDriversPage() {
                 placeholder="VD: GPLX không hợp lệ, hạng bằng không đúng..."
                 style={{
                   width: '100%', padding: '14px', background: 'var(--kem-dam)',
-                  border: '1px solid rgba(15,14,12,0.2)',
+                  border: '1px solid var(--border-3)',
                   fontFamily: 'var(--serif-2)', fontSize: '16px',
                   resize: 'vertical', outline: 'none', boxSizing: 'border-box'
                 }}

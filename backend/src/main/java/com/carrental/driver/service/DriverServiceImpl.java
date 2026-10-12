@@ -259,8 +259,7 @@ public class DriverServiceImpl implements DriverService {
                     "Tài xế đã được duyệt",
                     String.format("Tài xế %s (%s) đã được Admin duyệt.",
                             driver.getName(), driver.getPhone()),
-                    driver.getId()
-            );
+                    driver.getId());
         } catch (Exception e) {
             log.warn("Failed to notify owner: {}", e.getMessage());
         }
@@ -286,8 +285,7 @@ public class DriverServiceImpl implements DriverService {
                     String.format("Tài xế %s (%s) bị Admin từ chối. Lý do: %s.",
                             driver.getName(), driver.getPhone(),
                             reason != null ? reason : "Không có lý do"),
-                    driver.getId()
-            );
+                    driver.getId());
         } catch (Exception e) {
             log.warn("Failed to notify owner: {}", e.getMessage());
         }
@@ -316,6 +314,32 @@ public class DriverServiceImpl implements DriverService {
     @Override
     public long countPendingDrivers() {
         return driverRepository.countByStatusAndDeletedAtIsNull(DriverStatus.PENDING);
+    }
+
+    // ============================================================
+    // ★ MỚI: Pagination cho ADMIN
+    // ============================================================
+
+    @Override
+    @Transactional(readOnly = true)
+    public Page<DriverResponse> getAllDriversPaged(Pageable pageable) {
+        log.info("Admin: Get all drivers paged: {}", pageable);
+        return driverRepository.findByDeletedAtIsNull(pageable)
+                .map(driverMapper::toResponse);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Page<DriverResponse> getDriversByStatusPaged(DriverStatus status, Pageable pageable) {
+        log.info("Admin: Get drivers by status paged: {}, {}", status, pageable);
+        return driverRepository.findByStatusAndDeletedAtIsNull(status, pageable)
+                .map(driverMapper::toResponse);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public long countByStatus(DriverStatus status) {
+        return driverRepository.countByStatusAndDeletedAtIsNull(status);
     }
 
     // ===== HELPER =====
