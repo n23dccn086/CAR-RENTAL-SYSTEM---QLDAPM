@@ -7,10 +7,15 @@ import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
-import java.util.List;
+import java.util.LinkedHashMap;
+import java.util.Map;
 
 @RestController
 @RequestMapping("/admin/refunds")
@@ -22,13 +27,34 @@ public class AdminRefundController {
 
     RefundService refundService;
 
+    /**
+     * ★ SỬA: Endpoint phân trang
+     * GET /admin/refunds?status=PENDING&page=0&size=10
+     */
     @GetMapping
-    public ApiResponse<List<RefundResponse>> getAllRefunds(
-            @RequestParam(required = false) String status) {
-        if (status != null) {
-            return ApiResponse.success(refundService.getRefundsByStatus(status));
-        }
-        return ApiResponse.success(refundService.getAllRefunds());
+    public ApiResponse<Map<String, Object>> getAllRefunds(
+            @RequestParam(required = false) String status,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "10") int size) {
+
+        log.info("Admin get refunds: status={}, page={}, size={}", status, page, size);
+
+        Pageable pageable = PageRequest.of(page, size,
+                Sort.by(Sort.Direction.DESC, "createdAt"));
+
+        Page<RefundResponse> paged = refundService.getRefundsPaged(status, pageable);
+
+        // Wrap trong Map để giữ cấu trúc { content, totalPages, totalElements }
+        Map<String, Object> data = new LinkedHashMap<>();
+        data.put("content", paged.getContent());
+        data.put("totalPages", paged.getTotalPages());
+        data.put("totalElements", paged.getTotalElements());
+        data.put("number", paged.getNumber());
+        data.put("size", paged.getSize());
+        data.put("first", paged.isFirst());
+        data.put("last", paged.isLast());
+
+        return ApiResponse.success(data);
     }
 
     @GetMapping("/pending-count")

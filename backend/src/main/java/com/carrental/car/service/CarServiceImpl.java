@@ -29,6 +29,7 @@ import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
@@ -37,7 +38,6 @@ import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
 import java.time.LocalDate;
-import java.time.LocalDateTime;
 import java.util.*;
 
 @Service
@@ -63,10 +63,10 @@ public class CarServiceImpl implements CarService {
             CarStatus.BROKEN,
             CarStatus.INACTIVE);
 
+    // ★ SỬA: Bỏ REJECTED — cho phép Owner sửa khi bị từ chối
     static final Set<CarStatus> LOCKED_FOR_EDIT = Set.of(
             CarStatus.PENDING,
-            CarStatus.RENTED,
-            CarStatus.REJECTED);
+            CarStatus.RENTED);
 
     // ===== CREATE =====
 
@@ -240,7 +240,6 @@ public class CarServiceImpl implements CarService {
             String reason = switch (car.getStatus()) {
                 case PENDING -> "Xe đang chờ Admin duyệt, không thể sửa";
                 case RENTED -> "Xe đang được thuê, không thể sửa";
-                case REJECTED -> "Xe đã bị Admin từ chối, không thể sửa";
                 default -> "Không thể sửa xe ở trạng thái này";
             };
             throw new BadRequestException(ErrorCode.VALIDATION_ERROR, reason);
@@ -251,6 +250,7 @@ public class CarServiceImpl implements CarService {
             throw new BadRequestException(ErrorCode.CAR_PLATE_EXISTED);
         }
 
+        // ===== Cập nhật field =====
         if (request.getPlate() != null) car.setPlate(request.getPlate());
         if (request.getBrand() != null) car.setBrand(request.getBrand());
         if (request.getModel() != null) car.setModel(request.getModel());
@@ -273,12 +273,21 @@ public class CarServiceImpl implements CarService {
         if (request.getDeliveryRadius() != null) car.setDeliveryRadius(request.getDeliveryRadius());
         if (request.getDescription() != null) car.setDescription(request.getDescription());
 
+        // ★ Nếu xe đang REJECTED → xóa dòng [REJECT] cũ trong description
+        if (car.getStatus() == CarStatus.REJECTED && car.getDescription() != null) {
+            String cleaned = car.getDescription()
+                    .replaceAll("\\[REJECT\\][^\\n]*(\\n|$)", "")
+                    .trim();
+            car.setDescription(cleaned);
+        }
+
         // ★ Reset về PENDING — Admin duyệt lại nếu không phải Admin sửa
         User caller = userRepository.findById(ownerId).orElse(null);
         boolean isAdmin = caller != null && caller.getRole() == Role.ADMIN;
         if (!isAdmin && car.getStatus() != CarStatus.PENDING) {
+            CarStatus oldStatus = car.getStatus();
             log.info("Car {} status reset: {} → PENDING (do Owner sửa thông tin)",
-                    id, car.getStatus());
+                    id, oldStatus);
             car.setStatus(CarStatus.PENDING);
 
             try {
@@ -304,7 +313,7 @@ public class CarServiceImpl implements CarService {
         return enrichStats(updated);
     }
 
-    // ===== DELETE (soft) =====
+    // ===== DELETE (HARD DELETE) =====
 
     @Override
     @Transactional
@@ -317,28 +326,61 @@ public class CarServiceImpl implements CarService {
             throw new UnauthorizedException(ErrorCode.CAR_NOT_OWNED);
         }
 
-        // ★ Kiểm tra nếu xe đang có đơn đặt xe hoạt động (Contract 3.5: CAR_HAS_ACTIVE_BOOKING)
+        // ★ Chỉ chặn xóa khi RENTED (đang cho thuê)
+        if (car.getStatus() == CarStatus.RENTED) {
+            throw new BadRequestException(ErrorCode.VALIDATION_ERROR,
+                    "Xe đang được thuê, không thể xóa");
+        }
+
+        // ★ CHECK FK: Không xóa nếu có booking đang hoạt động
         long activeBookings = bookingRepository.countByCarIdAndStatusIn(
-                id, List.of(BookingStatus.PENDING, BookingStatus.PAID, BookingStatus.APPROVED, BookingStatus.RENTED));
+                id,
+                List.of(BookingStatus.PENDING, BookingStatus.PAID,
+                        BookingStatus.APPROVED, BookingStatus.RENTED,
+                        BookingStatus.RETURNED, BookingStatus.COMPLETED));
         if (activeBookings > 0) {
             throw new BadRequestException(ErrorCode.BOOKING_ALREADY_EXISTS,
-                    "Không thể xóa xe đang có đơn hoạt động");
+                    "Không thể xóa xe vì đã có " + activeBookings +
+                    " đơn đặt. Vui lòng chuyển sang Đã khóa (INACTIVE).");
         }
 
-        if (LOCKED_FOR_EDIT.contains(car.getStatus())) {
-            String reason = switch (car.getStatus()) {
-                case PENDING -> "Xe đang chờ Admin duyệt, không thể xóa";
-                case RENTED -> "Xe đang được thuê, không thể xóa";
-                case REJECTED -> "Xe đã bị Admin từ chối, không thể xóa";
-                default -> "Không thể xóa xe ở trạng thái này";
-            };
-            throw new BadRequestException(ErrorCode.VALIDATION_ERROR, reason);
+        // ★ XÓA FILE VẬT LÝ trên ổ đĩa (images + documents)
+        try {
+            List<CarImage> images = carImageRepository.findByCarId(id);
+            for (CarImage img : images) {
+                try {
+                    fileStorageService.deleteFile(img.getImageUrl());
+                } catch (Exception e) {
+                    log.warn("Cannot delete image file {}: {}", img.getImageUrl(), e.getMessage());
+                }
+            }
+
+            List<CarDocument> docs = carDocumentRepository.findByCarId(id);
+            for (CarDocument doc : docs) {
+                try {
+                    fileStorageService.deleteFile(doc.getDocumentUrl());
+                } catch (Exception e) {
+                    log.warn("Cannot delete document file {}: {}", doc.getDocumentUrl(), e.getMessage());
+                }
+            }
+        } catch (Exception e) {
+            log.warn("Failed to delete physical files for car {}: {}", id, e.getMessage());
         }
 
-        car.setDeletedAt(LocalDateTime.now());
-        carRepository.save(car);
+        // ★ XÓA CỨNG khỏi DB
+        try {
+            // Xóa blocked dates trước (không có cascade)
+            carBlockedDateRepository.deleteByCarId(id);
 
-        log.info("Car soft deleted id: {}", id);
+            // Xóa car (images + documents cascade tự động)
+            carRepository.delete(car);
+
+            log.info("Car HARD DELETED id: {}", id);
+        } catch (DataIntegrityViolationException e) {
+            log.error("Cannot hard delete car {}: {}", id, e.getMessage());
+            throw new BadRequestException(ErrorCode.VALIDATION_ERROR,
+                    "Không thể xóa xe vì còn dữ liệu liên quan (booking, tranh chấp...)");
+        }
     }
 
     // ===== SEARCH =====
@@ -408,8 +450,8 @@ public class CarServiceImpl implements CarService {
             LocalDate endDate,
             Pageable pageable) {
 
-        LocalDateTime startDt = startDate != null ? startDate.atStartOfDay() : null;
-        LocalDateTime endDt = endDate != null ? endDate.atTime(23, 59, 59) : null;
+        java.time.LocalDateTime startDt = startDate != null ? startDate.atStartOfDay() : null;
+        java.time.LocalDateTime endDt = endDate != null ? endDate.atTime(23, 59, 59) : null;
         List<Integer> seatsParam = (seats != null && !seats.isEmpty()) ? seats : null;
 
         Page<Car> cars = carRepository.searchAvailableCarsFull(
@@ -555,7 +597,6 @@ public class CarServiceImpl implements CarService {
         car.setStatus(CarStatus.AVAILABLE);
         Car updated = carRepository.save(car);
 
-        // ★ Thông báo cho Owner
         try {
             notificationService.createNotification(
                     car.getOwnerId(),
@@ -584,7 +625,6 @@ public class CarServiceImpl implements CarService {
         }
         Car updated = carRepository.save(car);
 
-        // ★ Thông báo cho Owner
         try {
             notificationService.createNotification(
                     car.getOwnerId(),
@@ -629,7 +669,6 @@ public class CarServiceImpl implements CarService {
             String reason = switch (car.getStatus()) {
                 case PENDING -> "Xe đang chờ Admin duyệt, không thể thêm ảnh";
                 case RENTED -> "Xe đang được thuê, không thể thêm ảnh";
-                case REJECTED -> "Xe đã bị Admin từ chối, không thể thêm ảnh";
                 default -> "Không thể thêm ảnh ở trạng thái này";
             };
             throw new BadRequestException(ErrorCode.VALIDATION_ERROR, reason);
@@ -700,7 +739,6 @@ public class CarServiceImpl implements CarService {
             String reason = switch (car.getStatus()) {
                 case PENDING -> "Xe đang chờ Admin duyệt, không thể xóa ảnh";
                 case RENTED -> "Xe đang được thuê, không thể xóa ảnh";
-                case REJECTED -> "Xe đã bị Admin từ chối, không thể xóa ảnh";
                 default -> "Không thể xóa ảnh ở trạng thái này";
             };
             throw new BadRequestException(ErrorCode.VALIDATION_ERROR, reason);
@@ -748,7 +786,6 @@ public class CarServiceImpl implements CarService {
 
             String fileUrl = fileStorageService.storeFile(file, "cars/" + carId + "/documents");
 
-            // Xóa document cũ cùng loại nếu có
             carDocumentRepository.findByCarIdAndDocumentType(carId, docType).ifPresent(old -> {
                 fileStorageService.deleteFile(old.getDocumentUrl());
                 carDocumentRepository.delete(old);

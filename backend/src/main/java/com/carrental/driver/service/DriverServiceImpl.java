@@ -4,24 +4,29 @@ import com.carrental.common.constant.ErrorCode;
 import com.carrental.common.exception.BadRequestException;
 import com.carrental.common.exception.ResourceNotFoundException;
 import com.carrental.common.exception.UnauthorizedException;
+import com.carrental.common.service.FileStorageService;
 import com.carrental.driver.dto.DriverMapper;
 import com.carrental.driver.dto.DriverRequest;
 import com.carrental.driver.dto.DriverResponse;
 import com.carrental.driver.entity.Driver;
 import com.carrental.driver.entity.DriverStatus;
+import com.carrental.driver.repository.DriverAssignmentRepository;
 import com.carrental.driver.repository.DriverRepository;
 import com.carrental.notification.entity.NotificationType;
 import com.carrental.notification.service.NotificationService;
+import com.carrental.user.entity.Role;
+import com.carrental.user.entity.User;
+import com.carrental.user.repository.UserRepository;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Set;
 
@@ -34,11 +39,13 @@ public class DriverServiceImpl implements DriverService {
     DriverRepository driverRepository;
     DriverMapper driverMapper;
     NotificationService notificationService;
+    UserRepository userRepository;
+    DriverAssignmentRepository driverAssignmentRepository;
+    FileStorageService fileStorageService;
 
     static final Set<DriverStatus> LOCKED_FOR_EDIT = Set.of(
             DriverStatus.PENDING,
-            DriverStatus.BUSY,
-            DriverStatus.REJECTED);
+            DriverStatus.BUSY);
 
     // ===== CREATE =====
 
@@ -58,6 +65,22 @@ public class DriverServiceImpl implements DriverService {
 
         Driver saved = driverRepository.save(driver);
         log.info("Driver created with id: {}", saved.getId());
+
+        try {
+            List<User> admins = userRepository.findByRole(Role.ADMIN);
+            for (User admin : admins) {
+                notificationService.createNotification(
+                        admin.getId(),
+                        NotificationType.DRIVER_PENDING,
+                        "Tài xế mới chờ duyệt",
+                        String.format("Tài xế %s (%s) vừa được thêm. Vui lòng vào duyệt.",
+                                saved.getName(), saved.getPhone()),
+                        saved.getId()
+                );
+            }
+        } catch (Exception e) {
+            log.warn("Failed to notify admins: {}", e.getMessage());
+        }
 
         return driverMapper.toResponse(saved);
     }
@@ -80,7 +103,18 @@ public class DriverServiceImpl implements DriverService {
     @Override
     public DriverResponse getDriverById(Long id) {
         Driver driver = getEntityById(id);
-        return driverMapper.toResponse(driver);
+        DriverResponse response = driverMapper.toResponse(driver);
+        
+        // ★ MỚI: Enrich owner info cho Admin xem chi tiết
+        if (driver.getOwnerId() != null) {
+            userRepository.findById(driver.getOwnerId()).ifPresent(owner -> {
+                response.setOwnerName(owner.getName());
+                response.setOwnerPhone(owner.getPhone());
+                response.setOwnerAvatarUrl(owner.getAvatarUrl());
+            });
+        }
+        
+        return response;
     }
 
     @Override
@@ -128,7 +162,6 @@ public class DriverServiceImpl implements DriverService {
             String reason = switch (driver.getStatus()) {
                 case PENDING -> "Tài xế đang chờ Admin duyệt, không thể sửa";
                 case BUSY -> "Tài xế đang chạy chuyến, không thể sửa";
-                case REJECTED -> "Tài xế đã bị Admin từ chối, không thể sửa";
                 default -> "Không thể sửa tài xế ở trạng thái này";
             };
             throw new BadRequestException(ErrorCode.VALIDATION_ERROR, reason);
@@ -152,10 +185,30 @@ public class DriverServiceImpl implements DriverService {
         driver.setExperienceYears(request.getExperienceYears());
         driver.setAvatarUrl(request.getAvatarUrl());
 
+        // Xóa lý do từ chối khi Owner sửa
+        driver.setRejectionReason(null);
+
+        // Reset về PENDING — Admin duyệt lại
         if (driver.getStatus() != DriverStatus.PENDING) {
+            DriverStatus oldStatus = driver.getStatus();
             log.info("Driver {} status reset: {} → PENDING (do Owner sửa thông tin)",
-                    id, driver.getStatus());
+                    id, oldStatus);
             driver.setStatus(DriverStatus.PENDING);
+
+            try {
+                List<User> admins = userRepository.findByRole(Role.ADMIN);
+                for (User admin : admins) {
+                    notificationService.createNotification(
+                            admin.getId(),
+                            NotificationType.DRIVER_RESUBMITTED,
+                            "Tài xế cần duyệt lại",
+                            String.format("Tài xế %s (%s) đã được Owner cập nhật thông tin. Vui lòng duyệt lại.",
+                                    driver.getName(), driver.getPhone()),
+                            driver.getId());
+                }
+            } catch (Exception e) {
+                log.warn("Failed to notify admins: {}", e.getMessage());
+            }
         }
 
         Driver updated = driverRepository.save(driver);
@@ -210,7 +263,7 @@ public class DriverServiceImpl implements DriverService {
         return driverMapper.toResponse(updated);
     }
 
-    // ===== DELETE (soft) =====
+    // ===== DELETE (HARD DELETE) =====
 
     @Override
     @Transactional
@@ -224,20 +277,34 @@ public class DriverServiceImpl implements DriverService {
                     "Bạn không sở hữu tài xế này");
         }
 
-        if (LOCKED_FOR_EDIT.contains(driver.getStatus())) {
-            String reason = switch (driver.getStatus()) {
-                case PENDING -> "Tài xế đang chờ Admin duyệt, không thể xóa";
-                case BUSY -> "Tài xế đang chạy chuyến, không thể xóa";
-                case REJECTED -> "Tài xế đã bị Admin từ chối, không thể xóa";
-                default -> "Không thể xóa tài xế ở trạng thái này";
-            };
-            throw new BadRequestException(ErrorCode.VALIDATION_ERROR, reason);
+        if (driver.getStatus() == DriverStatus.BUSY) {
+            throw new BadRequestException(ErrorCode.VALIDATION_ERROR,
+                    "Tài xế đang chạy chuyến, không thể xóa");
         }
 
-        driver.setDeletedAt(LocalDateTime.now());
-        driverRepository.save(driver);
+        long assignmentCount = driverAssignmentRepository.countByDriverId(id);
+        if (assignmentCount > 0) {
+            throw new BadRequestException(ErrorCode.VALIDATION_ERROR,
+                    "Không thể xóa tài xế vì đã có " + assignmentCount +
+                    " chuyến được phân công. Vui lòng chuyển sang Tạm nghỉ (INACTIVE).");
+        }
 
-        log.info("Driver soft deleted id: {}", id);
+        if (driver.getAvatarUrl() != null && !driver.getAvatarUrl().isBlank()) {
+            try {
+                fileStorageService.deleteFile(driver.getAvatarUrl());
+            } catch (Exception e) {
+                log.warn("Cannot delete avatar file: {}", e.getMessage());
+            }
+        }
+
+        try {
+            driverRepository.delete(driver);
+            log.info("Driver HARD DELETED id: {}", id);
+        } catch (DataIntegrityViolationException e) {
+            log.error("Cannot hard delete driver {}: {}", id, e.getMessage());
+            throw new BadRequestException(ErrorCode.VALIDATION_ERROR,
+                    "Không thể xóa tài xế vì còn dữ liệu liên quan");
+        }
     }
 
     // ===== ADMIN =====
@@ -249,9 +316,9 @@ public class DriverServiceImpl implements DriverService {
 
         Driver driver = getEntityById(id);
         driver.setStatus(DriverStatus.ACTIVE);
+        driver.setRejectionReason(null);
         Driver updated = driverRepository.save(driver);
 
-        // ★ MỚI: Thông báo cho Owner
         try {
             notificationService.createNotification(
                     driver.getOwnerId(),
@@ -274,15 +341,18 @@ public class DriverServiceImpl implements DriverService {
 
         Driver driver = getEntityById(id);
         driver.setStatus(DriverStatus.REJECTED);
+        driver.setRejectionReason(reason != null && !reason.isBlank()
+                ? reason
+                : "Không có lý do");
         Driver updated = driverRepository.save(driver);
 
-        // ★ MỚI: Thông báo cho Owner
         try {
             notificationService.createNotification(
                     driver.getOwnerId(),
                     NotificationType.DRIVER_REJECTED,
                     "Tài xế bị từ chối",
-                    String.format("Tài xế %s (%s) bị Admin từ chối. Lý do: %s.",
+                    String.format("Tài xế %s (%s) bị Admin từ chối. Lý do: %s. " +
+                                    "Vui lòng sửa thông tin và gửi duyệt lại.",
                             driver.getName(), driver.getPhone(),
                             reason != null ? reason : "Không có lý do"),
                     driver.getId());
@@ -317,7 +387,7 @@ public class DriverServiceImpl implements DriverService {
     }
 
     // ============================================================
-    // ★ MỚI: Pagination cho ADMIN
+    // Pagination cho ADMIN
     // ============================================================
 
     @Override
@@ -325,7 +395,7 @@ public class DriverServiceImpl implements DriverService {
     public Page<DriverResponse> getAllDriversPaged(Pageable pageable) {
         log.info("Admin: Get all drivers paged: {}", pageable);
         return driverRepository.findByDeletedAtIsNull(pageable)
-                .map(driverMapper::toResponse);
+                .map(this::enrichWithOwner);
     }
 
     @Override
@@ -333,7 +403,7 @@ public class DriverServiceImpl implements DriverService {
     public Page<DriverResponse> getDriversByStatusPaged(DriverStatus status, Pageable pageable) {
         log.info("Admin: Get drivers by status paged: {}, {}", status, pageable);
         return driverRepository.findByStatusAndDeletedAtIsNull(status, pageable)
-                .map(driverMapper::toResponse);
+                .map(this::enrichWithOwner);
     }
 
     @Override
@@ -347,5 +417,20 @@ public class DriverServiceImpl implements DriverService {
     private Driver getEntityById(Long id) {
         return driverRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.DRIVER_NOT_FOUND));
+    }
+
+    // ★ MỚI: Enrich owner info cho DriverResponse (dùng cho Admin)
+    private DriverResponse enrichWithOwner(Driver driver) {
+        DriverResponse response = driverMapper.toResponse(driver);
+        
+        if (driver.getOwnerId() != null) {
+            userRepository.findById(driver.getOwnerId()).ifPresent(owner -> {
+                response.setOwnerName(owner.getName());
+                response.setOwnerPhone(owner.getPhone());
+                response.setOwnerAvatarUrl(owner.getAvatarUrl());
+            });
+        }
+        
+        return response;
     }
 }

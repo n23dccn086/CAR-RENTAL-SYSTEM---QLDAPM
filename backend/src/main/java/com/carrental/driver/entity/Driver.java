@@ -69,6 +69,10 @@ public class Driver {
     @Builder.Default
     DriverStatus status = DriverStatus.PENDING;
 
+    // ★ MỚI: Lý do từ chối
+    @Column(name = "rejection_reason", columnDefinition = "TEXT")
+    String rejectionReason;
+
     @Column
     @Builder.Default
     Double rating = 0.0;

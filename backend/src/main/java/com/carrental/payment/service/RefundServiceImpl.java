@@ -17,6 +17,8 @@ import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -46,6 +48,28 @@ public class RefundServiceImpl implements RefundService {
                 refundRepository.findByStatusOrderByCreatedAtDesc(s));
     }
 
+    // ★ MỚI: Phân trang
+    @Override
+    @Transactional(readOnly = true)
+    public Page<RefundResponse> getRefundsPaged(String status, Pageable pageable) {
+        Page<Refund> page;
+
+        if (status != null && !status.isBlank()) {
+            PaymentStatus s;
+            try {
+                s = PaymentStatus.valueOf(status.trim().toUpperCase());
+            } catch (IllegalArgumentException e) {
+                throw new BadRequestException(ErrorCode.VALIDATION_ERROR,
+                        "Trạng thái không hợp lệ: " + status);
+            }
+            page = refundRepository.findByStatus(s, pageable);
+        } else {
+            page = refundRepository.findAll(pageable);
+        }
+
+        return page.map(refundMapper::toResponse);
+    }
+
     @Override
     @Transactional
     public RefundResponse approveRefund(Long refundId, Long adminId) {
@@ -64,7 +88,6 @@ public class RefundServiceImpl implements RefundService {
 
         Refund updated = refundRepository.save(refund);
 
-        // ★ MỚI: Thông báo cho Customer
         try {
             Booking booking = bookingRepository.findById(refund.getBookingId()).orElse(null);
             if (booking != null) {
@@ -102,7 +125,6 @@ public class RefundServiceImpl implements RefundService {
 
         Refund updated = refundRepository.save(refund);
 
-        // ★ MỚI: Thông báo cho Customer
         try {
             Booking booking = bookingRepository.findById(refund.getBookingId()).orElse(null);
             if (booking != null) {

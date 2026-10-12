@@ -7,28 +7,56 @@ export default function AdminRefundsPage() {
   const [filter, setFilter] = useState('')
   const [msg, setMsg] = useState('')
 
+  // ★ PHÂN TRANG
+  const [currentPage, setCurrentPage] = useState(0)   // ← bắt đầu từ 0 (khớp backend)
+  const [totalPages, setTotalPages] = useState(0)
+  const [totalElements, setTotalElements] = useState(0)
+  const PAGE_SIZE = 10
+
   const fetchRefunds = async () => {
     setLoading(true)
     try {
-      const params = filter ? { status: filter } : {}
+      const params = {
+        page: currentPage,
+        size: PAGE_SIZE,
+      }
+      if (filter) params.status = filter
+
       const res = await api.get('/admin/refunds', { params })
-      setRefunds(res.data.data || [])
+      const pageData = res.data.data || {}
+      setRefunds(pageData.content || [])
+      setTotalPages(pageData.totalPages || 0)
+      setTotalElements(pageData.totalElements || 0)
     } catch (err) {
       console.error(err)
+      setRefunds([])
+      setTotalPages(0)
+      setTotalElements(0)
     } finally {
       setLoading(false)
     }
   }
 
-  useEffect(() => { fetchRefunds() }, [filter])
+  useEffect(() => {
+    fetchRefunds()
+  }, [filter, currentPage])
+
+  // Reset page khi filter đổi
+  useEffect(() => {
+    setCurrentPage(0)
+  }, [filter])
+
+  const showMessage = (msg) => {
+    setMsg(msg)
+    setTimeout(() => setMsg(''), 4000)
+  }
 
   const handleApprove = async (id) => {
     if (!window.confirm(`Xác nhận hoàn tiền refund #${id}?`)) return
     try {
       await api.put(`/admin/refunds/${id}/approve`)
-      setMsg(`Đã duyệt hoàn tiền #${id}`)
+      showMessage(`Đã duyệt hoàn tiền #${id}`)
       fetchRefunds()
-      setTimeout(() => setMsg(''), 3000)
     } catch (err) {
       alert('Lỗi: ' + (err.response?.data?.message || err.message))
     }
@@ -39,9 +67,8 @@ export default function AdminRefundsPage() {
     if (!reason) return
     try {
       await api.put(`/admin/refunds/${id}/reject?reason=${encodeURIComponent(reason)}`)
-      setMsg(`Đã từ chối refund #${id}`)
+      showMessage(`Đã từ chối refund #${id}`)
       fetchRefunds()
-      setTimeout(() => setMsg(''), 3000)
     } catch (err) {
       alert('Lỗi: ' + (err.response?.data?.message || err.message))
     }
@@ -53,6 +80,12 @@ export default function AdminRefundsPage() {
     PENDING: 'var(--dong)',
     SUCCESS: 'var(--xanh-reu)',
     CANCELLED: 'var(--do)',
+  }
+
+  const goToPage = (p) => {
+    if (p >= 0 && p < totalPages) {
+      setCurrentPage(p)
+    }
   }
 
   return (
@@ -82,7 +115,7 @@ export default function AdminRefundsPage() {
         </div>
       )}
 
-      <div style={{ display: 'flex', gap: '12px', marginBottom: '32px' }}>
+      <div style={{ display: 'flex', gap: '12px', marginBottom: '32px', flexWrap: 'wrap' }}>
         {[
           { v: '', l: 'Tất cả' },
           { v: 'PENDING', l: 'Chờ duyệt' },
@@ -118,66 +151,98 @@ export default function AdminRefundsPage() {
           Không có yêu cầu hoàn tiền nào.
         </p>
       ) : (
-        <div>
-          {refunds.map(r => (
-            <div key={r.id} style={{
-              display: 'grid',
-              gridTemplateColumns: '80px 1fr 150px 150px 200px',
-              gap: '24px',
-              alignItems: 'center',
-              padding: '20px 0',
-              borderBottom: '1px solid rgba(15,14,12,0.12)'
-            }}>
-              <div style={{
-                fontFamily: 'var(--serif)',
-                fontSize: '24px',
-                fontWeight: 700,
-                color: 'var(--dong)'
+        <>
+          <div>
+            {refunds.map(r => (
+              <div key={r.id} style={{
+                display: 'grid',
+                gridTemplateColumns: '80px 1fr 150px 150px 200px',
+                gap: '24px',
+                alignItems: 'center',
+                padding: '20px 0',
+                borderBottom: '1px solid rgba(15,14,12,0.12)'
               }}>
-                #{r.id}
-              </div>
-
-              <div>
-                <div style={{ fontFamily: 'var(--serif)', fontSize: '18px', fontWeight: 700, marginBottom: '4px' }}>
-                  Booking #{r.bookingId}
+                <div style={{
+                  fontFamily: 'var(--serif)',
+                  fontSize: '24px',
+                  fontWeight: 700,
+                  color: 'var(--dong)'
+                }}>
+                  #{r.id}
                 </div>
-                <div style={{ fontFamily: 'var(--serif-2)', fontStyle: 'italic', fontSize: '14px', color: 'var(--muc-mo)' }}>
-                  {r.reason}
+
+                <div>
+                  <div style={{ fontFamily: 'var(--serif)', fontSize: '18px', fontWeight: 700, marginBottom: '4px' }}>
+                    Booking #{r.bookingId}
+                  </div>
+                  <div style={{ fontFamily: 'var(--serif-2)', fontStyle: 'italic', fontSize: '14px', color: 'var(--muc-mo)' }}>
+                    {r.reason}
+                  </div>
+                </div>
+
+                <div style={{ fontFamily: 'var(--mono)', fontSize: '18px', fontWeight: 500 }}>
+                  {formatPrice(r.amount)}đ
+                </div>
+
+                <div style={{
+                  padding: '4px 10px',
+                  border: `1px solid ${statusColors[r.status] || 'var(--muc-mo)'}`,
+                  color: statusColors[r.status] || 'var(--muc-mo)',
+                  fontFamily: 'var(--mono)',
+                  fontSize: '9px',
+                  letterSpacing: '1px',
+                  textTransform: 'uppercase',
+                  textAlign: 'center'
+                }}>
+                  {r.status}
+                </div>
+
+                <div style={{ display: 'flex', gap: '8px' }}>
+                  {r.status === 'PENDING' && (
+                    <>
+                      <button onClick={() => handleApprove(r.id)} style={btnStyle('var(--xanh-reu)')}>
+                        Duyệt
+                      </button>
+                      <button onClick={() => handleReject(r.id)} style={btnStyle('var(--do)')}>
+                        Từ chối
+                      </button>
+                    </>
+                  )}
                 </div>
               </div>
+            ))}
+          </div>
 
-              <div style={{ fontFamily: 'var(--mono)', fontSize: '18px', fontWeight: 500 }}>
-                {formatPrice(r.amount)}đ
+          {/* ★ PHÂN TRANG */}
+          {totalPages > 1 && (
+            <>
+              <div style={{ display: 'flex', justifyContent: 'center', gap: '8px', marginTop: '32px', flexWrap: 'wrap' }}>
+                <button
+                  onClick={() => goToPage(currentPage - 1)}
+                  disabled={currentPage === 0}
+                  style={paginationBtnStyle(currentPage === 0)}
+                >
+                  ← Trước
+                </button>
+                {Array.from({ length: totalPages }, (_, i) => i).map(p => (
+                  <button key={p} onClick={() => goToPage(p)} style={paginationNumStyle(currentPage === p)}>
+                    {p + 1}
+                  </button>
+                ))}
+                <button
+                  onClick={() => goToPage(currentPage + 1)}
+                  disabled={currentPage === totalPages - 1}
+                  style={paginationBtnStyle(currentPage === totalPages - 1)}
+                >
+                  Sau →
+                </button>
               </div>
-
-              <div style={{
-                padding: '4px 10px',
-                border: `1px solid ${statusColors[r.status] || 'var(--muc-mo)'}`,
-                color: statusColors[r.status] || 'var(--muc-mo)',
-                fontFamily: 'var(--mono)',
-                fontSize: '9px',
-                letterSpacing: '1px',
-                textTransform: 'uppercase',
-                textAlign: 'center'
-              }}>
-                {r.status}
+              <div style={{ textAlign: 'center', fontFamily: 'var(--mono)', fontSize: '11px', color: 'var(--muc-mo)', marginTop: '16px', marginBottom: '24px' }}>
+                Trang {currentPage + 1} / {totalPages} · Tổng {totalElements} yêu cầu
               </div>
-
-              <div style={{ display: 'flex', gap: '8px' }}>
-                {r.status === 'PENDING' && (
-                  <>
-                    <button onClick={() => handleApprove(r.id)} style={btnStyle('var(--xanh-reu)')}>
-                      Duyệt
-                    </button>
-                    <button onClick={() => handleReject(r.id)} style={btnStyle('var(--do)')}>
-                      Từ chối
-                    </button>
-                  </>
-                )}
-              </div>
-            </div>
-          ))}
-        </div>
+            </>
+          )}
+        </>
       )}
     </div>
   )
@@ -194,5 +259,33 @@ function btnStyle(color) {
     letterSpacing: '1px',
     textTransform: 'uppercase',
     cursor: 'pointer',
+  }
+}
+
+function paginationBtnStyle(disabled) {
+  return {
+    padding: '8px 16px',
+    background: 'transparent',
+    border: '1px solid var(--muc)',
+    color: disabled ? 'var(--muc-mo)' : 'var(--muc)',
+    fontFamily: 'var(--mono)',
+    fontSize: '11px',
+    letterSpacing: '2px',
+    textTransform: 'uppercase',
+    cursor: disabled ? 'not-allowed' : 'pointer',
+    opacity: disabled ? 0.4 : 1
+  }
+}
+
+function paginationNumStyle(active) {
+  return {
+    padding: '8px 14px',
+    background: active ? 'var(--muc)' : 'transparent',
+    color: active ? 'var(--kem)' : 'var(--muc)',
+    border: '1px solid var(--muc)',
+    fontFamily: 'var(--mono)',
+    fontSize: '11px',
+    cursor: 'pointer',
+    minWidth: '40px'
   }
 }

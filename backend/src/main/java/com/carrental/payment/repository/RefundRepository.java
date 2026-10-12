@@ -2,6 +2,8 @@ package com.carrental.payment.repository;
 
 import com.carrental.payment.entity.PaymentStatus;
 import com.carrental.payment.entity.Refund;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
 
@@ -19,4 +21,7 @@ public interface RefundRepository extends JpaRepository<Refund, Long> {
     List<Refund> findByStatusOrderByCreatedAtDesc(PaymentStatus status);
 
     long countByStatus(PaymentStatus status);
+
+    // ★ MỚI: Phân trang
+    Page<Refund> findByStatus(PaymentStatus status, Pageable pageable);
 }

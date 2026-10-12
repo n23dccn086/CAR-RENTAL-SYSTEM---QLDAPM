@@ -36,6 +36,7 @@ public enum NotificationType {
 
     // ===== DRIVER FLOW =====
     DRIVER_PENDING("Tài xế chờ duyệt"),
+    DRIVER_RESUBMITTED("Tài xế cần duyệt lại"),
     DRIVER_APPROVED("Tài xế đã được duyệt"),
     DRIVER_REJECTED("Tài xế bị từ chối"),
 

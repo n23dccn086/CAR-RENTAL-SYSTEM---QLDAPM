@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { createPortal } from "react-dom";
 import { Link } from "react-router-dom";
 import api from "../services/api";
 
@@ -31,7 +32,37 @@ const OWNER_STATUS_OPTIONS = [
   { value: "INACTIVE", label: "Đã khóa" },
 ];
 
-const LOCKED_STATUSES = ["RENTED", "PENDING", "REJECTED"];
+const LOCKED_STATUSES = ["RENTED", "PENDING"];
+
+const formatPrice = (p) => new Intl.NumberFormat("vi-VN").format(p || 0);
+
+const TRANSMISSION_LABELS = {
+  AUTOMATIC: "Tự động",
+  MANUAL: "Số sàn",
+};
+
+const FUEL_LABELS = {
+  GASOLINE: "Xăng",
+  DIESEL: "Dầu",
+  ELECTRIC: "Điện",
+  HYBRID: "Hybrid",
+};
+
+const RENTAL_MODE_LABELS = {
+  SELF_DRIVE: "Tự lái",
+  WITH_DRIVER: "Có tài xế",
+  BOTH: "Cả hai",
+};
+
+const CAR_TYPE_LABELS = {
+  SEDAN: "Sedan",
+  SUV: "SUV",
+  MPV: "MPV",
+  HATCHBACK: "Hatchback",
+  PICKUP: "Bán tải",
+  VAN: "Van",
+  LUXURY: "Xe cao cấp",
+};
 
 export default function OwnerCarsPage() {
   const [cars, setCars] = useState([]);
@@ -49,12 +80,21 @@ export default function OwnerCarsPage() {
 
   const [updatingId, setUpdatingId] = useState(null);
   const [importing, setImporting] = useState(false);
+  const [message, setMessage] = useState("");
+
+  const [detailModal, setDetailModal] = useState(false);
+  const [selectedCar, setSelectedCar] = useState(null);
 
   const [debouncedSearch, setDebouncedSearch] = useState("");
   useEffect(() => {
     const timer = setTimeout(() => setDebouncedSearch(search), 400);
     return () => clearTimeout(timer);
   }, [search]);
+
+  const showMessage = (msg) => {
+    setMessage(msg);
+    setTimeout(() => setMessage(""), 5000);
+  };
 
   const fetchCars = async () => {
     setLoading(true);
@@ -96,7 +136,30 @@ export default function OwnerCarsPage() {
     );
   };
 
-  // ★ HANDLE IMPORT EXCEL
+  const openDetail = async (car) => {
+    setSelectedCar(car);
+    setDetailModal(true);
+    try {
+      const res = await api.get(`/cars/${car.id}`);
+      setSelectedCar(res.data.data || car);
+    } catch (err) {
+      console.error("Failed to load car detail:", err);
+    }
+  };
+
+  const closeDetail = () => {
+    setDetailModal(false);
+    setSelectedCar(null);
+  };
+
+  useEffect(() => {
+    const handleEsc = (e) => {
+      if (e.key === "Escape" && detailModal) closeDetail();
+    };
+    window.addEventListener("keydown", handleEsc);
+    return () => window.removeEventListener("keydown", handleEsc);
+  }, [detailModal]);
+
   const handleImportExcel = async (e) => {
     const file = e.target.files[0];
     if (!file) return;
@@ -165,6 +228,7 @@ export default function OwnerCarsPage() {
       setCars((prev) =>
         prev.map((c) => (c.id === car.id ? { ...c, status: newStatus } : c)),
       );
+      showMessage(`Đã đổi trạng thái xe ${car.plate}`);
     } catch (err) {
       alert("Lỗi: " + (err.response?.data?.message || err.message));
       fetchCars();
@@ -174,14 +238,21 @@ export default function OwnerCarsPage() {
   };
 
   const handleDelete = async (car) => {
-    if (
-      !window.confirm(
-        `Xóa xe "${car.brand} ${car.model}" (${car.plate})?\n\nXe sẽ bị ẩn khỏi Bộ sưu tập.`,
-      )
-    )
-      return;
+    const isRejected = car.status === "REJECTED";
+
+    const message = isRejected
+      ? `XÓA VĨNH VIỄN xe "${car.brand} ${car.model}" (${car.plate})?\n\n` +
+        `⚠️ Hành động này KHÔNG THỂ hoàn tác!\n` +
+        `Xe và tất cả ảnh, giấy tờ sẽ bị xóa khỏi hệ thống.`
+      : `Xóa xe "${car.brand} ${car.model}" (${car.plate})?\n\n` +
+        `Xe sẽ bị ẩn khỏi Bộ sưu tập.`;
+
+    if (!window.confirm(message)) return;
+
     try {
       await api.delete(`/cars/${car.id}`);
+      showMessage(`Đã xóa xe ${car.plate}`);
+      closeDetail();
       fetchCars();
     } catch (err) {
       alert("Lỗi: " + (err.response?.data?.message || err.message));
@@ -198,7 +269,6 @@ export default function OwnerCarsPage() {
   };
 
   const hasActiveFilters = carType || status || seats.length > 0 || search;
-  const formatPrice = (p) => new Intl.NumberFormat("vi-VN").format(p || 0);
 
   return (
     <div style={{ maxWidth: "1400px", margin: "0 auto", padding: "60px 48px" }}>
@@ -289,7 +359,22 @@ export default function OwnerCarsPage() {
         </div>
       </div>
 
-      {/* FILTER BAR */}
+      {message && (
+        <div
+          style={{
+            background: "rgba(74,93,63,0.1)",
+            border: "1px solid var(--xanh-reu)",
+            padding: "12px 16px",
+            marginBottom: "24px",
+            color: "var(--xanh-reu)",
+            fontFamily: "var(--serif-2)",
+            fontStyle: "italic",
+          }}
+        >
+          {message}
+        </div>
+      )}
+
       <div
         style={{
           display: "grid",
@@ -406,7 +491,6 @@ export default function OwnerCarsPage() {
         </div>
       </div>
 
-      {/* LIST */}
       {loading ? (
         <p
           style={{
@@ -456,6 +540,7 @@ export default function OwnerCarsPage() {
               return (
                 <div
                   key={car.id}
+                  onClick={() => openDetail(car)}
                   style={{
                     display: "grid",
                     gridTemplateColumns: "100px 1.5fr auto 200px auto",
@@ -463,9 +548,16 @@ export default function OwnerCarsPage() {
                     alignItems: "center",
                     padding: "20px 0",
                     borderBottom: "1px solid rgba(15,14,12,0.12)",
+                    cursor: "pointer",
+                    transition: "background 0.2s",
                   }}
+                  onMouseEnter={(e) =>
+                    (e.currentTarget.style.background = "rgba(15,14,12,0.03)")
+                  }
+                  onMouseLeave={(e) =>
+                    (e.currentTarget.style.background = "transparent")
+                  }
                 >
-                  {/* Ảnh xe */}
                   <div
                     style={{
                       width: "100px",
@@ -494,7 +586,6 @@ export default function OwnerCarsPage() {
                     )}
                   </div>
 
-                  {/* Thông tin xe */}
                   <div>
                     <div
                       style={{
@@ -517,7 +608,6 @@ export default function OwnerCarsPage() {
                       {car.plate} · {car.seats} chỗ · {car.carType}
                     </div>
 
-                    {/* Stats */}
                     <div
                       style={{
                         display: "flex",
@@ -541,7 +631,6 @@ export default function OwnerCarsPage() {
                       </span>
                     </div>
 
-                    {/* Giá */}
                     <div
                       style={{
                         fontFamily: "var(--serif)",
@@ -566,7 +655,6 @@ export default function OwnerCarsPage() {
                     </div>
                   </div>
 
-                  {/* Nhãn trạng thái */}
                   <div
                     style={{
                       padding: "6px 14px",
@@ -584,8 +672,7 @@ export default function OwnerCarsPage() {
                     {st.label}
                   </div>
 
-                  {/* Dropdown đổi trạng thái */}
-                  <div>
+                  <div onClick={(e) => e.stopPropagation()}>
                     {isLocked ? (
                       <div
                         style={{
@@ -601,7 +688,21 @@ export default function OwnerCarsPage() {
                       >
                         {car.status === "RENTED" && "Đang cho thuê"}
                         {car.status === "PENDING" && "Chờ Admin duyệt"}
-                        {car.status === "REJECTED" && "Admin đã từ chối"}
+                      </div>
+                    ) : car.status === "REJECTED" ? (
+                      <div
+                        style={{
+                          padding: "8px 12px",
+                          background: "rgba(139,44,44,0.08)",
+                          border: "1px solid var(--do)",
+                          fontFamily: "var(--serif-2)",
+                          fontStyle: "italic",
+                          fontSize: "12px",
+                          color: "var(--do)",
+                          textAlign: "center",
+                        }}
+                      >
+                        Bị từ chối — sửa lại hoặc xóa
                       </div>
                     ) : (
                       <select
@@ -633,12 +734,11 @@ export default function OwnerCarsPage() {
                     )}
                   </div>
 
-                  {/* Actions */}
-                  <div style={{ display: "flex", gap: "8px" }}>
-                    {/* Nút Sửa — ẨN khi PENDING/RENTED/REJECTED */}
-                    {!["PENDING", "RENTED", "REJECTED"].includes(
-                      car.status,
-                    ) && (
+                  <div
+                    style={{ display: "flex", gap: "8px" }}
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    {!LOCKED_STATUSES.includes(car.status) && (
                       <Link
                         to={`/cars/edit/${car.id}`}
                         style={btnStyle("var(--muc)")}
@@ -647,10 +747,7 @@ export default function OwnerCarsPage() {
                       </Link>
                     )}
 
-                    {/* Nút Xóa — ẨN khi PENDING/RENTED/REJECTED */}
-                    {!["PENDING", "RENTED", "REJECTED"].includes(
-                      car.status,
-                    ) && (
+                    {!LOCKED_STATUSES.includes(car.status) && (
                       <button
                         onClick={() => handleDelete(car)}
                         style={btnStyle("var(--do)")}
@@ -701,11 +798,412 @@ export default function OwnerCarsPage() {
           )}
         </>
       )}
+
+      {detailModal && selectedCar && (
+        <CarDetailModalOwner
+          car={selectedCar}
+          onClose={closeDetail}
+          onEdit={() => {
+            window.location.href = `/cars/edit/${selectedCar.id}`;
+          }}
+          onDelete={() => handleDelete(selectedCar)}
+        />
+      )}
     </div>
   );
 }
 
-// Styles
+function CarDetailModalOwner({ car, onClose, onEdit, onDelete }) {
+  const [activeImage, setActiveImage] = useState(0);
+
+  const st = STATUS_MAP[car.status] || {
+    label: car.status,
+    color: "var(--muc-mo)",
+  };
+
+  const images = car.imageUrls || [];
+  const isLocked = LOCKED_STATUSES.includes(car.status);
+
+  return createPortal(
+    <div
+      style={{
+        position: "fixed",
+        inset: 0,
+        background: "rgba(15,14,12,0.75)",
+        display: "flex",
+        alignItems: "flex-start",
+        justifyContent: "center",
+        zIndex: 99999,
+        padding: "20px",
+        paddingTop: "80px",
+        paddingBottom: "40px",
+        overflowY: "auto",
+      }}
+      onClick={onClose}
+    >
+      <div
+        style={{
+          background: "var(--kem)",
+          border: "1px solid var(--muc)",
+          maxWidth: "900px",
+          width: "100%",
+          maxHeight: "90vh",
+          overflowY: "auto",
+          padding: "48px",
+          position: "relative",
+        }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <button
+          onClick={onClose}
+          style={{
+            position: "absolute",
+            top: "16px",
+            right: "16px",
+            width: "40px",
+            height: "40px",
+            background: "transparent",
+            border: "1px solid var(--muc)",
+            color: "var(--muc)",
+            fontFamily: "var(--mono)",
+            fontSize: "18px",
+            cursor: "pointer",
+          }}
+        >
+          ✕
+        </button>
+
+        <div style={{ paddingRight: "56px", marginBottom: "24px" }}>
+          <div
+            style={{
+              fontFamily: "var(--mono)",
+              fontSize: "10px",
+              letterSpacing: "3px",
+              textTransform: "uppercase",
+              color: "var(--muc-mo)",
+              marginBottom: "8px",
+            }}
+          >
+            Chi tiết xe #{car.id}
+          </div>
+          <h2
+            style={{
+              fontFamily: "var(--serif)",
+              fontSize: "clamp(28px, 4vw, 42px)",
+              fontWeight: 900,
+              letterSpacing: "-1px",
+              margin: 0,
+              marginBottom: "8px",
+            }}
+          >
+            {car.brand} {car.model} — {car.year}
+          </h2>
+          <div
+            style={{
+              fontFamily: "var(--mono)",
+              fontSize: "12px",
+              letterSpacing: "1px",
+              color: "var(--muc-mo)",
+            }}
+          >
+            {car.plate}
+          </div>
+        </div>
+
+        <div
+          style={{
+            display: "inline-block",
+            padding: "6px 16px",
+            marginBottom: "24px",
+            border: `1px solid ${st.color}`,
+            color: st.color,
+            fontFamily: "var(--mono)",
+            fontSize: "11px",
+            letterSpacing: "2px",
+            textTransform: "uppercase",
+          }}
+        >
+          {st.label}
+        </div>
+
+        {car.status === "REJECTED" &&
+          car.description &&
+          car.description.includes("[REJECT]") && (
+            <div
+              style={{
+                background: "rgba(139,44,44,0.08)",
+                border: "1px solid var(--do)",
+                padding: "16px",
+                marginBottom: "24px",
+                fontFamily: "var(--serif-2)",
+                fontStyle: "italic",
+                fontSize: "14px",
+                color: "var(--do)",
+              }}
+            >
+              ⚠️ <strong>Lý do từ chối:</strong>{" "}
+              {car.description.split("[REJECT]").pop().trim()}
+            </div>
+          )}
+
+        {images.length > 0 ? (
+          <div style={{ marginBottom: "32px" }}>
+            <div
+              style={{
+                width: "100%",
+                aspectRatio: "16/9",
+                background: "var(--kem-dam)",
+                border: "1px solid rgba(15,14,12,0.15)",
+                overflow: "hidden",
+                marginBottom: "8px",
+              }}
+            >
+              <img
+                src={images[activeImage]}
+                alt={car.plate}
+                style={{ width: "100%", height: "100%", objectFit: "cover" }}
+              />
+            </div>
+            {images.length > 1 && (
+              <div style={{ display: "flex", gap: "8px", overflowX: "auto" }}>
+                {images.map((url, i) => (
+                  <div
+                    key={i}
+                    onClick={() => setActiveImage(i)}
+                    style={{
+                      width: "80px",
+                      height: "60px",
+                      flexShrink: 0,
+                      cursor: "pointer",
+                      border:
+                        activeImage === i
+                          ? "2px solid var(--do)"
+                          : "1px solid rgba(15,14,12,0.15)",
+                      overflow: "hidden",
+                    }}
+                  >
+                    <img
+                      src={url}
+                      alt={`${car.plate}-${i}`}
+                      style={{
+                        width: "100%",
+                        height: "100%",
+                        objectFit: "cover",
+                      }}
+                    />
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        ) : (
+          <div
+            style={{
+              width: "100%",
+              height: "200px",
+              background: "var(--kem-dam)",
+              border: "1px dashed rgba(15,14,12,0.2)",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              fontSize: "64px",
+              marginBottom: "32px",
+              color: "var(--muc-mo)",
+            }}
+          >
+            🚗
+          </div>
+        )}
+
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "1fr 1fr",
+            gap: "24px",
+            marginBottom: "32px",
+          }}
+        >
+          <div>
+            <h3 style={sectionTitleStyle}>Thông tin cơ bản</h3>
+            <InfoRow label="Biển số" value={car.plate} />
+            <InfoRow label="Hãng xe" value={car.brand} />
+            <InfoRow label="Dòng xe" value={car.model} />
+            <InfoRow label="Năm SX" value={car.year} />
+            <InfoRow label="Màu sắc" value={car.color || "—"} />
+            <InfoRow
+              label="Loại xe"
+              value={CAR_TYPE_LABELS[car.carType] || car.carType}
+            />
+            <InfoRow
+              label="Số chỗ"
+              value={car.seats ? `${car.seats} chỗ` : "—"}
+            />
+            <InfoRow
+              label="Số KM"
+              value={
+                car.currentKm != null ? `${formatPrice(car.currentKm)} km` : "—"
+              }
+            />
+          </div>
+
+          <div>
+            <h3 style={sectionTitleStyle}>Giá & Địa chỉ</h3>
+            <InfoRow
+              label="Giá thuê/ngày"
+              value={`${formatPrice(car.pricePerDay)}đ`}
+              highlight
+            />
+            <InfoRow label="Địa chỉ" value={car.address || "—"} />
+            <InfoRow
+              label="Hộp số"
+              value={TRANSMISSION_LABELS[car.transmission] || car.transmission}
+            />
+            <InfoRow
+              label="Nhiên liệu"
+              value={FUEL_LABELS[car.fuelType] || car.fuelType}
+            />
+            <InfoRow
+              label="Hình thức thuê"
+              value={RENTAL_MODE_LABELS[car.rentalMode] || car.rentalMode}
+            />
+          </div>
+        </div>
+
+        {car.description && !car.description.includes("[REJECT]") && (
+          <div style={{ marginBottom: "32px" }}>
+            <h3 style={sectionTitleStyle}>Mô tả</h3>
+            <p
+              style={{
+                fontFamily: "var(--serif-2)",
+                fontSize: "15px",
+                lineHeight: 1.6,
+                whiteSpace: "pre-wrap",
+              }}
+            >
+              {car.description}
+            </p>
+          </div>
+        )}
+
+        <div style={{ marginBottom: "32px" }}>
+          <h3 style={sectionTitleStyle}>Đánh giá & Lượt thuê</h3>
+          <InfoRow
+            label="Đánh giá trung bình"
+            value={`★ ${car.averageRating?.toFixed(1) || "5.0"} / 5.0`}
+            highlight
+          />
+          <InfoRow
+            label="Số lượng đánh giá"
+            value={`${car.reviewCount || 0} lượt`}
+          />
+          <InfoRow
+            label="Số chuyến đã hoàn tất"
+            value={`🚗 ${car.rentalCount || 0} chuyến`}
+          />
+        </div>
+
+        {!isLocked && (
+          <div
+            style={{
+              display: "flex",
+              gap: "12px",
+              marginTop: "32px",
+              paddingTop: "24px",
+              borderTop: "1px solid rgba(15,14,12,0.15)",
+            }}
+          >
+            <button
+              onClick={onDelete}
+              style={{
+                flex: 1,
+                padding: "16px",
+                background: "transparent",
+                border: "1px solid var(--do)",
+                color: "var(--do)",
+                fontFamily: "var(--mono)",
+                fontSize: "11px",
+                letterSpacing: "2px",
+                textTransform: "uppercase",
+                cursor: "pointer",
+              }}
+            >
+              ✕ Xóa xe
+            </button>
+            <button
+              onClick={onEdit}
+              style={{
+                flex: 2,
+                padding: "16px",
+                background: "var(--muc)",
+                border: "1px solid var(--muc)",
+                color: "var(--kem)",
+                fontFamily: "var(--mono)",
+                fontSize: "11px",
+                letterSpacing: "2px",
+                textTransform: "uppercase",
+                cursor: "pointer",
+              }}
+            >
+              ✎ Sửa thông tin
+            </button>
+          </div>
+        )}
+      </div>
+    </div>,
+    document.getElementById("modal-root") || document.body
+  );
+}
+
+function InfoRow({ label, value, highlight }) {
+  return (
+    <div
+      style={{
+        display: "flex",
+        justifyContent: "space-between",
+        padding: "8px 0",
+        borderBottom: "1px dotted rgba(15,14,12,0.1)",
+      }}
+    >
+      <span
+        style={{
+          fontFamily: "var(--mono)",
+          fontSize: "10px",
+          letterSpacing: "1.5px",
+          textTransform: "uppercase",
+          color: "var(--muc-mo)",
+        }}
+      >
+        {label}
+      </span>
+      <span
+        style={{
+          fontFamily: highlight ? "var(--serif)" : "var(--serif-2)",
+          fontSize: highlight ? "16px" : "14px",
+          fontWeight: highlight ? 700 : 400,
+          color: highlight ? "var(--do)" : "var(--muc)",
+          textAlign: "right",
+          marginLeft: "16px",
+          wordBreak: "break-word",
+        }}
+      >
+        {value || "—"}
+      </span>
+    </div>
+  );
+}
+
+const sectionTitleStyle = {
+  fontFamily: "var(--mono)",
+  fontSize: "10px",
+  letterSpacing: "3px",
+  textTransform: "uppercase",
+  color: "var(--muc-mo)",
+  marginBottom: "12px",
+  marginTop: "0",
+  paddingBottom: "8px",
+  borderBottom: "1px solid rgba(15,14,12,0.15)",
+};
+
 const labelStyle = {
   display: "block",
   fontFamily: "var(--mono)",

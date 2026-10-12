@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { createPortal } from "react-dom";
 import api from "../services/api";
 
 const STATUS_MAP = {
@@ -9,8 +10,7 @@ const STATUS_MAP = {
   REJECTED: { label: "Bị từ chối", color: "var(--do)" },
 };
 
-// ★ Trạng thái ẩn nút Sửa/Xóa
-const LOCKED_STATUSES = ["PENDING", "BUSY", "REJECTED"];
+const LOCKED_STATUSES = ["PENDING", "BUSY"];
 
 export default function OwnerDriversPage() {
   const [drivers, setDrivers] = useState([]);
@@ -18,24 +18,23 @@ export default function OwnerDriversPage() {
   const [totalPages, setTotalPages] = useState(0);
   const [totalElements, setTotalElements] = useState(0);
 
-  // ★ Filter state
   const [status, setStatus] = useState("");
   const [search, setSearch] = useState("");
   const [sort, setSort] = useState("createdAt,desc");
   const [page, setPage] = useState(0);
   const SIZE = 10;
 
-  // ★ Import Excel
   const [importing, setImporting] = useState(false);
 
-  // Debounce search
   const [debouncedSearch, setDebouncedSearch] = useState("");
   useEffect(() => {
     const timer = setTimeout(() => setDebouncedSearch(search), 400);
     return () => clearTimeout(timer);
   }, [search]);
 
-  // Modal
+  const [detailModal, setDetailModal] = useState(false);
+  const [selectedDriver, setSelectedDriver] = useState(null);
+
   const [modalOpen, setModalOpen] = useState(false);
   const [editingDriver, setEditingDriver] = useState(null);
   const [form, setForm] = useState({
@@ -83,12 +82,39 @@ export default function OwnerDriversPage() {
     fetchDrivers();
   }, [status, debouncedSearch, sort, page]);
 
-  // Reset page khi filter đổi
   useEffect(() => {
     setPage(0);
   }, [status, debouncedSearch, sort]);
 
-  // ★ IMPORT EXCEL DRIVERS
+  const showMessage = (msg) => {
+    setMessage(msg);
+    setTimeout(() => setMessage(""), 5000);
+  };
+
+  const openDetail = async (driver) => {
+    setSelectedDriver(driver);
+    setDetailModal(true);
+    try {
+      const res = await api.get(`/drivers/${driver.id}`);
+      setSelectedDriver(res.data.data || driver);
+    } catch (err) {
+      console.error("Failed to load driver detail:", err);
+    }
+  };
+
+  const closeDetail = () => {
+    setDetailModal(false);
+    setSelectedDriver(null);
+  };
+
+  useEffect(() => {
+    const handleEsc = (e) => {
+      if (e.key === "Escape" && detailModal) closeDetail();
+    };
+    window.addEventListener("keydown", handleEsc);
+    return () => window.removeEventListener("keydown", handleEsc);
+  }, [detailModal]);
+
   const handleImportExcel = async (e) => {
     const file = e.target.files[0];
     if (!file) return;
@@ -139,14 +165,6 @@ export default function OwnerDriversPage() {
     }
   };
 
-  const showMessage = (msg) => {
-    setMessage(msg);
-    setTimeout(() => setMessage(""), 5000);
-  };
-
-  // ============================================================
-  // ★ MỚI: KHÓA / MỞ KHÓA TÀI XẾ
-  // ============================================================
   const handleStatusToggle = async (driver) => {
     const newStatus = driver.status === "ACTIVE" ? "INACTIVE" : "ACTIVE";
     const action = newStatus === "INACTIVE" ? "Khóa" : "Mở khóa";
@@ -155,7 +173,6 @@ export default function OwnerDriversPage() {
 
     try {
       await api.patch(`/drivers/${driver.id}/status`, { status: newStatus });
-      // Update local state
       setDrivers((prev) =>
         prev.map((d) =>
           d.id === driver.id ? { ...d, status: newStatus } : d,
@@ -253,10 +270,19 @@ export default function OwnerDriversPage() {
   };
 
   const handleDelete = async (driver) => {
-    if (!window.confirm(`Xóa tài xế "${driver.name}"?`)) return;
+    const isRejected = driver.status === "REJECTED";
+
+    const message = isRejected
+      ? `XÓA VĨNH VIỄN tài xế "${driver.name}" (${driver.phone})?\n\n` +
+        `⚠️ Hành động này KHÔNG THỂ hoàn tác!`
+      : `Xóa tài xế "${driver.name}"?`;
+
+    if (!window.confirm(message)) return;
+
     try {
       await api.delete(`/drivers/${driver.id}`);
       showMessage(`Đã xóa tài xế ${driver.name}`);
+      closeDetail();
       fetchDrivers();
     } catch (err) {
       alert("Lỗi: " + (err.response?.data?.message || err.message));
@@ -380,7 +406,6 @@ export default function OwnerDriversPage() {
         </div>
       )}
 
-      {/* FILTER BAR */}
       <div
         style={{
           display: "grid",
@@ -393,7 +418,6 @@ export default function OwnerDriversPage() {
           alignItems: "start",
         }}
       >
-        {/* Status */}
         <div>
           <label style={labelStyle}>Trạng thái</label>
           <select
@@ -410,7 +434,6 @@ export default function OwnerDriversPage() {
           </select>
         </div>
 
-        {/* Search */}
         <div>
           <label style={labelStyle}>Tìm kiếm</label>
           <input
@@ -421,7 +444,6 @@ export default function OwnerDriversPage() {
           />
         </div>
 
-        {/* Sort */}
         <div>
           <label style={labelStyle}>Sắp xếp</label>
           <select
@@ -437,7 +459,6 @@ export default function OwnerDriversPage() {
           </select>
         </div>
 
-        {/* Clear */}
         <div style={{ paddingTop: "22px" }}>
           {hasActiveFilters && (
             <button
@@ -510,6 +531,7 @@ export default function OwnerDriversPage() {
               return (
                 <div
                   key={d.id}
+                  onClick={() => openDetail(d)}
                   style={{
                     display: "grid",
                     gridTemplateColumns: "60px 1fr auto auto auto",
@@ -517,8 +539,33 @@ export default function OwnerDriversPage() {
                     alignItems: "center",
                     padding: "24px 0",
                     borderBottom: "1px solid rgba(15,14,12,0.12)",
+                    cursor: "pointer",
+                    transition: "background 0.2s",
                   }}
+                  onMouseEnter={(e) =>
+                    (e.currentTarget.style.background = "rgba(15,14,12,0.03)")
+                  }
+                  onMouseLeave={(e) =>
+                    (e.currentTarget.style.background = "transparent")
+                  }
                 >
+                  {d.avatarUrl ? (
+                    <img
+                      src={d.avatarUrl}
+                      alt={d.name}
+                      style={{
+                        width: "48px",
+                        height: "48px",
+                        borderRadius: "50%",
+                        objectFit: "cover",
+                        border: "2px solid var(--dong)",
+                      }}
+                      onError={(e) => {
+                        e.target.style.display = "none";
+                        e.target.nextSibling.style.display = "flex";
+                      }}
+                    />
+                  ) : null}
                   <div
                     style={{
                       width: "48px",
@@ -526,7 +573,7 @@ export default function OwnerDriversPage() {
                       borderRadius: "50%",
                       background: "var(--dong)",
                       color: "var(--muc)",
-                      display: "flex",
+                      display: d.avatarUrl ? "none" : "flex",
                       alignItems: "center",
                       justifyContent: "center",
                       fontFamily: "var(--serif)",
@@ -601,9 +648,10 @@ export default function OwnerDriversPage() {
                     {st.label}
                   </div>
 
-                  {/* ===== ACTIONS ===== */}
-                  <div style={{ display: "flex", gap: "8px" }}>
-                    {/* Nút Sửa */}
+                  <div
+                    style={{ display: "flex", gap: "8px" }}
+                    onClick={(e) => e.stopPropagation()}
+                  >
                     {!isLocked && (
                       <button
                         onClick={() => openEditModal(d)}
@@ -613,7 +661,6 @@ export default function OwnerDriversPage() {
                       </button>
                     )}
 
-                    {/* ★ Nút Khóa/Mở — chỉ cho ACTIVE và INACTIVE */}
                     {canToggle && (
                       <button
                         onClick={() => handleStatusToggle(d)}
@@ -627,7 +674,6 @@ export default function OwnerDriversPage() {
                       </button>
                     )}
 
-                    {/* Nút Xóa */}
                     {!isLocked && (
                       <button
                         onClick={() => handleDelete(d)}
@@ -642,7 +688,6 @@ export default function OwnerDriversPage() {
             })}
           </div>
 
-          {/* SERVER-SIDE PAGINATION */}
           {totalPages > 1 && (
             <>
               <div
@@ -697,8 +742,19 @@ export default function OwnerDriversPage() {
         </>
       )}
 
-      {/* MODAL */}
-      {modalOpen && (
+      {detailModal && selectedDriver && (
+        <DriverDetailModal
+          driver={selectedDriver}
+          onClose={closeDetail}
+          onEdit={() => {
+            closeDetail();
+            openEditModal(selectedDriver);
+          }}
+          onDelete={() => handleDelete(selectedDriver)}
+        />
+      )}
+
+      {modalOpen && createPortal(
         <div
           style={{
             position: "fixed",
@@ -707,7 +763,7 @@ export default function OwnerDriversPage() {
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
-            zIndex: 1000,
+            zIndex: 99999,
             padding: "20px",
             overflowY: "auto",
           }}
@@ -948,9 +1004,283 @@ export default function OwnerDriversPage() {
               </div>
             </form>
           </div>
-        </div>
+        </div>,
+        document.getElementById("modal-root") || document.body
       )}
     </div>
+  );
+}
+
+function DriverDetailModal({ driver, onClose, onEdit, onDelete }) {
+  const formatDate = (d) =>
+    d
+      ? new Date(d).toLocaleDateString("vi-VN", {
+          day: "2-digit",
+          month: "2-digit",
+          year: "numeric",
+        })
+      : "—";
+
+  const st = STATUS_MAP[driver.status] || {
+    label: driver.status,
+    color: "var(--muc-mo)",
+  };
+
+  const isLocked = LOCKED_STATUSES.includes(driver.status);
+
+  return createPortal(
+    <div
+      style={{
+        position: "fixed",
+        inset: 0,
+        background: "rgba(15,14,12,0.75)",
+        display: "flex",
+        alignItems: "flex-start",
+        justifyContent: "center",
+        zIndex: 99999,
+        padding: "20px",
+        paddingTop: "80px",
+        paddingBottom: "40px",
+        overflowY: "auto",
+      }}
+      onClick={onClose}
+    >
+      <div
+        style={{
+          background: "var(--kem)",
+          border: "1px solid var(--muc)",
+          maxWidth: "700px",
+          width: "100%",
+          maxHeight: "90vh",
+          overflowY: "auto",
+          padding: "48px",
+          position: "relative",
+        }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <button
+          onClick={onClose}
+          style={{
+            position: "absolute",
+            top: "16px",
+            right: "16px",
+            width: "40px",
+            height: "40px",
+            background: "transparent",
+            border: "1px solid var(--muc)",
+            color: "var(--muc)",
+            fontFamily: "var(--mono)",
+            fontSize: "18px",
+            cursor: "pointer",
+          }}
+        >
+          ✕
+        </button>
+
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: "20px",
+            marginBottom: "24px",
+            paddingRight: "56px",
+          }}
+        >
+          {driver.avatarUrl ? (
+            <img
+              src={driver.avatarUrl}
+              alt={driver.name}
+              style={{
+                width: "80px",
+                height: "80px",
+                borderRadius: "50%",
+                objectFit: "cover",
+                border: "2px solid var(--dong)",
+                flexShrink: 0,
+              }}
+              onError={(e) => {
+                e.target.style.display = "none";
+                e.target.nextSibling.style.display = "flex";
+              }}
+            />
+          ) : null}
+          <div
+            style={{
+              width: "80px",
+              height: "80px",
+              borderRadius: "50%",
+              background: "var(--dong)",
+              color: "var(--muc)",
+              display: driver.avatarUrl ? "none" : "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              fontFamily: "var(--serif)",
+              fontWeight: 700,
+              fontSize: "32px",
+              flexShrink: 0,
+            }}
+          >
+            {driver.name?.charAt(0)?.toUpperCase() || "?"}
+          </div>
+          <div>
+            <div
+              style={{
+                fontFamily: "var(--mono)",
+                fontSize: "10px",
+                letterSpacing: "3px",
+                textTransform: "uppercase",
+                color: "var(--muc-mo)",
+                marginBottom: "4px",
+              }}
+            >
+              Chi tiết tài xế #{driver.id}
+            </div>
+            <h2
+              style={{
+                fontFamily: "var(--serif)",
+                fontSize: "clamp(24px, 3vw, 36px)",
+                fontWeight: 900,
+                letterSpacing: "-1px",
+                margin: 0,
+              }}
+            >
+              {driver.name}
+            </h2>
+            <div
+              style={{
+                fontFamily: "var(--mono)",
+                fontSize: "12px",
+                letterSpacing: "1px",
+                color: "var(--muc-mo)",
+                marginTop: "4px",
+              }}
+            >
+              {driver.phone}
+            </div>
+          </div>
+        </div>
+
+        <div
+          style={{
+            display: "inline-block",
+            padding: "6px 16px",
+            marginBottom: "24px",
+            border: `1px solid ${st.color}`,
+            color: st.color,
+            fontFamily: "var(--mono)",
+            fontSize: "11px",
+            letterSpacing: "2px",
+            textTransform: "uppercase",
+          }}
+        >
+          {st.label}
+        </div>
+
+        {driver.status === "REJECTED" && driver.rejectionReason && (
+          <div
+            style={{
+              background: "rgba(139,44,44,0.08)",
+              border: "1px solid var(--do)",
+              padding: "16px",
+              marginBottom: "24px",
+              fontFamily: "var(--serif-2)",
+              fontStyle: "italic",
+              fontSize: "14px",
+              color: "var(--do)",
+            }}
+          >
+            ⚠️ <strong>Lý do từ chối:</strong> {driver.rejectionReason}
+          </div>
+        )}
+
+        <div style={{ marginBottom: "24px" }}>
+          <h3 style={sectionTitleStyle}>Thông tin cá nhân</h3>
+          <InfoRow label="Họ tên" value={driver.name} />
+          <InfoRow label="SĐT" value={driver.phone} highlight />
+          <InfoRow label="Email" value={driver.email || "—"} />
+          <InfoRow label="CCCD" value={driver.cccd || "—"} />
+          <InfoRow label="Ngày sinh" value={formatDate(driver.dateOfBirth)} />
+          <InfoRow label="Địa chỉ" value={driver.address || "—"} />
+        </div>
+
+        <div style={{ marginBottom: "24px" }}>
+          <h3 style={sectionTitleStyle}>Bằng lái & Kinh nghiệm</h3>
+          <InfoRow label="Số GPLX" value={driver.licenseNumber} highlight />
+          <InfoRow label="Hạng GPLX" value={driver.licenseClass} />
+          <InfoRow
+            label="Ngày hết hạn"
+            value={formatDate(driver.licenseExpiry)}
+          />
+          <InfoRow
+            label="Kinh nghiệm"
+            value={
+              driver.experienceYears ? `${driver.experienceYears} năm` : "—"
+            }
+          />
+        </div>
+
+        <div style={{ marginBottom: "24px" }}>
+          <h3 style={sectionTitleStyle}>Đánh giá & Lượt chạy</h3>
+          <InfoRow
+            label="Đánh giá trung bình"
+            value={`★ ${driver.rating?.toFixed(1) || "5.0"} / 5.0`}
+            highlight
+          />
+          <InfoRow
+            label="Tổng số chuyến"
+            value={`🚗 ${driver.totalTrips || 0} chuyến`}
+          />
+        </div>
+
+        {!isLocked && (
+          <div
+            style={{
+              display: "flex",
+              gap: "12px",
+              marginTop: "32px",
+              paddingTop: "24px",
+              borderTop: "1px solid rgba(15,14,12,0.15)",
+            }}
+          >
+            <button
+              onClick={onDelete}
+              style={{
+                flex: 1,
+                padding: "16px",
+                background: "transparent",
+                border: "1px solid var(--do)",
+                color: "var(--do)",
+                fontFamily: "var(--mono)",
+                fontSize: "11px",
+                letterSpacing: "2px",
+                textTransform: "uppercase",
+                cursor: "pointer",
+              }}
+            >
+              ✕ Xóa tài xế
+            </button>
+            <button
+              onClick={onEdit}
+              style={{
+                flex: 2,
+                padding: "16px",
+                background: "var(--muc)",
+                border: "1px solid var(--muc)",
+                color: "var(--kem)",
+                fontFamily: "var(--mono)",
+                fontSize: "11px",
+                letterSpacing: "2px",
+                textTransform: "uppercase",
+                cursor: "pointer",
+              }}
+            >
+              ✎ Sửa thông tin
+            </button>
+          </div>
+        )}
+      </div>
+    </div>,
+    document.getElementById("modal-root") || document.body
   );
 }
 
@@ -968,6 +1298,56 @@ function Field({ label, name, type = "text", value, onChange }) {
     </div>
   );
 }
+
+function InfoRow({ label, value, highlight }) {
+  return (
+    <div
+      style={{
+        display: "flex",
+        justifyContent: "space-between",
+        padding: "8px 0",
+        borderBottom: "1px dotted rgba(15,14,12,0.1)",
+      }}
+    >
+      <span
+        style={{
+          fontFamily: "var(--mono)",
+          fontSize: "10px",
+          letterSpacing: "1.5px",
+          textTransform: "uppercase",
+          color: "var(--muc-mo)",
+        }}
+      >
+        {label}
+      </span>
+      <span
+        style={{
+          fontFamily: highlight ? "var(--serif)" : "var(--serif-2)",
+          fontSize: highlight ? "16px" : "14px",
+          fontWeight: highlight ? 700 : 400,
+          color: highlight ? "var(--do)" : "var(--muc)",
+          textAlign: "right",
+          marginLeft: "16px",
+          wordBreak: "break-word",
+        }}
+      >
+        {value || "—"}
+      </span>
+    </div>
+  );
+}
+
+const sectionTitleStyle = {
+  fontFamily: "var(--mono)",
+  fontSize: "10px",
+  letterSpacing: "3px",
+  textTransform: "uppercase",
+  color: "var(--muc-mo)",
+  marginBottom: "12px",
+  marginTop: "0",
+  paddingBottom: "8px",
+  borderBottom: "1px solid rgba(15,14,12,0.15)",
+};
 
 function paginationBtnStyle(disabled) {
   return {

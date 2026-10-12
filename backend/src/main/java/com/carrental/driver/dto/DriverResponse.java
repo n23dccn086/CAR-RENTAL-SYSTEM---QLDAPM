@@ -11,10 +11,6 @@ import lombok.experimental.FieldDefaults;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 
-/**
- * Response DTO cho tài xế.
- * Trả về client các thông tin cần thiết (không expose dữ liệu nhạy cảm).
- */
 @Data
 @Builder
 @NoArgsConstructor
@@ -30,7 +26,7 @@ public class DriverResponse {
     String phone;
     String email;
 
-    String cccd;             // có thể che 3 số cuối ở service
+    String cccd;
     String licenseNumber;
     String licenseClass;
 
@@ -41,14 +37,22 @@ public class DriverResponse {
     Integer experienceYears;
     String avatarUrl;
 
-    String status;           // PENDING / AVAILABLE / BUSY / OFF / REJECTED
+    String status;
     Double rating;
     Integer totalTrips;
+
+    // Lý do từ chối
+    String rejectionReason;
+
+    // ★ MỚI: Thông tin chủ xe (chỉ Admin cần)
+    String ownerName;
+    String ownerPhone;
+    String ownerAvatarUrl;
 
     LocalDateTime createdAt;
     LocalDateTime updatedAt;
 
-    // ===== DUAL COMPATIBILITY GETTERS (Contract snake_case) =====
+    // ===== DUAL COMPATIBILITY GETTERS =====
     public String getGplx_class() { return licenseClass; }
     public String getGplx_number() { return licenseNumber; }
     public String getCccd_number() { return cccd; }
