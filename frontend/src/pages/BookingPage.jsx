@@ -130,6 +130,7 @@ export default function BookingPage() {
   const total = calcTotal()
   const depositAmount = Math.round(total * depositPercent / 100)
   const noDriverAvailable = form.rentalMode === 'WITH_DRIVER' && !loadingDrivers && drivers.length === 0
+  const isCarUnavailable = car && car.status !== 'AVAILABLE'
 
   return (
     <div style={{ maxWidth: '1200px', margin: '0 auto', padding: '60px 48px' }}>
@@ -140,6 +141,37 @@ export default function BookingPage() {
 
       <div style={{ display: 'grid', gridTemplateColumns: '1.5fr 1fr', gap: '48px' }}>
         <form onSubmit={handleSubmit}>
+          {isCarUnavailable && (
+            <div style={{
+              padding: '16px 20px',
+              background: 'rgba(139,44,44,0.1)',
+              border: '1px solid var(--do)',
+              borderLeft: '4px solid var(--do)',
+              marginBottom: '24px',
+              fontFamily: 'var(--serif-2)',
+              color: 'var(--do)',
+            }}>
+              <div style={{ fontWeight: 700, fontSize: '16px', marginBottom: '6px' }}>
+                ⚠️ Cỗ xe này hiện đã được đặt hoặc không khả dụng!
+              </div>
+              <div style={{ fontSize: '14px', color: 'var(--muc)', marginBottom: '12px' }}>
+                Cỗ xe đã có khách đặt trước hoặc đang trong hành trình thuê. Quý khách vui lòng quay lại bộ sưu tập để chọn cỗ xe khác.
+              </div>
+              <Link to="/search" style={{
+                display: 'inline-flex',
+                padding: '8px 16px',
+                background: 'var(--muc)',
+                color: 'var(--kem)',
+                fontFamily: 'var(--mono)',
+                fontSize: '10px',
+                letterSpacing: '1px',
+                textTransform: 'uppercase',
+                textDecoration: 'none'
+              }}>
+                ← Về bộ sưu tập chọn xe khác
+              </Link>
+            </div>
+          )}
           {needsVerification && (
             <div style={{
               padding: '16px 20px',
@@ -311,16 +343,16 @@ export default function BookingPage() {
           <button
             type="submit"
             className="btn-login"
-            disabled={loading || needsVerification || noDriverAvailable}
+            disabled={loading || needsVerification || noDriverAvailable || isCarUnavailable}
             style={{
               width: '100%',
               justifyContent: 'center',
               padding: '18px',
-              opacity: (needsVerification || noDriverAvailable) ? 0.5 : 1,
-              cursor: (needsVerification || noDriverAvailable) ? 'not-allowed' : 'pointer'
+              opacity: (needsVerification || noDriverAvailable || isCarUnavailable) ? 0.5 : 1,
+              cursor: (needsVerification || noDriverAvailable || isCarUnavailable) ? 'not-allowed' : 'pointer'
             }}
           >
-            <span>{loading ? 'Đang xử lý...' : 'Xác nhận đặt xe'}</span>
+            <span>{isCarUnavailable ? 'Hết xe / Đã được đặt' : loading ? 'Đang xử lý...' : 'Xác nhận đặt xe'}</span>
           </button>
         </form>
 

@@ -259,6 +259,17 @@ public class DriverServiceImpl implements DriverService {
         driver.setStatus(target);
         Driver updated = driverRepository.save(driver);
 
+        // Đồng bộ user nếu có
+        if (userRepository != null && driver.getPhone() != null) {
+            userRepository.findByPhone(driver.getPhone()).ifPresent(user -> {
+                user.setIsActive(target == DriverStatus.ACTIVE);
+                if (target == DriverStatus.ACTIVE) {
+                    user.setDeletedAt(null);
+                }
+                userRepository.save(user);
+            });
+        }
+
         log.info("Driver {} status: {} → {}", id, oldStatus, target);
         return driverMapper.toResponse(updated);
     }
@@ -360,6 +371,52 @@ public class DriverServiceImpl implements DriverService {
             log.warn("Failed to notify owner: {}", e.getMessage());
         }
 
+        return driverMapper.toResponse(updated);
+    }
+
+    @Override
+    @Transactional
+    public DriverResponse adminUpdateDriverStatus(Long id, String newStatus) {
+        log.info("Admin update driver {} status to {}", id, newStatus);
+        Driver driver = getEntityById(id);
+
+        DriverStatus target;
+        try {
+            target = DriverStatus.valueOf(newStatus.toUpperCase());
+        } catch (Exception e) {
+            throw new BadRequestException(ErrorCode.VALIDATION_ERROR,
+                    "Trạng thái không hợp lệ: " + newStatus);
+        }
+
+        if (target != DriverStatus.ACTIVE && target != DriverStatus.INACTIVE) {
+            throw new BadRequestException(ErrorCode.VALIDATION_ERROR,
+                    "Admin chỉ có thể đổi trạng thái ACTIVE (Mở khóa) hoặc INACTIVE (Khóa)");
+        }
+
+        if (driver.getStatus() == DriverStatus.BUSY) {
+            throw new BadRequestException(ErrorCode.VALIDATION_ERROR,
+                    "Tài xế đang chạy chuyến, không thể khóa");
+        }
+
+        DriverStatus oldStatus = driver.getStatus();
+        driver.setStatus(target);
+        if (target == DriverStatus.ACTIVE) {
+            driver.setRejectionReason(null);
+        }
+        Driver updated = driverRepository.save(driver);
+
+        // Đồng bộ user nếu có tài khoản liên kết với số điện thoại này
+        if (userRepository != null && driver.getPhone() != null) {
+            userRepository.findByPhone(driver.getPhone()).ifPresent(user -> {
+                user.setIsActive(target == DriverStatus.ACTIVE);
+                if (target == DriverStatus.ACTIVE) {
+                    user.setDeletedAt(null);
+                }
+                userRepository.save(user);
+            });
+        }
+
+        log.info("Admin updated driver {} status: {} → {}", id, oldStatus, target);
         return driverMapper.toResponse(updated);
     }
 

@@ -43,6 +43,8 @@ public interface BookingRepository extends JpaRepository<Booking, Long> {
 
     long countByCarIdAndStatusIn(Long carId, List<BookingStatus> statuses);
 
+    boolean existsByCarIdAndStatusIn(Long carId, List<BookingStatus> statuses);
+
     /**
      * Kiểm tra tài xế có booking đang active chồng lấn thời gian không.
      */

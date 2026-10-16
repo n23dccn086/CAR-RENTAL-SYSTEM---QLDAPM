@@ -31,6 +31,7 @@ public class AdminUserResponse {
     String address;
     LocalDate dateOfBirth;
 
+    @com.fasterxml.jackson.annotation.JsonProperty("isActive")
     Boolean isActive;
     LocalDateTime lastLoginAt;
     LocalDateTime createdAt;

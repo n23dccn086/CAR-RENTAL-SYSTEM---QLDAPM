@@ -6,7 +6,7 @@ const STATUS_MAP = {
   PENDING:  { label: 'Chờ duyệt',       color: 'var(--dong)' },
   ACTIVE:   { label: 'Đang hoạt động',  color: 'var(--xanh-reu)' },
   BUSY:     { label: 'Đang chạy chuyến', color: 'var(--xanh-ngoc)' },
-  INACTIVE: { label: 'Tạm nghỉ',        color: 'var(--muc-mo)' },
+  INACTIVE: { label: 'Đã khóa',         color: 'var(--do)' },
   REJECTED: { label: 'Bị từ chối',      color: 'var(--do)' },
 }
 
@@ -105,6 +105,30 @@ export default function AdminDriversPage() {
     }
   }
 
+  const handleLockDriver = async (driver) => {
+    if (!window.confirm(`Khóa tài xế "${driver.name}" (${driver.phone})?`)) return
+    try {
+      await api.put(`/admin/drivers/${driver.id}/lock`)
+      showMessage(`✅ Đã khóa tài xế ${driver.name}`)
+      closeDetail()
+      fetchDrivers()
+    } catch (err) {
+      alert('Lỗi: ' + (err.response?.data?.message || err.message))
+    }
+  }
+
+  const handleUnlockDriver = async (driver) => {
+    if (!window.confirm(`Mở khóa tài xế "${driver.name}" (${driver.phone})?`)) return
+    try {
+      await api.put(`/admin/drivers/${driver.id}/unlock`)
+      showMessage(`✅ Đã mở khóa tài xế ${driver.name}`)
+      closeDetail()
+      fetchDrivers()
+    } catch (err) {
+      alert('Lỗi: ' + (err.response?.data?.message || err.message))
+    }
+  }
+
   const openRejectModal = (driver) => {
     setRejectingDriver(driver)
     setRejectReason('')
@@ -172,6 +196,7 @@ export default function AdminDriversPage() {
         {[
           { v: 'PENDING',  l: 'Chờ duyệt' },
           { v: 'ACTIVE',   l: 'Đang hoạt động' },
+          { v: 'INACTIVE', l: 'Đã khóa' },
           { v: 'REJECTED', l: 'Bị từ chối' },
           { v: '',         l: 'Tất cả' },
         ].map(opt => (
@@ -281,6 +306,14 @@ export default function AdminDriversPage() {
                           ✕ Từ chối
                         </button>
                       </>
+                    ) : d.status === 'ACTIVE' ? (
+                      <button onClick={() => handleLockDriver(d)} style={btnStyle('var(--do)')}>
+                        Khóa
+                      </button>
+                    ) : d.status === 'INACTIVE' ? (
+                      <button onClick={() => handleUnlockDriver(d)} style={btnStyle('var(--xanh-reu)')}>
+                        Mở khóa
+                      </button>
                     ) : (
                       <div style={{ width: '180px' }} />
                     )}
@@ -317,6 +350,8 @@ export default function AdminDriversPage() {
             setDetailModal(false)
             openRejectModal(selectedDriver)
           }}
+          onLock={handleLockDriver}
+          onUnlock={handleUnlockDriver}
         />
       )}
 
@@ -398,7 +433,7 @@ export default function AdminDriversPage() {
 // ============================================================
 // MODAL CHI TIẾT TÀI XẾ
 // ============================================================
-function DriverDetailModal({ driver, loading, onClose, onApprove, onReject }) {
+function DriverDetailModal({ driver, loading, onClose, onApprove, onReject, onLock, onUnlock }) {
   const formatDate = (d) =>
     d ? new Date(d).toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric' }) : '—'
 
@@ -630,6 +665,44 @@ function DriverDetailModal({ driver, loading, onClose, onApprove, onReject }) {
               }}
             >
               ✓ Duyệt tài xế
+            </button>
+          </div>
+        )}
+
+        {driver.status === 'ACTIVE' && onLock && (
+          <div style={{ display: 'flex', gap: '12px', marginTop: '32px', paddingTop: '24px', borderTop: '1px solid rgba(15,14,12,0.15)' }}>
+            <button
+              onClick={() => {
+                onClose()
+                onLock(driver)
+              }}
+              style={{
+                flex: 1, padding: '16px', background: 'transparent',
+                border: '1px solid var(--do)', color: 'var(--do)',
+                fontFamily: 'var(--mono)', fontSize: '11px', letterSpacing: '2px',
+                textTransform: 'uppercase', cursor: 'pointer'
+              }}
+            >
+              🔒 Khóa tài xế
+            </button>
+          </div>
+        )}
+
+        {driver.status === 'INACTIVE' && onUnlock && (
+          <div style={{ display: 'flex', gap: '12px', marginTop: '32px', paddingTop: '24px', borderTop: '1px solid rgba(15,14,12,0.15)' }}>
+            <button
+              onClick={() => {
+                onClose()
+                onUnlock(driver)
+              }}
+              style={{
+                flex: 1, padding: '16px', background: 'var(--xanh-reu)',
+                border: '1px solid var(--xanh-reu)', color: 'var(--kem)',
+                fontFamily: 'var(--mono)', fontSize: '11px', letterSpacing: '2px',
+                textTransform: 'uppercase', cursor: 'pointer'
+              }}
+            >
+              🔓 Mở khóa tài xế
             </button>
           </div>
         )}

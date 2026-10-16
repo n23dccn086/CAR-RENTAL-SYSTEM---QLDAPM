@@ -158,8 +158,12 @@ public class BookingServiceImpl implements BookingService {
         detail.setBookingId(savedBooking.getId());
         BookingDetail savedDetail = bookingDetailRepository.save(detail);
 
-        log.info("Booking created: id={}, total={}, driverId={}",
-                savedBooking.getId(), totalPrice, driverId);
+        // Khóa xe: Đánh dấu đã được đặt để không còn hiển thị trên web
+        car.setStatus(CarStatus.RENTED);
+        carRepository.save(car);
+
+        log.info("Booking created: id={}, total={}, driverId={}, car {} -> RENTED",
+                savedBooking.getId(), totalPrice, driverId, car.getId());
 
         return buildResponse(savedBooking, savedDetail);
     }
@@ -322,6 +326,8 @@ public class BookingServiceImpl implements BookingService {
         booking.setCancelledAt(LocalDateTime.now());
         Booking updated = bookingRepository.save(booking);
 
+        releaseCarIfNoActiveBookings(booking.getCarId());
+
         // ★ Thông báo cho Owner
         try {
             notificationService.createNotification(
@@ -380,6 +386,12 @@ public class BookingServiceImpl implements BookingService {
             booking.setOwnerNote(note);
 
         Booking updated = bookingRepository.save(booking);
+
+        Car car = carRepository.findById(booking.getCarId()).orElse(null);
+        if (car != null && car.getStatus() != CarStatus.RENTED) {
+            car.setStatus(CarStatus.RENTED);
+            carRepository.save(car);
+        }
 
         // ★ Thông báo cho Customer
         try {
@@ -453,6 +465,8 @@ public class BookingServiceImpl implements BookingService {
         booking.setCancelledAt(LocalDateTime.now());
 
         Booking updated = bookingRepository.save(booking);
+
+        releaseCarIfNoActiveBookings(booking.getCarId());
 
         // ★ Thông báo cho Customer
         try {
@@ -560,11 +574,7 @@ public class BookingServiceImpl implements BookingService {
 
         Booking updated = bookingRepository.save(booking);
 
-        Car car = carRepository.findById(booking.getCarId()).orElse(null);
-        if (car != null) {
-            car.setStatus(CarStatus.AVAILABLE);
-            carRepository.save(car);
-        }
+        releaseCarIfNoActiveBookings(booking.getCarId());
 
         // ★ Thông báo cho Customer
         try {
@@ -683,6 +693,23 @@ public class BookingServiceImpl implements BookingService {
                 .multiply(percent)
                 .divide(new BigDecimal("100"), 0, RoundingMode.DOWN)
                 .longValue();
+    }
+
+    private void releaseCarIfNoActiveBookings(Long carId) {
+        if (carId == null) return;
+        boolean hasActive = bookingRepository.existsByCarIdAndStatusIn(
+                carId,
+                List.of(BookingStatus.PENDING, BookingStatus.PAID, BookingStatus.APPROVED, BookingStatus.RENTED)
+        );
+        if (!hasActive) {
+            carRepository.findById(carId).ifPresent(c -> {
+                if (c.getStatus() == CarStatus.RENTED) {
+                    c.setStatus(CarStatus.AVAILABLE);
+                    carRepository.save(c);
+                    log.info("Car {} released back to AVAILABLE", carId);
+                }
+            });
+        }
     }
 
     private BookingResponse buildResponse(Booking booking, BookingDetail detail) {

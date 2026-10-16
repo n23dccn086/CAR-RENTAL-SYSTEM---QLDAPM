@@ -137,9 +137,30 @@ export default function CarDetailPage() {
             <span style={{ fontFamily: 'var(--mono)', fontSize: '14px', fontWeight: 400, marginLeft: '8px', color: 'var(--dong)' }}>đ/ngày</span>
           </div>
           <div style={{ height: '1px', background: 'rgba(201,169,97,0.3)', margin: '32px 0' }}></div>
-          <button onClick={() => navigate(`/booking/${car.id}`)} className="btn-login" style={{ width: '100%', justifyContent: 'center', padding: '18px', background: 'var(--dong)', color: 'var(--muc)' }}>
-            <span>Đặt cỗ xe này</span>
-          </button>
+          {car.status === 'AVAILABLE' ? (
+            <button onClick={() => navigate(`/booking/${car.id}`)} className="btn-login" style={{ width: '100%', justifyContent: 'center', padding: '18px', background: 'var(--dong)', color: 'var(--muc)' }}>
+              <span>Đặt cỗ xe này</span>
+            </button>
+          ) : (
+            <div>
+              <div style={{
+                background: 'rgba(139,44,44,0.2)',
+                border: '1px solid var(--do)',
+                color: 'var(--kem)',
+                padding: '14px',
+                fontFamily: 'var(--serif-2)',
+                fontSize: '14px',
+                lineHeight: 1.5,
+                marginBottom: '16px',
+                textAlign: 'center'
+              }}>
+                🔒 Cỗ xe hiện <strong>{car.status === 'RENTED' ? 'đã có người đặt / đang cho thuê' : 'tạm không khả dụng'}</strong>.
+              </div>
+              <button disabled style={{ width: '100%', padding: '18px', background: 'rgba(255,255,255,0.08)', color: 'rgba(255,255,255,0.4)', border: '1px solid rgba(255,255,255,0.15)', fontFamily: 'var(--mono)', fontSize: '11px', letterSpacing: '2px', textTransform: 'uppercase', cursor: 'not-allowed' }}>
+                Hết xe
+              </button>
+            </div>
+          )}
         </div>
       </div>
     </div>
