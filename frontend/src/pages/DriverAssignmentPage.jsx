@@ -64,9 +64,18 @@ export default function DriverAssignmentPage() {
     }
   }
 
+  const parseDate = (d) => {
+    if (!d) return null
+    if (typeof d === 'string' && !d.endsWith('Z') && !/[+-]\d{2}:\d{2}$/.test(d)) {
+      return new Date(d + 'Z')
+    }
+    return new Date(d)
+  }
+
   const formatDateTime = (dt) => {
     if (!dt) return '-'
-    return new Date(dt).toLocaleString('vi-VN', {
+    const date = parseDate(dt)
+    return date.toLocaleString('vi-VN', {
       day: '2-digit', month: '2-digit', year: 'numeric',
       hour: '2-digit', minute: '2-digit'
     })
@@ -121,7 +130,7 @@ export default function DriverAssignmentPage() {
 
   // ===== MAIN =====
   const isPending = assignment?.status === 'PENDING'
-  const isExpired = assignment?.deadlineAt && new Date(assignment.deadlineAt) < new Date()
+  const isExpired = assignment?.expired ?? (assignment?.status === 'EXPIRED' || (assignment?.deadlineAt && parseDate(assignment.deadlineAt) < new Date()))
 
   return (
     <div style={{ maxWidth: '800px', margin: '0 auto', padding: '60px 48px' }}>
@@ -286,7 +295,7 @@ export default function DriverAssignmentPage() {
         <div style={{
           position: 'fixed', inset: 0, background: 'rgba(15,14,12,0.75)',
           display: 'flex', alignItems: 'center', justifyContent: 'center',
-          zIndex: 1000, padding: '20px'
+          zIndex: 99999, padding: '20px'
         }} onClick={() => setRejectModal(false)}>
           <div style={{
             background: 'var(--kem)', border: '1px solid var(--muc)',

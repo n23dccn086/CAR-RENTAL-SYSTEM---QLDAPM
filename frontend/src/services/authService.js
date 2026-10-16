@@ -33,8 +33,14 @@ export async function logout() {
     await api.post('/auth/logout')
   } finally {
     localStorage.removeItem('token')
+    localStorage.removeItem('refreshToken')
     localStorage.removeItem('user')
   }
+}
+
+export async function refreshAccessToken(refreshToken) {
+  const response = await api.post('/auth/refresh', { refreshToken })
+  return response.data
 }
 
 export async function forgotPassword(phone) {

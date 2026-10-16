@@ -525,7 +525,7 @@ export default function AdminConfigPage() {
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
-            zIndex: 1000,
+            zIndex: 99999,
             padding: "20px",
           }}
           onClick={() => setCreateModal(false)}

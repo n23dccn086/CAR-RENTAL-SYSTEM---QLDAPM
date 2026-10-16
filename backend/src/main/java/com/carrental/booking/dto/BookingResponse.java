@@ -41,6 +41,9 @@ public class BookingResponse {
 
     RentalMode rentalMode;
     Long driverId;
+    String driverName;
+    String driverPhone;
+    String driverAssignmentStatus;
 
     Long totalPrice;
     Long depositAmount;
@@ -68,6 +71,12 @@ public class BookingResponse {
 
     @JsonProperty("refund_required")
     Boolean refundRequired;
+
+    @JsonProperty("refund_status")
+    String refundStatus;
+
+    @JsonProperty("refund_reason")
+    String refundReason;
 
     // ===== Chi tiết phí =====
     BookingDetailResponse details;
@@ -181,6 +190,26 @@ public class BookingResponse {
             map.put("phone", ownerPhone);
         }
         return map;
+    }
+
+    @JsonProperty("driver")
+    public Map<String, Object> getDriver() {
+        if (driverId == null && driverName == null) return null;
+        Map<String, Object> map = new LinkedHashMap<>();
+        map.put("id", driverId);
+        map.put("name", driverName != null ? driverName : "");
+        if (driverPhone != null) {
+            map.put("phone", driverPhone);
+        }
+        if (driverAssignmentStatus != null) {
+            map.put("assignment_status", driverAssignmentStatus);
+        }
+        return map;
+    }
+
+    @JsonProperty("driver_assignment_status")
+    public String getDriverAssignmentStatus() {
+        return driverAssignmentStatus;
     }
 
     @JsonProperty("pricing_breakdown")

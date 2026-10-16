@@ -130,7 +130,7 @@ public class HandoverServiceImpl implements HandoverService {
             log.info("Late fee calculated for booking {}: {} minutes → {}đ",
                     booking.getId(), lateMinutes, lateFee);
 
-            if (booking.getRentalMode() == RentalMode.SELF_DRIVE) {
+            if (booking.getRentalMode() == null || booking.getRentalMode() == RentalMode.SELF_DRIVE) {
                 HandoverRecord pickupRecord = handoverRepository
                         .findByBookingIdAndHandoverType(booking.getId(), "PICKUP")
                         .orElse(null);
@@ -150,6 +150,8 @@ public class HandoverServiceImpl implements HandoverService {
             }
         }
 
+        BigDecimal extraFees = request.getExtraFees() != null ? request.getExtraFees() : BigDecimal.ZERO;
+
         HandoverRecord record = HandoverRecord.builder()
                 .bookingId(request.getBookingId())
                 .handoverType(type.toUpperCase())
@@ -158,7 +160,7 @@ public class HandoverServiceImpl implements HandoverService {
                 .exteriorNote(request.getExteriorNote())
                 .interiorNote(request.getInteriorNote())
                 .damages(request.getDamages())
-                .extraFees(request.getExtraFees())
+                .extraFees(extraFees)
                 .extraFeesNote(request.getExtraFeesNote())
                 .actualReturnTime(actualReturnTime)
                 .lateFee(lateFee)
@@ -263,25 +265,30 @@ public class HandoverServiceImpl implements HandoverService {
         Booking booking = bookingRepository.findById(record.getBookingId())
                 .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.BOOKING_NOT_FOUND));
 
+        if (booking.getStatus() == BookingStatus.CANCELLED) {
+            throw new BadRequestException(ErrorCode.VALIDATION_ERROR,
+                    "Đơn hàng này đã bị hủy. Biên bản bàn giao không còn hiệu lực để ký.");
+        }
+
         if (record.getStatus() == HandoverStatus.CANCELLED) {
-            throw new BadRequestException(ErrorCode.VALIDATION_ERROR, "Biên bản đã bị hủy");
+            throw new BadRequestException(ErrorCode.VALIDATION_ERROR, "Biên bản bàn giao này đã bị hủy");
         }
 
         if ("OWNER".equalsIgnoreCase(role)) {
             if (!booking.getOwnerId().equals(userId)) {
-                throw new UnauthorizedException(ErrorCode.PERMISSION_DENIED);
+                throw new BadRequestException(ErrorCode.PERMISSION_DENIED, "Bạn không phải chủ xe của chuyến đi này");
             }
             if (record.getOwnerSignature() != null) {
-                throw new BadRequestException(ErrorCode.VALIDATION_ERROR, "Bạn đã ký rồi");
+                throw new BadRequestException(ErrorCode.VALIDATION_ERROR, "Chủ xe đã ký rồi");
             }
             record.setOwnerSignature(signatureUrl);
             record.setOwnerSignedAt(LocalDateTime.now());
         } else if ("CUSTOMER".equalsIgnoreCase(role)) {
             if (!booking.getCustomerId().equals(userId)) {
-                throw new UnauthorizedException(ErrorCode.PERMISSION_DENIED);
+                throw new BadRequestException(ErrorCode.PERMISSION_DENIED, "Bạn không phải khách thuê của chuyến đi này");
             }
             if (record.getCustomerSignature() != null) {
-                throw new BadRequestException(ErrorCode.VALIDATION_ERROR, "Bạn đã ký rồi");
+                throw new BadRequestException(ErrorCode.VALIDATION_ERROR, "Khách thuê đã ký rồi");
             }
             record.setCustomerSignature(signatureUrl);
             record.setCustomerSignedAt(LocalDateTime.now());
@@ -563,6 +570,11 @@ public class HandoverServiceImpl implements HandoverService {
             boolean isOwner = booking.getOwnerId().equals(userId);
             boolean isCustomer = booking.getCustomerId().equals(userId);
 
+            response.setOwnerId(booking.getOwnerId());
+            response.setCustomerId(booking.getCustomerId());
+            response.setIsOwner(isOwner);
+            response.setIsCustomer(isCustomer);
+
             boolean canSign = record.getStatus() == HandoverStatus.PENDING
                     && ((isOwner && record.getOwnerSignature() == null)
                         || (isCustomer && record.getCustomerSignature() == null));
@@ -572,6 +584,30 @@ public class HandoverServiceImpl implements HandoverService {
                     && record.getStatus() == HandoverStatus.PENDING
                     && record.getOwnerSignature() == null;
             response.setCanCreate(canCreate);
+
+            // ===== BẢNG TÍNH QUYẾT TOÁN THANH TOÁN (FINANCIAL SETTLEMENT) =====
+            BigDecimal totalExtra = BigDecimal.ZERO;
+            if (record.getLateFee() != null) totalExtra = totalExtra.add(record.getLateFee());
+            if (record.getKmOverageFee() != null) totalExtra = totalExtra.add(record.getKmOverageFee());
+            if (record.getExtraFees() != null) totalExtra = totalExtra.add(record.getExtraFees());
+            response.setTotalExtraFees(totalExtra);
+
+            Long deposit = booking.getDepositAmount() != null ? booking.getDepositAmount() : 0L;
+            response.setDepositAmount(deposit);
+
+            long currentTotal = booking.getTotalPrice() != null ? booking.getTotalPrice() : 0L;
+            long baseRental = currentTotal;
+            if (record.getStatus() == HandoverStatus.SIGNED && "RETURN".equals(record.getHandoverType())) {
+                baseRental = currentTotal - totalExtra.longValue();
+                if (baseRental < 0) baseRental = currentTotal;
+            }
+            response.setRentalPrice(baseRental);
+
+            long remainingBase = Math.max(0L, baseRental - deposit);
+            response.setRemainingRentalPrice(remainingBase);
+
+            BigDecimal finalToPay = BigDecimal.valueOf(remainingBase).add(totalExtra);
+            response.setFinalAmountToPay(finalToPay);
         }
 
         return response;
@@ -836,7 +872,7 @@ public class HandoverServiceImpl implements HandoverService {
         int kmOverage = 0;
         BigDecimal kmOverageFee = BigDecimal.ZERO;
 
-        if (booking.getRentalMode() == RentalMode.SELF_DRIVE) {
+        if (booking.getRentalMode() == null || booking.getRentalMode() == RentalMode.SELF_DRIVE) {
             HandoverRecord pickupRecord = handoverRepository
                     .findByBookingIdAndHandoverType(booking.getId(), "PICKUP")
                     .orElse(null);

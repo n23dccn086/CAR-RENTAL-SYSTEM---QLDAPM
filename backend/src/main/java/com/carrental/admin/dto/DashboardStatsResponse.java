@@ -23,6 +23,14 @@ public class DashboardStatsResponse {
     BigDecimal commissionRate;
     Integer depositPercent;
 
+    // ===== TIỀN CỌC & QUỸ TẠM GIỮ (ESCROW) =====
+    Long holdingDepositAmount;      // Tiền cọc đang tạm giữ riêng (các đơn PAID chờ chủ xe duyệt)
+    Long holdingDepositCount;       // Số đơn cọc đang tạm giữ
+    Long mergedDepositAmount;       // Tiền cọc đã duyệt & sáp nhập vào doanh thu (APPROVED+)
+    Long mergedDepositCount;        // Số đơn cọc đã sáp nhập doanh thu
+    Long refundedDepositAmount;     // Tiền cọc đã hoàn trả cho khách (CANCELLED)
+    Long refundedDepositCount;      // Số đơn cọc đã hoàn trả
+
     // ===== ĐƠN HÀNG =====
     Long totalBookings;
     Long completedBookings;

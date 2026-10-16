@@ -202,7 +202,7 @@ public class CarServiceImpl implements CarService {
     @Transactional(readOnly = true)
     public List<CarResponse> getAllCars(String status) {
         List<Car> cars;
-        if (status == null || status.isBlank()) {
+        if (status == null || status.isBlank() || status.equalsIgnoreCase("AVAILABLE")) {
             cars = carRepository.findAvailableCarsWithoutActiveBookings();
         } else if (status.equalsIgnoreCase("ALL")) {
             cars = carRepository.findAll().stream()

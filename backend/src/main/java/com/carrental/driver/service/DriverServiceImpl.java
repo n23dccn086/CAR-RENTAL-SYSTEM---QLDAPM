@@ -27,6 +27,8 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.carrental.booking.repository.BookingRepository;
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Set;
 
@@ -42,6 +44,7 @@ public class DriverServiceImpl implements DriverService {
     UserRepository userRepository;
     DriverAssignmentRepository driverAssignmentRepository;
     FileStorageService fileStorageService;
+    BookingRepository bookingRepository;
 
     static final Set<DriverStatus> LOCKED_FOR_EDIT = Set.of(
             DriverStatus.PENDING,
@@ -119,8 +122,26 @@ public class DriverServiceImpl implements DriverService {
 
     @Override
     public List<DriverResponse> getAvailableDrivers() {
-        List<Driver> drivers = driverRepository
-                .findByStatusAndDeletedAtIsNull(DriverStatus.ACTIVE);
+        return getAvailableDrivers(null, null, null);
+    }
+
+    @Override
+    public List<DriverResponse> getAvailableDrivers(Long ownerId, LocalDateTime startDate, LocalDateTime endDate) {
+        List<Driver> drivers;
+        if (ownerId != null) {
+            drivers = driverRepository.findByOwnerIdAndStatusInAndDeletedAtIsNull(
+                    ownerId, List.of(DriverStatus.ACTIVE, DriverStatus.BUSY));
+        } else {
+            drivers = driverRepository.findByStatusInAndDeletedAtIsNull(
+                    List.of(DriverStatus.ACTIVE, DriverStatus.BUSY));
+        }
+
+        if (startDate != null && endDate != null) {
+            drivers = drivers.stream()
+                    .filter(d -> !bookingRepository.existsByDriverIdAndTimeOverlap(d.getId(), startDate, endDate))
+                    .toList();
+        }
+
         return driverMapper.toResponseList(drivers);
     }
 

@@ -685,7 +685,7 @@ function Modal({ title, onClose, children }) {
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
-        zIndex: 1000,
+        zIndex: 99999,
         padding: '20px',
         overflowY: 'auto',
       }}

@@ -103,11 +103,51 @@ public class AdminDashboardServiceImpl implements AdminDashboardService {
         BigDecimal defaultDepositPercent = configHelper.getDefaultDepositPercent();
         Integer depositPercent = defaultDepositPercent != null ? defaultDepositPercent.intValue() : 30;
 
+        // ===== 4. TIỀN CỌC & QUỸ TẠM GIỮ (ESCROW) =====
+        // 1. Tiền cọc đang tạm giữ riêng: đơn PAID (chưa duyệt, chưa tính vào doanh thu)
+        long holdingDepositAmount = allBookings.stream()
+                .filter(b -> b.getStatus() == BookingStatus.PAID)
+                .mapToLong(b -> b.getDepositAmount() != null ? b.getDepositAmount() : 0L)
+                .sum();
+        long holdingDepositCount = allBookings.stream()
+                .filter(b -> b.getStatus() == BookingStatus.PAID)
+                .count();
+
+        // 2. Tiền cọc đã sáp nhập doanh thu: đơn APPROVED, RENTED, RETURNED, COMPLETED
+        long mergedDepositAmount = allBookings.stream()
+                .filter(b -> b.getStatus() == BookingStatus.APPROVED
+                        || b.getStatus() == BookingStatus.RENTED
+                        || b.getStatus() == BookingStatus.RETURNED
+                        || b.getStatus() == BookingStatus.COMPLETED)
+                .mapToLong(b -> b.getDepositAmount() != null ? b.getDepositAmount() : 0L)
+                .sum();
+        long mergedDepositCount = allBookings.stream()
+                .filter(b -> b.getStatus() == BookingStatus.APPROVED
+                        || b.getStatus() == BookingStatus.RENTED
+                        || b.getStatus() == BookingStatus.RETURNED
+                        || b.getStatus() == BookingStatus.COMPLETED)
+                .count();
+
+        // 3. Tiền cọc đã hoàn trả: đơn CANCELLED
+        long refundedDepositAmount = allBookings.stream()
+                .filter(b -> b.getStatus() == BookingStatus.CANCELLED)
+                .mapToLong(b -> b.getDepositAmount() != null ? b.getDepositAmount() : 0L)
+                .sum();
+        long refundedDepositCount = allBookings.stream()
+                .filter(b -> b.getStatus() == BookingStatus.CANCELLED && b.getDepositAmount() != null && b.getDepositAmount() > 0)
+                .count();
+
         return DashboardStatsResponse.builder()
                 .totalRevenue(totalRevenue)
                 .platformRevenue(platformRevenue)
                 .commissionRate(commissionRate)
                 .depositPercent(depositPercent)
+                .holdingDepositAmount(holdingDepositAmount)
+                .holdingDepositCount(holdingDepositCount)
+                .mergedDepositAmount(mergedDepositAmount)
+                .mergedDepositCount(mergedDepositCount)
+                .refundedDepositAmount(refundedDepositAmount)
+                .refundedDepositCount(refundedDepositCount)
                 .totalBookings(totalBookings)
                 .completedBookings(completedCount)
                 .cancelledBookings(cancelledCount)
@@ -121,6 +161,103 @@ public class AdminDashboardServiceImpl implements AdminDashboardService {
                 .pendingVerifications(pendingVerifications)
                 .pendingOwnerRequests(pendingOwnerRequests)
                 .pendingDisputes(pendingDisputes)
+                .build();
+    }
+
+    @Override
+    public com.carrental.admin.dto.AdminDepositSummaryResponse getDepositSummary() {
+        log.info("Computing admin deposit escrow summary and breakdown");
+        List<Booking> allBookings = bookingRepository.findAll();
+
+        long holdingAmount = 0L;
+        long holdingCount = 0L;
+        long mergedAmount = 0L;
+        long mergedCount = 0L;
+        long refundedAmount = 0L;
+        long refundedCount = 0L;
+
+        List<com.carrental.admin.dto.AdminDepositSummaryResponse.DepositBookingItem> holdingList = new java.util.ArrayList<>();
+        List<com.carrental.admin.dto.AdminDepositSummaryResponse.DepositBookingItem> mergedList = new java.util.ArrayList<>();
+        List<com.carrental.admin.dto.AdminDepositSummaryResponse.DepositBookingItem> refundedList = new java.util.ArrayList<>();
+
+        java.util.Map<Long, com.carrental.car.entity.Car> carMap = carRepository.findAll().stream()
+                .collect(java.util.stream.Collectors.toMap(com.carrental.car.entity.Car::getId, c -> c, (a, b) -> a));
+        java.util.Map<Long, com.carrental.user.entity.User> userMap = userRepository.findAll().stream()
+                .collect(java.util.stream.Collectors.toMap(com.carrental.user.entity.User::getId, u -> u, (a, b) -> a));
+
+        for (Booking b : allBookings) {
+            long dep = b.getDepositAmount() != null ? b.getDepositAmount() : 0L;
+            if (b.getStatus() == BookingStatus.PAID) {
+                holdingAmount += dep;
+                holdingCount++;
+                holdingList.add(toDepositItem(b, carMap, userMap,
+                        "Đang tạm giữ riêng tại Quỹ tạm giữ (Escrow). Sẽ hoàn trả cho khách nếu chủ xe không duyệt hoặc khách hủy đơn."));
+            } else if (b.getStatus() == BookingStatus.APPROVED
+                    || b.getStatus() == BookingStatus.RENTED
+                    || b.getStatus() == BookingStatus.RETURNED
+                    || b.getStatus() == BookingStatus.COMPLETED) {
+                mergedAmount += dep;
+                mergedCount++;
+                mergedList.add(toDepositItem(b, carMap, userMap,
+                        "Chủ xe đã duyệt đơn — Tiền cọc đã chính thức sáp nhập vào dòng tiền Doanh thu sàn."));
+            } else if (b.getStatus() == BookingStatus.CANCELLED && dep > 0) {
+                refundedAmount += dep;
+                refundedCount++;
+                refundedList.add(toDepositItem(b, carMap, userMap,
+                        "Đơn đã hủy — Tiền cọc đã được hoàn trả lại cho khách hàng."));
+            }
+        }
+
+        java.util.Comparator<com.carrental.admin.dto.AdminDepositSummaryResponse.DepositBookingItem> comp =
+                (a, b) -> (b.getCreatedAt() != null && a.getCreatedAt() != null)
+                        ? b.getCreatedAt().compareTo(a.getCreatedAt()) : 0;
+        holdingList.sort(comp);
+        mergedList.sort(comp);
+        refundedList.sort(comp);
+
+        return com.carrental.admin.dto.AdminDepositSummaryResponse.builder()
+                .holdingDepositAmount(holdingAmount)
+                .holdingDepositCount(holdingCount)
+                .mergedDepositAmount(mergedAmount)
+                .mergedDepositCount(mergedCount)
+                .refundedDepositAmount(refundedAmount)
+                .refundedDepositCount(refundedCount)
+                .holdingBookings(holdingList)
+                .mergedBookings(mergedList)
+                .refundedBookings(refundedList)
+                .build();
+    }
+
+    private com.carrental.admin.dto.AdminDepositSummaryResponse.DepositBookingItem toDepositItem(
+            Booking b,
+            java.util.Map<Long, com.carrental.car.entity.Car> carMap,
+            java.util.Map<Long, com.carrental.user.entity.User> userMap,
+            String note) {
+        com.carrental.car.entity.Car car = carMap.get(b.getCarId());
+        com.carrental.user.entity.User customer = userMap.get(b.getCustomerId());
+        com.carrental.user.entity.User owner = userMap.get(b.getOwnerId());
+
+        String carName = car != null ? (car.getBrand() + " " + car.getModel()) : "Xe #" + b.getCarId();
+        String carPlate = car != null ? car.getPlate() : "";
+        String custName = customer != null ? customer.getName() : "Khách #" + b.getCustomerId();
+        String custPhone = customer != null ? customer.getPhone() : "";
+        String ownName = owner != null ? owner.getName() : "Chủ xe #" + b.getOwnerId();
+        String ownPhone = owner != null ? owner.getPhone() : "";
+
+        return com.carrental.admin.dto.AdminDepositSummaryResponse.DepositBookingItem.builder()
+                .bookingId(b.getId())
+                .carName(carName)
+                .carPlate(carPlate)
+                .customerName(custName)
+                .customerPhone(custPhone)
+                .ownerName(ownName)
+                .ownerPhone(ownPhone)
+                .depositAmount(b.getDepositAmount() != null ? b.getDepositAmount() : 0L)
+                .totalPrice(b.getTotalPrice() != null ? b.getTotalPrice() : 0L)
+                .status(b.getStatus().name())
+                .statusDescription(b.getStatus().getDescription())
+                .createdAt(b.getCreatedAt())
+                .note(note)
                 .build();
     }
 }

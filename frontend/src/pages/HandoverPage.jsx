@@ -6,7 +6,9 @@ import {
   signHandover,
   uploadSignature,
 } from '../services/handoverService'
+import { getBookingById } from '../services/bookingService'
 import { useAuth } from '../hooks/useAuth'
+import api from '../services/api'
 
 export default function HandoverPage() {
   const { id } = useParams()
@@ -14,6 +16,8 @@ export default function HandoverPage() {
   const { user } = useAuth()
 
   const [handover, setHandover] = useState(null)
+  const [booking, setBooking] = useState(null)
+  const [payments, setPayments] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
 
@@ -44,7 +48,21 @@ export default function HandoverPage() {
     setLoading(true)
     try {
       const res = await getHandoverById(id)
-      setHandover(res.data)
+      const data = res.data
+      setHandover(data)
+
+      if (data?.bookingId) {
+        try {
+          const [bRes, pRes] = await Promise.all([
+            getBookingById(data.bookingId).catch(() => null),
+            api.get(`/payments/booking/${data.bookingId}`).catch(() => null),
+          ])
+          if (bRes?.data) setBooking(bRes.data)
+          if (pRes?.data?.data) setPayments(pRes.data.data)
+        } catch (e) {
+          console.warn("Could not load booking or payment details", e)
+        }
+      }
     } catch (err) {
       setError(err.response?.data?.message || 'Không tải được biên bản')
     } finally {
@@ -72,14 +90,18 @@ export default function HandoverPage() {
 
       await signHandover(id, role, signatureUrl)
 
-      setMsg('✅ Ký biên bản thành công!')
-      setTimeout(() => setMsg(''), 3000)
-
-      await loadHandover()
+      setMsg('✅ Ký biên bản thành công! Đang chuyển hướng...')
       setSignatureData(null)
+
+      setTimeout(() => {
+        const isOwnerRole = user?.role === 'OWNER' || role === 'OWNER'
+        const targetPath = isOwnerRole
+          ? '/owner/bookings'
+          : (user?.role === 'ADMIN' ? '/admin/dashboard' : '/my-bookings')
+        navigate(targetPath)
+      }, 1200)
     } catch (err) {
       setSignError(err.response?.data?.message || 'Ký thất bại')
-    } finally {
       setSigning(false)
     }
   }
@@ -138,7 +160,44 @@ export default function HandoverPage() {
   const title = isPickup ? 'Biên bản giao xe' : 'Biên bản nhận xe'
   const hasOwnerSigned = !!handover.ownerSignature
   const hasCustomerSigned = !!handover.customerSignature
-  const isCompleted = hasOwnerSigned && hasCustomerSigned
+  const isCancelled = handover.status === 'CANCELLED' || booking?.status === 'CANCELLED'
+  const isCompleted = !isCancelled && hasOwnerSigned && hasCustomerSigned
+
+  const isOwner = handover.isOwner ?? (handover.ownerId != null && user?.id === handover.ownerId)
+  const isCustomer = handover.isCustomer ?? (handover.customerId != null && user?.id === handover.customerId)
+  const canUserSign = !isCancelled && ((isOwner && !hasOwnerSigned) || (isCustomer && !hasCustomerSigned))
+
+  // ===== TÍNH TOÁN BẢNG QUYẾT TOÁN THANH TOÁN (RETURN) =====
+  const lateFee = Number(handover.lateFee || handover.late_fee || 0)
+  const kmOverageFee = Number(handover.kmOverageFee || handover.overage_km_fee || 0)
+  const extraFees = Number(handover.extraFees || handover.extra_fees || 0)
+  const totalExtraFees = Number(handover.totalExtraFees || handover.total_extra_fees) || (lateFee + kmOverageFee + extraFees)
+
+  const depositAmount = Number(
+    handover.depositAmount ??
+    handover.deposit_amount ??
+    booking?.depositAmount ??
+    0
+  )
+
+  const rawTotal = Number(booking?.totalPrice || handover.rentalPrice || handover.rental_price || 0)
+  const baseRentalPrice = (handover.status === 'SIGNED' && totalExtraFees > 0)
+    ? Math.max(0, rawTotal - totalExtraFees)
+    : (Number(handover.rentalPrice || handover.rental_price) || rawTotal)
+
+  const remainingBaseRental = Number(handover.remainingRentalPrice || handover.remaining_rental_price) || Math.max(0, baseRentalPrice - depositAmount)
+
+  const finalAmountToPay = Number(handover.finalAmountToPay || handover.final_amount_to_pay) || (remainingBaseRental + totalExtraFees)
+
+  const isPaidRemaining =
+    booking?.status === 'COMPLETED' ||
+    handover.bookingStatus === 'COMPLETED' ||
+    (booking?.status !== 'PENDING' && booking?.status !== 'APPROVED' && booking?.status !== 'RENTED' && booking?.remainingAmount === 0 && Number(booking?.totalPrice || 0) > 0) ||
+    payments.some(
+      (p) =>
+        (p.paymentType === 'REMAINING' || p.payment_type === 'REMAINING') &&
+        (p.status === 'SUCCESS' || p.status === 'PAID')
+    )
 
   return (
     <div style={{ maxWidth: '900px', margin: '0 auto', padding: '60px 48px' }}>
@@ -183,8 +242,29 @@ export default function HandoverPage() {
           marginBottom: '40px',
         }}
       >
-        Đơn #{handover.bookingId} · {handover.status}
+        Đơn #{handover.bookingId} · {isCancelled ? 'ĐÃ HỦY (VÔ HIỆU HÓA)' : handover.status}
       </p>
+
+      {isCancelled && (
+        <div
+          style={{
+            background: 'rgba(139,44,44,0.1)',
+            border: '2px solid var(--do)',
+            padding: '24px',
+            marginBottom: '32px',
+            color: 'var(--do)',
+          }}
+        >
+          <div style={{ fontFamily: 'var(--serif)', fontSize: '20px', fontWeight: 700, marginBottom: '8px' }}>
+            🚫 ĐƠN HÀNG ĐÃ BỊ HỦY — BIÊN BẢN BÀN GIAO ĐÃ VÔ HIỆU HÓA
+          </div>
+          <div style={{ fontFamily: 'var(--serif-2)', fontSize: '15px', color: 'var(--muc)', lineHeight: 1.6 }}>
+            Đơn hàng #{booking?.id || handover.bookingId} đã ở trạng thái <strong>ĐÃ HỦY</strong>.
+            {booking?.cancelReason && <span> (Lý do: <em>{booking.cancelReason}</em>). </span>}
+            Biên bản này không còn giá trị pháp lý và tất cả các thao tác ký xác nhận đã bị hệ thống khóa hoàn toàn.
+          </div>
+        </div>
+      )}
 
       {msg && (
         <div
@@ -437,6 +517,308 @@ export default function HandoverPage() {
         )}
       </div>
 
+      {/* ===== BẢNG TÍNH QUYẾT TOÁN TỔNG TIỀN (CHỈ HIỂN THỊ KHI TRẢ XE / RETURN) ===== */}
+      {!isPickup && (
+        <div
+          style={{
+            background: 'var(--kem-dam)',
+            border: '2px solid var(--muc)',
+            padding: '32px',
+            marginBottom: '32px',
+          }}
+        >
+          <div
+            style={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'flex-start',
+              borderBottom: '1px solid rgba(15,14,12,0.15)',
+              paddingBottom: '16px',
+              marginBottom: '24px',
+              flexWrap: 'wrap',
+              gap: '12px',
+            }}
+          >
+            <div>
+              <div
+                style={{
+                  fontFamily: 'var(--mono)',
+                  fontSize: '11px',
+                  letterSpacing: '2px',
+                  textTransform: 'uppercase',
+                  color: 'var(--do)',
+                  marginBottom: '4px',
+                  fontWeight: 'bold',
+                }}
+              >
+                BẢNG QUYẾT TOÁN THANH TOÁN KHI TRẢ XE
+              </div>
+              <h3
+                style={{
+                  fontFamily: 'var(--serif)',
+                  fontSize: '24px',
+                  fontWeight: 900,
+                  margin: 0,
+                  color: 'var(--muc)',
+                }}
+              >
+                Tổng hợp chi phí chuyến đi
+              </h3>
+            </div>
+            <div
+              style={{
+                fontFamily: 'var(--mono)',
+                fontSize: '11px',
+                letterSpacing: '1px',
+                color: 'var(--muc-mo)',
+                padding: '6px 12px',
+                background: 'var(--kem)',
+                border: '1px solid rgba(15,14,12,0.1)',
+              }}
+            >
+              Đơn #{handover.bookingId}
+            </div>
+          </div>
+
+          {/* Chi tiết từng mục tính tiền */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '14px', marginBottom: '24px' }}>
+            {/* 1. Tiền thuê xe gốc */}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <div>
+                <span style={{ fontFamily: 'var(--serif)', fontSize: '16px', fontWeight: 600 }}>
+                  1. Giá thuê xe gốc (theo đơn)
+                </span>
+                <div style={{ fontFamily: 'var(--serif-2)', fontStyle: 'italic', fontSize: '13px', color: 'var(--muc-mo)' }}>
+                  Tổng tiền thuê cơ bản của chuyến đi
+                </div>
+              </div>
+              <span style={{ fontFamily: 'var(--mono)', fontSize: '16px', fontWeight: 600 }}>
+                {formatPrice(baseRentalPrice)}đ
+              </span>
+            </div>
+
+            {/* 2. Tiền cọc đã thanh toán */}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <div>
+                <span style={{ fontFamily: 'var(--serif)', fontSize: '16px', fontWeight: 600, color: 'var(--xanh-reu)' }}>
+                  2. Tiền cọc đã thanh toán (trừ đi)
+                </span>
+                <div style={{ fontFamily: 'var(--serif-2)', fontStyle: 'italic', fontSize: '13px', color: 'var(--muc-mo)' }}>
+                  Đã thanh toán trước lúc nhận xe
+                </div>
+              </div>
+              <span style={{ fontFamily: 'var(--mono)', fontSize: '16px', fontWeight: 700, color: 'var(--xanh-reu)' }}>
+                - {formatPrice(depositAmount)}đ
+              </span>
+            </div>
+
+            {/* 3. Tiền thuê còn lại */}
+            <div
+              style={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                padding: '10px 16px',
+                background: 'rgba(15,14,12,0.03)',
+                borderLeft: '3px solid var(--muc-mo)',
+              }}
+            >
+              <span style={{ fontFamily: 'var(--serif)', fontSize: '15px', fontWeight: 600 }}>
+                → Tiền thuê xe còn lại chưa thanh toán
+              </span>
+              <span style={{ fontFamily: 'var(--mono)', fontSize: '15px', fontWeight: 600 }}>
+                {formatPrice(remainingBaseRental)}đ
+              </span>
+            </div>
+
+            {/* 4. Các phụ phí phát sinh */}
+            <div style={{ marginTop: '8px', paddingTop: '16px', borderTop: '1px dashed rgba(15,14,12,0.15)' }}>
+              <div
+                style={{
+                  fontFamily: 'var(--mono)',
+                  fontSize: '11px',
+                  letterSpacing: '1.5px',
+                  textTransform: 'uppercase',
+                  color: 'var(--muc-mo)',
+                  marginBottom: '12px',
+                }}
+              >
+                Các khoản phụ phí phát sinh:
+              </div>
+
+              {/* Phí trễ hạn */}
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
+                <span style={{ fontFamily: 'var(--serif)', fontSize: '15px' }}>
+                  • Phí trả xe trễ hạn {handover.lateMinutes > 0 ? `(${Math.floor(handover.lateMinutes / 60)}h${handover.lateMinutes % 60}p)` : ''}
+                </span>
+                <span style={{ fontFamily: 'var(--mono)', fontSize: '15px', color: lateFee > 0 ? 'var(--do)' : 'var(--muc-mo)' }}>
+                  {lateFee > 0 ? `+ ${formatPrice(lateFee)}đ` : '0đ'}
+                </span>
+              </div>
+
+              {/* Phí vượt km */}
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
+                <span style={{ fontFamily: 'var(--serif)', fontSize: '15px' }}>
+                  • Phí vượt quá giới hạn km {handover.kmOverage > 0 ? `(vượt ${handover.kmOverage?.toLocaleString('vi-VN')} km)` : ''}
+                </span>
+                <span style={{ fontFamily: 'var(--mono)', fontSize: '15px', color: kmOverageFee > 0 ? 'var(--do)' : 'var(--muc-mo)' }}>
+                  {kmOverageFee > 0 ? `+ ${formatPrice(kmOverageFee)}đ` : '0đ'}
+                </span>
+              </div>
+
+              {/* Phí khác */}
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
+                <span style={{ fontFamily: 'var(--serif)', fontSize: '15px' }}>
+                  • Phụ phí phát sinh khác {handover.extraFeesNote ? `(${handover.extraFeesNote})` : ''}
+                </span>
+                <span style={{ fontFamily: 'var(--mono)', fontSize: '15px', color: extraFees > 0 ? 'var(--do)' : 'var(--muc-mo)' }}>
+                  {extraFees > 0 ? `+ ${formatPrice(extraFees)}đ` : '0đ'}
+                </span>
+              </div>
+
+              {/* Tổng phụ phí */}
+              <div
+                style={{
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                  padding: '10px 16px',
+                  background: totalExtraFees > 0 ? 'rgba(139,44,44,0.06)' : 'rgba(15,14,12,0.03)',
+                  borderLeft: `3px solid ${totalExtraFees > 0 ? 'var(--do)' : 'var(--muc-mo)'}`,
+                  marginTop: '8px',
+                }}
+              >
+                <span style={{ fontFamily: 'var(--serif)', fontSize: '15px', fontWeight: 600, color: totalExtraFees > 0 ? 'var(--do)' : 'var(--muc)' }}>
+                  → Tổng phụ phí phát sinh
+                </span>
+                <span style={{ fontFamily: 'var(--mono)', fontSize: '15px', fontWeight: 700, color: totalExtraFees > 0 ? 'var(--do)' : 'var(--muc)' }}>
+                  + {formatPrice(totalExtraFees)}đ
+                </span>
+              </div>
+            </div>
+          </div>
+
+          {/* Hộp tổng kết nổi bật */}
+          <div
+            style={{
+              padding: '24px',
+              background: 'var(--kem)',
+              border: '2px solid var(--do)',
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              flexWrap: 'wrap',
+              gap: '16px',
+              boxShadow: '0 4px 20px rgba(139,44,44,0.15)',
+            }}
+          >
+            <div>
+              <div
+                style={{
+                  fontFamily: 'var(--mono)',
+                  fontSize: '11px',
+                  letterSpacing: '2px',
+                  textTransform: 'uppercase',
+                  color: 'var(--do)',
+                  fontWeight: 800,
+                  marginBottom: '4px',
+                }}
+              >
+                TỔNG TIỀN KHÁCH CẦN PHẢI TRẢ
+              </div>
+              <div
+                style={{
+                  fontFamily: 'var(--serif-2)',
+                  fontStyle: 'italic',
+                  fontSize: '14px',
+                  color: 'var(--muc-mo)',
+                }}
+              >
+                (Tiền thuê còn lại sau khi trừ cọc + Phụ phí trễ hạn + Phí vượt km + Phí khác)
+              </div>
+            </div>
+
+            <div style={{ textAlign: 'right' }}>
+              <div
+                style={{
+                  fontFamily: 'var(--serif)',
+                  fontSize: 'clamp(28px, 4vw, 38px)',
+                  fontWeight: 900,
+                  color: 'var(--do)',
+                  lineHeight: 1,
+                }}
+              >
+                {formatPrice(finalAmountToPay)}đ
+              </div>
+              <div
+                style={{
+                  fontFamily: 'var(--mono)',
+                  fontSize: '10px',
+                  letterSpacing: '1px',
+                  color: isPaidRemaining ? 'var(--xanh-reu)' : 'var(--muc-mo)',
+                  marginTop: '6px',
+                  textTransform: 'uppercase',
+                  fontWeight: isPaidRemaining ? 700 : 400,
+                }}
+              >
+                {isPaidRemaining
+                  ? '✓ Đã hoàn tất thanh toán'
+                  : finalAmountToPay === 0
+                  ? 'Đã thanh toán đủ'
+                  : 'Số tiền quyết toán khi trả xe'}
+              </div>
+            </div>
+          </div>
+
+          {/* Trạng thái thanh toán hoặc Nút điều hướng thanh toán nốt */}
+          {isPaidRemaining ? (
+            <div
+              style={{
+                marginTop: '20px',
+                padding: '14px 20px',
+                background: 'rgba(74,93,63,0.1)',
+                border: '1px solid var(--xanh-reu)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'flex-end',
+                gap: '8px',
+                fontFamily: 'var(--mono)',
+                fontSize: '12px',
+                letterSpacing: '1px',
+                textTransform: 'uppercase',
+                color: 'var(--xanh-reu)',
+                fontWeight: 'bold',
+              }}
+            >
+              <span>✓ Khách đã thanh toán hoàn tất quyết toán chuyến đi</span>
+            </div>
+          ) : (
+            handover.status === 'SIGNED' && finalAmountToPay > 0 && isCustomer && (
+              <div style={{ marginTop: '20px', textAlign: 'right' }}>
+                <Link
+                  to={`/payment-final/${handover.bookingId}`}
+                  style={{
+                    display: 'inline-block',
+                    padding: '14px 28px',
+                    background: 'var(--do)',
+                    color: 'var(--kem)',
+                    textDecoration: 'none',
+                    fontFamily: 'var(--mono)',
+                    fontSize: '11px',
+                    letterSpacing: '2px',
+                    textTransform: 'uppercase',
+                    fontWeight: 'bold',
+                    boxShadow: '0 4px 12px rgba(139,44,44,0.25)',
+                  }}
+                >
+                  💰 Đi đến thanh toán nốt ({formatPrice(finalAmountToPay)}đ) →
+                </Link>
+              </div>
+            )
+          )}
+        </div>
+      )}
+
       {/* ===== ẢNH ===== */}
       {handover.images && handover.images.length > 0 && (
         <div style={{ marginBottom: '32px' }}>
@@ -592,7 +974,7 @@ export default function HandoverPage() {
       </div>
 
       {/* ===== SIGN FORM ===== */}
-      {!isCompleted && (
+      {!isCompleted && !isCancelled && (
         <div
           style={{
             padding: '32px',
@@ -646,7 +1028,7 @@ export default function HandoverPage() {
           )}
 
           <div style={{ marginTop: '20px', display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
-            {!hasOwnerSigned && (
+            {isOwner && !hasOwnerSigned && (
               <button
                 type="button"
                 onClick={() => handleSign('OWNER')}
@@ -670,7 +1052,7 @@ export default function HandoverPage() {
               </button>
             )}
 
-            {!hasCustomerSigned && (
+            {isCustomer && !hasCustomerSigned && (
               <button
                 type="button"
                 onClick={() => handleSign('CUSTOMER')}
@@ -693,6 +1075,42 @@ export default function HandoverPage() {
                 {signing ? 'Đang ký...' : '✍️ Ký với vai trò KHÁCH THUÊ'}
               </button>
             )}
+
+            {!canUserSign && (
+              <div style={{
+                width: '100%',
+                padding: '16px',
+                background: 'var(--kem-dam)',
+                border: '1px solid rgba(15,14,12,0.15)',
+                textAlign: 'center',
+                fontFamily: 'var(--serif-2)',
+                fontStyle: 'italic',
+                color: 'var(--muc-mo)'
+              }}>
+                Chỉ chủ xe và khách thuê của chuyến đi này mới có quyền ký biên bản.
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {isCancelled && (
+        <div
+          style={{
+            padding: '32px',
+            background: 'rgba(15,14,12,0.04)',
+            border: '2px dashed var(--muc-mo)',
+            marginBottom: '32px',
+            textAlign: 'center',
+            fontFamily: 'var(--serif-2)',
+            color: 'var(--muc-mo)',
+          }}
+        >
+          <div style={{ fontSize: '20px', fontWeight: 700, marginBottom: '6px', color: 'var(--do)' }}>
+            🔒 Biên bản bàn giao đã bị vô hiệu hóa
+          </div>
+          <div style={{ fontStyle: 'italic', fontSize: '15px' }}>
+            Do đơn hàng đã ở trạng thái ĐÃ HỦY, hệ thống đã khóa toàn bộ chức năng ký và cập nhật biên bản này.
           </div>
         </div>
       )}

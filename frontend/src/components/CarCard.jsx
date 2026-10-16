@@ -58,6 +58,26 @@ const imageUrl = hasImage ? car.imageUrls[0] : null
         zIndex: 1,
         boxShadow: hover ? '0 12px 32px rgba(15,14,12,0.15)' : 'none'
       }}>
+        {/* Status badge nếu không AVAILABLE */}
+        {car.status && car.status !== 'AVAILABLE' && (
+          <div style={{
+            position: 'absolute',
+            top: '8px',
+            left: '8px',
+            background: 'var(--do)',
+            color: 'var(--kem)',
+            fontFamily: 'var(--mono)',
+            fontSize: '9px',
+            letterSpacing: '1px',
+            padding: '2px 6px',
+            textTransform: 'uppercase',
+            fontWeight: 700,
+            zIndex: 3,
+          }}>
+            {car.status === 'RENTED' ? 'ĐÃ ĐẶT' : car.status}
+          </div>
+        )}
+
         {/* Ánh sáng sweep */}
         {hover && (
           <div style={{

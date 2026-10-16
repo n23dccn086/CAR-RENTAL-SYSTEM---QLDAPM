@@ -35,4 +35,14 @@ public class AdminDashboardController {
         log.info("REST: Admin get dashboard stats");
         return ApiResponse.success(dashboardService.getStats());
     }
+
+    /**
+     * Chi tiết các khoản cọc: Đang tạm giữ, Đã sáp nhập doanh thu, Đã hoàn trả.
+     * GET /api/v1/admin/dashboard/deposits
+     */
+    @GetMapping("/deposits")
+    public ApiResponse<com.carrental.admin.dto.AdminDepositSummaryResponse> getDeposits() {
+        log.info("REST: Admin get deposit summary and escrow breakdown");
+        return ApiResponse.success(dashboardService.getDepositSummary());
+    }
 }

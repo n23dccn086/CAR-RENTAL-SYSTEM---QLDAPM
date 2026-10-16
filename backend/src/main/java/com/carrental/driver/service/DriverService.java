@@ -38,6 +38,8 @@ public interface DriverService {
 
     List<DriverResponse> getAvailableDrivers();
 
+    List<DriverResponse> getAvailableDrivers(Long ownerId, java.time.LocalDateTime startDate, java.time.LocalDateTime endDate);
+
     // ===== ADMIN =====
 
     DriverResponse approveDriver(Long id);

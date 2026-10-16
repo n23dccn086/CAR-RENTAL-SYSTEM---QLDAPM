@@ -16,8 +16,10 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
+import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.web.bind.annotation.*;
 
+import java.time.LocalDateTime;
 import java.util.List;
 
 @RestController
@@ -184,8 +186,11 @@ public class DriverController {
     // ===== PUBLIC / ADMIN =====
 
     @GetMapping("/available")
-    public ApiResponse<List<DriverResponse>> getAvailableDrivers() {
-        return ApiResponse.success(driverService.getAvailableDrivers());
+    public ApiResponse<List<DriverResponse>> getAvailableDrivers(
+            @RequestParam(required = false) Long ownerId,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime startDate,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime endDate) {
+        return ApiResponse.success(driverService.getAvailableDrivers(ownerId, startDate, endDate));
     }
 
     @PutMapping("/{id}/approve")

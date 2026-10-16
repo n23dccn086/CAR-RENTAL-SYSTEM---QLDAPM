@@ -30,14 +30,7 @@ export default function HomePage() {
     fetchCars()
   }, [])
 
-  const fallbackCars = [
-    { id: 1, brand: 'Toyota', model: 'Camry', year: 2023, seats: 5, transmission: 'AUTOMATIC', carType: 'Sedan', pricePerDay: 1200000 },
-    { id: 2, brand: 'Ford', model: 'Everest', year: 2024, seats: 7, transmission: 'AUTOMATIC', carType: 'SUV', pricePerDay: 1800000 },
-    { id: 3, brand: 'Kia', model: 'Carnival', year: 2024, seats: 7, transmission: 'AUTOMATIC', carType: 'MPV', pricePerDay: 2000000 },
-    { id: 4, brand: 'Mazda', model: 'CX-5', year: 2024, seats: 5, transmission: 'AUTOMATIC', carType: 'SUV', pricePerDay: 1400000 },
-  ]
 
-  const displayCars = cars.length > 0 ? cars : fallbackCars
 
   return (
     <>
@@ -83,8 +76,12 @@ export default function HomePage() {
       <section className="collection">
         {loading ? (
           <p style={{ textAlign: 'center', padding: '40px', fontFamily: 'var(--serif-2)', fontStyle: 'italic' }}>Đang tải bộ sưu tập...</p>
+        ) : cars.length === 0 ? (
+          <div style={{ textAlign: 'center', padding: '60px 20px', fontFamily: 'var(--serif-2)', fontStyle: 'italic', fontSize: '18px', color: 'var(--muc-mo)' }}>
+            Hiện tại các cỗ xe đang trong hành trình phục vụ. Quý khách vui lòng dạo bộ sưu tập hoặc quay lại sau.
+          </div>
         ) : (
-          displayCars.slice(0, 4).map((car, i) => (
+          cars.slice(0, 4).map((car, i) => (
             <CarCard key={car.id} car={car} index={i} />
           ))
         )}

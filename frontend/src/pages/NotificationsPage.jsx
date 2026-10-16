@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from "react";
+import { Link } from "react-router-dom";
 import api from "../services/api";
 import { useAuthStore } from "../stores/authStore";
 
@@ -670,6 +671,50 @@ export default function NotificationsPage() {
                     >
                       {n.content}
                     </div>
+
+                    {/* ★ Nút mở trực tiếp biên bản nếu có liên kết biên bản */}
+                    {n.relatedEntityId && (n.type?.includes("HANDOVER") || n.title?.toLowerCase().includes("biên bản")) && (
+                      <Link
+                        to={`/handover/${n.relatedEntityId}`}
+                        style={{
+                          display: "inline-block",
+                          marginTop: "10px",
+                          padding: "6px 14px",
+                          background: "var(--do)",
+                          color: "var(--kem)",
+                          textDecoration: "none",
+                          fontFamily: "var(--mono)",
+                          fontSize: "10px",
+                          letterSpacing: "1.5px",
+                          textTransform: "uppercase",
+                          fontWeight: "bold",
+                        }}
+                      >
+                        ✍️ Mở biên bản để ký →
+                      </Link>
+                    )}
+
+                    {/* ★ Nút xem chi tiết đơn nếu liên quan booking / refund */}
+                    {n.relatedEntityId && (n.type?.includes("REFUND") || n.type?.includes("BOOKING")) && (
+                      <Link
+                        to={`/bookings/${n.relatedEntityId}`}
+                        style={{
+                          display: "inline-block",
+                          marginTop: "10px",
+                          padding: "6px 14px",
+                          background: "var(--muc)",
+                          color: "var(--kem)",
+                          textDecoration: "none",
+                          fontFamily: "var(--mono)",
+                          fontSize: "10px",
+                          letterSpacing: "1.5px",
+                          textTransform: "uppercase",
+                          fontWeight: "bold",
+                        }}
+                      >
+                        👁 Xem chi tiết đơn #{n.relatedEntityId} →
+                      </Link>
+                    )}
                   </div>
 
                   {/* Actions */}

@@ -52,7 +52,7 @@ function App() {
       <CarDecor />
       <Ticker />
       <Header />
-      <main style={{ minHeight: "60vh", position: "relative", zIndex: 2 }}>
+      <main style={{ minHeight: "60vh" }}>
         <Routes>
           {/* ===== PUBLIC ===== */}
           <Route path="/" element={<HomePage />} />
