@@ -46,15 +46,17 @@ export default function DriverAssignmentPage() {
     }
   }
 
-  const handleReject = async () => {
-    const reason = window.prompt('Lý do từ chối (không bắt buộc):', 'Tôi bận')
-    if (reason === null) return
+  const [rejectModal, setRejectModal] = useState(false)
+  const [rejectReason, setRejectReason] = useState('Tôi bận việc đột xuất')
 
+  const handleRejectSubmit = async (e) => {
+    if (e) e.preventDefault()
     setActionLoading(true)
     try {
-      const res = await api.post(`/driver/assignments/${id}/reject?token=${token}&reason=${encodeURIComponent(reason)}`)
+      const res = await api.post(`/driver/assignments/${id}/reject?token=${token}&reason=${encodeURIComponent(rejectReason || 'Tôi bận')}`)
       setResult({ type: 'warning', message: 'Bạn đã từ chối chuyến. Hệ thống sẽ tìm tài xế khác.' })
       setAssignment(res.data.data)
+      setRejectModal(false)
     } catch (err) {
       setResult({ type: 'error', message: err.response?.data?.message || 'Có lỗi xảy ra' })
     } finally {
@@ -217,7 +219,7 @@ export default function DriverAssignmentPage() {
       {isPending && !isExpired && (
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
           <button
-            onClick={handleReject}
+            onClick={() => setRejectModal(true)}
             disabled={actionLoading}
             style={{
               padding: '20px',
@@ -274,8 +276,81 @@ export default function DriverAssignmentPage() {
           color: 'var(--muc-mo)'
         }}>
           {isExpired && assignment?.status === 'PENDING'
-            ? 'Chuyến đã hết hạn phản hồi.'
+            ? '⏰ Chuyến xe đã quá hạn xác nhận (3 giờ) và đã tự động hết hạn.'
             : 'Chuyến này đã được xử lý.'}
+        </div>
+      )}
+
+      {/* ===== REJECT MODAL ===== */}
+      {rejectModal && (
+        <div style={{
+          position: 'fixed', inset: 0, background: 'rgba(15,14,12,0.75)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          zIndex: 1000, padding: '20px'
+        }} onClick={() => setRejectModal(false)}>
+          <div style={{
+            background: 'var(--kem)', border: '1px solid var(--muc)',
+            maxWidth: '480px', width: '100%', padding: '36px', position: 'relative'
+          }} onClick={(e) => e.stopPropagation()}>
+            <button type="button" onClick={() => setRejectModal(false)} style={{
+              position: 'absolute', top: '16px', right: '16px',
+              width: '32px', height: '32px', background: 'transparent',
+              border: '1px solid var(--muc)', color: 'var(--muc)',
+              fontFamily: 'var(--mono)', fontSize: '14px', cursor: 'pointer',
+              display: 'flex', alignItems: 'center', justifyContent: 'center'
+            }}>✕</button>
+
+            <h2 style={{ fontFamily: 'var(--serif)', fontSize: '24px', fontWeight: 900, marginBottom: '8px' }}>
+              Từ chối nhận chuyến.
+            </h2>
+            <p style={{ fontFamily: 'var(--serif-2)', fontSize: '14px', color: 'var(--muc-mo)', marginBottom: '20px' }}>
+              Vui lòng cho biết lý do từ chối để hệ thống chuyển tiếp cỗ xe cho tài xế phù hợp.
+            </p>
+
+            <form onSubmit={handleRejectSubmit}>
+              <label style={{ display: 'block', fontFamily: 'var(--mono)', fontSize: '10px', letterSpacing: '2px', textTransform: 'uppercase', color: 'var(--muc-mo)', marginBottom: '8px' }}>
+                Lý do từ chối
+              </label>
+              <textarea
+                value={rejectReason}
+                onChange={(e) => setRejectReason(e.target.value)}
+                rows={3}
+                placeholder="Nhập lý do (ví dụ: bận việc đột xuất)..."
+                style={{
+                  width: '100%', padding: '12px', background: 'var(--kem-dam)',
+                  border: '1px solid rgba(15,14,12,0.2)', fontFamily: 'var(--serif-2)',
+                  fontSize: '15px', resize: 'vertical', marginBottom: '20px', boxSizing: 'border-box'
+                }}
+              />
+
+              <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end' }}>
+                <button
+                  type="button"
+                  onClick={() => setRejectModal(false)}
+                  style={{
+                    padding: '10px 18px', background: 'transparent',
+                    border: '1px solid var(--muc)', color: 'var(--muc)',
+                    fontFamily: 'var(--mono)', fontSize: '10px',
+                    letterSpacing: '1px', textTransform: 'uppercase', cursor: 'pointer'
+                  }}
+                >
+                  Quay lại
+                </button>
+                <button
+                  type="submit"
+                  disabled={actionLoading}
+                  style={{
+                    padding: '10px 20px', background: 'var(--do)',
+                    border: '1px solid var(--do)', color: 'var(--kem)',
+                    fontFamily: 'var(--mono)', fontSize: '10px',
+                    letterSpacing: '1px', textTransform: 'uppercase', cursor: 'pointer'
+                  }}
+                >
+                  {actionLoading ? 'Đang gửi...' : 'Xác nhận từ chối'}
+                </button>
+              </div>
+            </form>
+          </div>
         </div>
       )}
     </div>

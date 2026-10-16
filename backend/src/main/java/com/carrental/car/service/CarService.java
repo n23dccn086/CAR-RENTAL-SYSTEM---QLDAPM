@@ -27,6 +27,8 @@ public interface CarService {
 
     List<CarResponse> getAllCars();
 
+    List<CarResponse> getAllCars(String status);
+
     List<CarResponse> getCarsByOwner(Long ownerId);
 
     Page<CarResponse> getCarsByOwner(Long ownerId, String status, Pageable pageable);

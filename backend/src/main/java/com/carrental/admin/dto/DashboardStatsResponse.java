@@ -21,6 +21,7 @@ public class DashboardStatsResponse {
     Long totalRevenue;
     Long platformRevenue;
     BigDecimal commissionRate;
+    Integer depositPercent;
 
     // ===== ĐƠN HÀNG =====
     Long totalBookings;

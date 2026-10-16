@@ -308,15 +308,6 @@ export default function CarEditPage() {
               <option value="HYBRID">Hybrid</option>
             </select>
           </div>
-
-          <div>
-            <label style={labelStyle}>Hình thức thuê *</label>
-            <select name="rentalMode" value={form.rentalMode} onChange={handleChange} style={inputStyle}>
-              <option value="BOTH">Cả hai</option>
-              <option value="SELF_DRIVE">Tự lái</option>
-              <option value="WITH_DRIVER">Có tài xế</option>
-            </select>
-          </div>
         </div>
 
         <div style={{ marginTop: '20px' }}>

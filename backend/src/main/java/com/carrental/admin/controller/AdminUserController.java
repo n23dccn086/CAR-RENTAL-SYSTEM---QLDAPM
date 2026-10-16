@@ -69,8 +69,15 @@ public class AdminUserController {
      * PUT /api/v1/admin/users/{id}/lock
      */
     @PutMapping("/{id}/lock")
-    public ApiResponse<AdminUserResponse> lockUser(@PathVariable Long id) {
-        log.info("REST: Admin locking user {}", id);
+    public ApiResponse<AdminUserResponse> lockUser(
+            @PathVariable Long id,
+            @RequestAttribute("userId") Long adminId) {
+        log.info("REST: Admin {} locking user {}", adminId, id);
+        if (id.equals(adminId)) {
+            throw new com.carrental.common.exception.BadRequestException(
+                    com.carrental.common.constant.ErrorCode.VALIDATION_ERROR,
+                    "Không thể tự khóa tài khoản của chính mình");
+        }
         return ApiResponse.success("Đã khóa tài khoản", adminUserService.lockUser(id));
     }
 
@@ -89,8 +96,15 @@ public class AdminUserController {
      * DELETE /api/v1/admin/users/{id}
      */
     @DeleteMapping("/{id}")
-    public ApiResponse<Void> deleteUser(@PathVariable Long id) {
-        log.info("REST: Admin deleting user {}", id);
+    public ApiResponse<Void> deleteUser(
+            @PathVariable Long id,
+            @RequestAttribute("userId") Long adminId) {
+        log.info("REST: Admin {} deleting user {}", adminId, id);
+        if (id.equals(adminId)) {
+            throw new com.carrental.common.exception.BadRequestException(
+                    com.carrental.common.constant.ErrorCode.VALIDATION_ERROR,
+                    "Không thể tự xóa tài khoản của chính mình");
+        }
         adminUserService.deleteUser(id);
         return ApiResponse.success("Đã xóa tài khoản", null);
     }

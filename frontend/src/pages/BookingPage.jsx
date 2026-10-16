@@ -218,8 +218,57 @@ export default function BookingPage() {
                   Đang tải danh sách tài xế...
                 </div>
               ) : drivers.length === 0 ? (
-                <div style={{ padding: '14px', background: 'rgba(139,44,44,0.05)', border: '1px solid var(--do)', fontFamily: 'var(--serif-2)', fontStyle: 'italic', color: 'var(--do)' }}>
-                  ⚠️ Chủ xe hiện không có tài xế nào khả dụng. Vui lòng chọn hình thức Tự lái hoặc liên hệ chủ xe.
+                <div style={{
+                  padding: '20px',
+                  background: 'rgba(139,44,44,0.08)',
+                  border: '1px solid var(--do)',
+                  borderLeft: '4px solid var(--do)',
+                  fontFamily: 'var(--serif-2)',
+                  color: 'var(--do)'
+                }}>
+                  <div style={{ fontWeight: 700, fontSize: '16px', marginBottom: '8px' }}>
+                    ⚠️ Chủ xe hiện không có tài xế nào khả dụng!
+                  </div>
+                  <div style={{ fontSize: '14px', marginBottom: '16px', color: 'var(--muc)' }}>
+                    Để tiếp tục đặt xe, quý khách có thể chuyển sang hình thức <strong>Tự lái</strong> hoặc quay lại chọn cỗ xe khác có tài xế sẵn sàng.
+                  </div>
+                  <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
+                    <button
+                      type="button"
+                      onClick={() => setForm(f => ({ ...f, rentalMode: 'SELF_DRIVE', driverId: '' }))}
+                      style={{
+                        padding: '10px 16px',
+                        background: 'var(--muc)',
+                        color: 'var(--kem)',
+                        border: 'none',
+                        fontFamily: 'var(--mono)',
+                        fontSize: '11px',
+                        letterSpacing: '1px',
+                        textTransform: 'uppercase',
+                        cursor: 'pointer'
+                      }}
+                    >
+                      🔄 Chuyển sang Tự lái
+                    </button>
+                    <Link
+                      to="/cars"
+                      style={{
+                        padding: '10px 16px',
+                        background: 'transparent',
+                        color: 'var(--muc)',
+                        border: '1px solid var(--muc)',
+                        fontFamily: 'var(--mono)',
+                        fontSize: '11px',
+                        letterSpacing: '1px',
+                        textTransform: 'uppercase',
+                        textDecoration: 'none',
+                        display: 'inline-flex',
+                        alignItems: 'center'
+                      }}
+                    >
+                      🚗 Chọn xe khác →
+                    </Link>
+                  </div>
                 </div>
               ) : (
                 <select

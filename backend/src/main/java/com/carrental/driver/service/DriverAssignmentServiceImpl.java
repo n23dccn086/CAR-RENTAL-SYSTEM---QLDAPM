@@ -43,7 +43,7 @@ public class DriverAssignmentServiceImpl implements DriverAssignmentService {
     NotificationSender notificationSender;
     NotificationService notificationService;
 
-    static final int RESPONSE_TIMEOUT_MINUTES = 5;
+    static final int RESPONSE_TIMEOUT_HOURS = 3;
 
     // ===== ASSIGN (AUTO) =====
 
@@ -253,6 +253,13 @@ public class DriverAssignmentServiceImpl implements DriverAssignmentService {
             throw new BadRequestException(ErrorCode.VALIDATION_ERROR, "Assignment đã được xử lý");
         }
 
+        if (assignment.getDeadlineAt() != null && LocalDateTime.now().isAfter(assignment.getDeadlineAt())) {
+            assignment.setStatus(AssignmentStatus.EXPIRED);
+            assignment.setRespondedAt(LocalDateTime.now());
+            assignmentRepository.save(assignment);
+            throw new BadRequestException(ErrorCode.VALIDATION_ERROR, "Đã quá hạn phản hồi (3 giờ)");
+        }
+
         assignment.setStatus(AssignmentStatus.ACCEPTED);
         assignment.setRespondedAt(LocalDateTime.now());
         assignmentRepository.save(assignment);
@@ -293,10 +300,38 @@ public class DriverAssignmentServiceImpl implements DriverAssignmentService {
             throw new BadRequestException(ErrorCode.VALIDATION_ERROR, "Assignment đã được xử lý");
         }
 
+        if (assignment.getDeadlineAt() != null && LocalDateTime.now().isAfter(assignment.getDeadlineAt())) {
+            assignment.setStatus(AssignmentStatus.EXPIRED);
+            assignment.setRespondedAt(LocalDateTime.now());
+            assignmentRepository.save(assignment);
+            assignNextDriver(assignment.getBookingId());
+            throw new BadRequestException(ErrorCode.VALIDATION_ERROR, "Đã quá hạn phản hồi (3 giờ)");
+        }
+
         assignment.setStatus(AssignmentStatus.REJECTED);
         assignment.setRejectReason(reason != null ? reason : "Bận việc đột xuất");
         assignment.setRespondedAt(LocalDateTime.now());
         assignmentRepository.save(assignment);
+
+        try {
+            Booking booking = bookingRepository.findById(assignment.getBookingId()).orElse(null);
+            if (booking != null) {
+                Driver driver = driverRepository.findById(assignment.getDriverId()).orElse(null);
+                String driverName = driver != null ? driver.getName() : "Tài xế";
+                notificationService.createNotification(
+                        booking.getOwnerId(),
+                        NotificationType.BOOKING_DRIVER_REJECTED,
+                        "Tài xế từ chối chuyến",
+                        String.format("Tài xế %s đã từ chối đơn #%d. Đang tìm tài xế khác.",
+                                driverName, booking.getId()),
+                        booking.getId()
+                );
+            }
+        } catch (Exception e) {
+            log.warn("Failed to notify owner: {}", e.getMessage());
+        }
+
+        assignNextDriver(assignment.getBookingId());
 
         return assignment;
     }
@@ -315,9 +350,13 @@ public class DriverAssignmentServiceImpl implements DriverAssignmentService {
                     "Assignment đã được xử lý");
         }
 
-        if (assignment.getDeadlineAt().isBefore(LocalDateTime.now())) {
+        if (assignment.getDeadlineAt() != null && LocalDateTime.now().isAfter(assignment.getDeadlineAt())) {
+            assignment.setStatus(AssignmentStatus.EXPIRED);
+            assignment.setRespondedAt(LocalDateTime.now());
+            assignmentRepository.save(assignment);
+            assignNextDriver(assignment.getBookingId());
             throw new BadRequestException(ErrorCode.VALIDATION_ERROR,
-                    "Đã hết hạn phản hồi");
+                    "Đã quá hạn phản hồi (3 giờ)");
         }
 
         assignment.setStatus(AssignmentStatus.ACCEPTED);
@@ -374,6 +413,15 @@ public class DriverAssignmentServiceImpl implements DriverAssignmentService {
         if (assignment.getStatus() != AssignmentStatus.PENDING) {
             throw new BadRequestException(ErrorCode.VALIDATION_ERROR,
                     "Assignment đã được xử lý");
+        }
+
+        if (assignment.getDeadlineAt() != null && LocalDateTime.now().isAfter(assignment.getDeadlineAt())) {
+            assignment.setStatus(AssignmentStatus.EXPIRED);
+            assignment.setRespondedAt(LocalDateTime.now());
+            assignmentRepository.save(assignment);
+            assignNextDriver(assignment.getBookingId());
+            throw new BadRequestException(ErrorCode.VALIDATION_ERROR,
+                    "Đã quá hạn phản hồi (3 giờ)");
         }
 
         assignment.setStatus(AssignmentStatus.REJECTED);
@@ -445,13 +493,23 @@ public class DriverAssignmentServiceImpl implements DriverAssignmentService {
     // ===== READ =====
 
     @Override
+    @Transactional
     public DriverAssignment getAssignmentByIdAndToken(Long id, String token) {
         DriverAssignment assignment = assignmentRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.VALIDATION_ERROR));
 
-        if (!assignment.getToken().equals(token)) {
+        if (assignment.getToken() == null || !assignment.getToken().equals(token)) {
             throw new UnauthorizedException(ErrorCode.PERMISSION_DENIED,
                     "Token không hợp lệ");
+        }
+
+        if (assignment.getStatus() == AssignmentStatus.PENDING
+                && assignment.getDeadlineAt() != null
+                && LocalDateTime.now().isAfter(assignment.getDeadlineAt())) {
+            assignment.setStatus(AssignmentStatus.EXPIRED);
+            assignment.setRespondedAt(LocalDateTime.now());
+            assignmentRepository.save(assignment);
+            assignNextDriver(assignment.getBookingId());
         }
 
         return assignment;
@@ -472,7 +530,7 @@ public class DriverAssignmentServiceImpl implements DriverAssignmentService {
                 .driverId(driver.getId())
                 .token(token)
                 .status(AssignmentStatus.PENDING)
-                .deadlineAt(LocalDateTime.now().plusMinutes(RESPONSE_TIMEOUT_MINUTES))
+                .deadlineAt(LocalDateTime.now().plusHours(RESPONSE_TIMEOUT_HOURS))
                 .attemptNumber(attempt)
                 .build();
     }
@@ -487,12 +545,12 @@ public class DriverAssignmentServiceImpl implements DriverAssignmentService {
         );
 
         String message = String.format(
-                "[MAISON] Ban duoc phan cong chuyen #%d. Xe: %s. Tu %s den %s. Xac nhan trong %d phut: %s",
+                "[MAISON] Ban duoc phan cong chuyen #%d. Xe: %s. Tu %s den %s. Xac nhan trong %d gio: %s",
                 booking.getId(),
                 carInfo,
                 booking.getStartDate(),
                 booking.getEndDate(),
-                RESPONSE_TIMEOUT_MINUTES,
+                RESPONSE_TIMEOUT_HOURS,
                 magicLink
         );
 

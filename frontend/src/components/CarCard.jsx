@@ -137,6 +137,23 @@ const imageUrl = hasImage ? car.imageUrls[0] : null
           <span className="dash">·</span>
           <span>{car.transmission === 'AUTOMATIC' ? 'Tự hành' : 'Số sàn'}</span>
         </div>
+        {(car.address || car.location) && (
+          <div style={{
+            fontFamily: 'var(--mono)',
+            fontSize: '11px',
+            color: 'var(--muc-mo)',
+            marginTop: '6px',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '4px',
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+            whiteSpace: 'nowrap'
+          }}>
+            <span>📍</span>
+            <span>{car.address || car.location}</span>
+          </div>
+        )}
 
         {/* Tags khi hover */}
         {hover && (

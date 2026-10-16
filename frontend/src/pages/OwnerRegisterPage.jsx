@@ -16,8 +16,8 @@ const BANKS = [
 const DOC_TYPES = [
   { key: 'CCCD_FRONT', label: 'CCCD — Mặt trước' },
   { key: 'CCCD_BACK', label: 'CCCD — Mặt sau' },
-  { key: 'GPLX_FRONT', label: 'GPLX — Mặt trước' },
-  { key: 'GPLX_BACK', label: 'GPLX — Mặt sau' },
+  { key: 'GPKD_FRONT', label: 'GPKD / Giấy tờ kinh doanh — Mặt trước' },
+  { key: 'GPKD_BACK', label: 'GPKD / Giấy tờ kinh doanh — Mặt sau' },
   { key: 'SELFIE', label: 'Selfie cầm CCCD' },
 ]
 

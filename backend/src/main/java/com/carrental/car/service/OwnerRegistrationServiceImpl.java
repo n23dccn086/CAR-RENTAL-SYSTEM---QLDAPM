@@ -39,8 +39,8 @@ public class OwnerRegistrationServiceImpl implements OwnerRegistrationService {
     FileStorageService fileStorageService;
     NotificationService notificationService;
 
-    private static final List<String> REQUIRED_TYPES = List.of(
-            "CCCD_FRONT", "CCCD_BACK", "GPLX_FRONT", "GPLX_BACK", "SELFIE"
+    private static final List<String> ALLOWED_TYPES = List.of(
+            "CCCD_FRONT", "CCCD_BACK", "GPLX_FRONT", "GPLX_BACK", "GPKD_FRONT", "GPKD_BACK", "SELFIE"
     );
 
     // ============================================================
@@ -162,7 +162,7 @@ public class OwnerRegistrationServiceImpl implements OwnerRegistrationService {
 
         for (int i = 0; i < files.length; i++) {
             String type = types[i];
-            if (!REQUIRED_TYPES.contains(type)) {
+            if (!ALLOWED_TYPES.contains(type)) {
                 throw new BadRequestException(ErrorCode.VALIDATION_ERROR,
                         "Loại giấy tờ không hợp lệ: " + type);
             }
@@ -230,9 +230,14 @@ public class OwnerRegistrationServiceImpl implements OwnerRegistrationService {
         List<String> uploadedTypes = docs.stream()
                 .map(OwnerRequestDocument::getDocumentType).toList();
 
-        if (!uploadedTypes.containsAll(REQUIRED_TYPES)) {
+        boolean hasCccd = uploadedTypes.contains("CCCD_FRONT") && uploadedTypes.contains("CCCD_BACK");
+        boolean hasSelfie = uploadedTypes.contains("SELFIE");
+        boolean hasGpkdOrGplx = (uploadedTypes.contains("GPKD_FRONT") && uploadedTypes.contains("GPKD_BACK"))
+                || (uploadedTypes.contains("GPLX_FRONT") && uploadedTypes.contains("GPLX_BACK"));
+
+        if (!hasCccd || !hasSelfie || !hasGpkdOrGplx) {
             throw new BadRequestException(ErrorCode.VALIDATION_ERROR,
-                    "Yêu cầu chưa đủ 5 ảnh. Không thể duyệt.");
+                    "Yêu cầu chưa đủ 5 ảnh giấy tờ theo quy định (CCCD, GPKD/GPLX, Selfie). Không thể duyệt.");
         }
 
         User user = userRepository.findById(request.getUserId())

@@ -105,10 +105,10 @@ export default function AdminDashboard() {
           hint="Tổng doanh thu đơn hoàn tất"
         />
         <StatCard
-          label={`Nền tảng thực nhận (${stats?.commissionRate}%)`}
+          label={`Nền tảng thực nhận (${stats?.commissionRate ?? 10}%)`}
           value={`${formatPrice(stats?.platformRevenue)}đ`}
           color="var(--do)"
-          hint="% hoa hồng × Doanh thu sàn"
+          hint={`Hoa hồng ${stats?.commissionRate ?? 10}% · Cọc mặc định ${stats?.depositPercent ?? 30}% (từ cấu hình sàn)`}
         />
         <StatCard
           label="Tỉ lệ hủy"
