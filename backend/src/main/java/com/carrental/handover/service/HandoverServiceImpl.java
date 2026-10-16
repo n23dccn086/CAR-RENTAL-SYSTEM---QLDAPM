@@ -5,6 +5,7 @@ import com.carrental.booking.entity.Booking;
 import com.carrental.booking.entity.BookingStatus;
 import com.carrental.booking.repository.BookingRepository;
 import com.carrental.car.entity.Car;
+import com.carrental.car.entity.CarStatus;
 import com.carrental.car.entity.RentalMode;
 import com.carrental.car.repository.CarRepository;
 import com.carrental.common.constant.ErrorCode;
@@ -294,7 +295,12 @@ public class HandoverServiceImpl implements HandoverService {
 
             if ("PICKUP".equals(record.getHandoverType())) {
                 booking.setStatus(BookingStatus.RENTED);
-                log.info("Booking {} → RENTED", booking.getId());
+                Car car = carRepository.findById(booking.getCarId()).orElse(null);
+                if (car != null) {
+                    car.setStatus(CarStatus.RENTED);
+                    carRepository.save(car);
+                }
+                log.info("Booking {} → RENTED, Car {} → RENTED", booking.getId(), booking.getCarId());
             } else if ("RETURN".equals(record.getHandoverType())) {
                 booking.setStatus(BookingStatus.RETURNED);
                 booking.setActualReturnDate(record.getActualReturnTime());
@@ -320,7 +326,19 @@ public class HandoverServiceImpl implements HandoverService {
                     booking.setRemainingAmount(newTotal - booking.getDepositAmount());
                 }
 
-                log.info("Booking {} → RETURNED", booking.getId());
+                boolean hasOtherActive = bookingRepository.existsByCarIdAndStatusIn(
+                        booking.getCarId(),
+                        List.of(BookingStatus.PENDING, BookingStatus.PAID, BookingStatus.APPROVED, BookingStatus.RENTED)
+                );
+                if (!hasOtherActive) {
+                    Car car = carRepository.findById(booking.getCarId()).orElse(null);
+                    if (car != null) {
+                        car.setStatus(CarStatus.AVAILABLE);
+                        carRepository.save(car);
+                    }
+                }
+
+                log.info("Booking {} → RETURNED, Car {} → AVAILABLE", booking.getId(), booking.getCarId());
             }
             bookingRepository.save(booking);
 

@@ -7,7 +7,7 @@ export default function AdminUsersPage() {
   const [users, setUsers] = useState([])
   const [stats, setStats] = useState(null)
   const [loading, setLoading] = useState(true)
-  const [filter, setFilter] = useState({ role: '', status: '' })
+  const [filter, setFilter] = useState({ role: '', status: '', locked: false })
   const [msg, setMsg] = useState('')
 
   // ===== PHÂN TRANG =====
@@ -55,12 +55,13 @@ export default function AdminUsersPage() {
   }, [filter])
 
   const handleAction = async (id, action) => {
-    if (!window.confirm(`Xác nhận ${action} user #${id}?`)) return
+    const actionLabel = action === 'lock' ? 'khóa' : action === 'unlock' ? 'mở khóa' : 'xóa'
+    if (!window.confirm(`Xác nhận ${actionLabel} user #${id}?`)) return
     try {
       if (action === 'lock') await api.put(`/admin/users/${id}/lock`)
       if (action === 'unlock') await api.put(`/admin/users/${id}/unlock`)
       if (action === 'delete') await api.delete(`/admin/users/${id}`)
-      setMsg(`Đã ${action} user #${id}`)
+      setMsg(`Đã ${actionLabel} user #${id}`)
       fetchData()
       setTimeout(() => setMsg(''), 3000)
     } catch (err) {
@@ -169,10 +170,19 @@ export default function AdminUsersPage() {
     })
   }
 
+  // ===== LỌC THEO TRẠNG THÁI KHÓA (NẾU CÓ) =====
+  const displayedUsers = users.filter(u => {
+    if (filter.locked) {
+      const isLocked = (u.isActive ?? u.active) === false
+      return isLocked
+    }
+    return true
+  })
+
   // ===== TÍNH TOÁN PHÂN TRANG =====
-  const totalPages = Math.ceil(users.length / ITEMS_PER_PAGE)
+  const totalPages = Math.ceil(displayedUsers.length / ITEMS_PER_PAGE)
   const startIndex = (currentPage - 1) * ITEMS_PER_PAGE
-  const currentUsers = users.slice(startIndex, startIndex + ITEMS_PER_PAGE)
+  const currentUsers = displayedUsers.slice(startIndex, startIndex + ITEMS_PER_PAGE)
 
   return (
     <div style={{ maxWidth: '1400px', margin: '0 auto', padding: '60px 48px' }}>
@@ -199,11 +209,11 @@ export default function AdminUsersPage() {
       {/* FILTER */}
       <div style={{ display: 'flex', gap: '12px', marginBottom: '32px', flexWrap: 'wrap' }}>
         {['', 'CUSTOMER', 'OWNER', 'DRIVER', 'ADMIN'].map(r => (
-          <button key={r} onClick={() => setFilter({ ...filter, role: r, status: '' })} style={{
+          <button key={r} onClick={() => setFilter({ ...filter, role: r, status: '', locked: false })} style={{
             padding: '8px 16px',
-            background: filter.role === r ? 'var(--muc)' : 'transparent',
-            color: filter.role === r ? 'var(--kem)' : 'var(--muc)',
-            border: `1px solid ${filter.role === r ? 'var(--muc)' : 'rgba(15,14,12,0.2)'}`,
+            background: filter.role === r && !filter.locked ? 'var(--muc)' : 'transparent',
+            color: filter.role === r && !filter.locked ? 'var(--kem)' : 'var(--muc)',
+            border: `1px solid ${filter.role === r && !filter.locked ? 'var(--muc)' : 'rgba(15,14,12,0.2)'}`,
             fontFamily: 'var(--mono)', fontSize: '10px', letterSpacing: '2px', textTransform: 'uppercase',
             cursor: 'pointer'
           }}>
@@ -211,10 +221,10 @@ export default function AdminUsersPage() {
           </button>
         ))}
         {['PENDING', 'VERIFIED', 'REJECTED'].map(s => (
-          <button key={s} onClick={() => setFilter({ ...filter, status: s, role: '' })} style={{
+          <button key={s} onClick={() => setFilter({ ...filter, status: s, role: '', locked: false })} style={{
             padding: '8px 16px',
-            background: filter.status === s ? 'var(--do)' : 'transparent',
-            color: filter.status === s ? 'var(--kem)' : 'var(--do)',
+            background: filter.status === s && !filter.locked ? 'var(--do)' : 'transparent',
+            color: filter.status === s && !filter.locked ? 'var(--kem)' : 'var(--do)',
             border: `1px solid var(--do)`,
             fontFamily: 'var(--mono)', fontSize: '10px', letterSpacing: '2px', textTransform: 'uppercase',
             cursor: 'pointer'
@@ -222,6 +232,16 @@ export default function AdminUsersPage() {
             {statusLabels[s] || s}
           </button>
         ))}
+        <button onClick={() => setFilter({ role: '', status: '', locked: !filter.locked })} style={{
+          padding: '8px 16px',
+          background: filter.locked ? 'var(--do)' : 'transparent',
+          color: filter.locked ? 'var(--kem)' : 'var(--do)',
+          border: '1px solid var(--do)',
+          fontFamily: 'var(--mono)', fontSize: '10px', letterSpacing: '2px', textTransform: 'uppercase',
+          cursor: 'pointer'
+        }}>
+          {filter.locked ? '✓ Đang xem: Đã khóa' : 'Đã khóa'}
+        </button>
       </div>
 
       {/* TABLE */}
@@ -239,17 +259,20 @@ export default function AdminUsersPage() {
               const isSelf = currentUser && String(currentUser.id) === String(u.id)
               const hasDocs = !isAdmin && u.verificationStatus !== 'UNVERIFIED'
               const isPending = u.verificationStatus === 'PENDING'
+              const isLocked = (u.isActive ?? u.active) === false
 
               return (
                 <div key={u.id} style={{
                   display: 'grid',
                   gridTemplateColumns: '60px minmax(0, 1fr) auto auto auto',
                   gap: '24px', alignItems: 'center', padding: '20px 0',
-                  borderBottom: '1px solid rgba(15,14,12,0.12)'
+                  borderBottom: '1px solid rgba(15,14,12,0.12)',
+                  opacity: isLocked ? 0.75 : 1
                 }}>
                   <div style={{
                     width: '48px', height: '48px', borderRadius: '50%',
-                    background: 'var(--dong)', color: 'var(--muc)',
+                    background: isLocked ? 'var(--muc-mo)' : 'var(--dong)',
+                    color: isLocked ? 'var(--kem)' : 'var(--muc)',
                     display: 'flex', alignItems: 'center', justifyContent: 'center',
                     fontFamily: 'var(--serif)', fontWeight: 700, fontSize: '20px'
                   }}>
@@ -281,26 +304,40 @@ export default function AdminUsersPage() {
                     {u.role}
                   </div>
 
-                  {/* VERIFICATION STATUS — ẨN với ADMIN */}
-                  {!isAdmin ? (
-                    <div style={{
-                      padding: '4px 10px',
-                      border: `1px solid ${statusColors[u.verificationStatus] || 'var(--muc-mo)'}`,
-                      color: statusColors[u.verificationStatus] || 'var(--muc-mo)',
-                      fontFamily: 'var(--mono)', fontSize: '9px', letterSpacing: '1px',
-                      whiteSpace: 'nowrap'
-                    }}>
-                      {statusLabels[u.verificationStatus] || u.verificationStatus}
-                    </div>
-                  ) : (
-                    <div style={{
-                      padding: '4px 10px',
-                      fontFamily: 'var(--mono)', fontSize: '9px', color: 'var(--muc-mo)',
-                      whiteSpace: 'nowrap'
-                    }}>
-                      —
-                    </div>
-                  )}
+                  {/* VERIFICATION & LOCK STATUS */}
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', alignItems: 'center' }}>
+                    {!isAdmin ? (
+                      <div style={{
+                        padding: '4px 10px',
+                        border: `1px solid ${statusColors[u.verificationStatus] || 'var(--muc-mo)'}`,
+                        color: statusColors[u.verificationStatus] || 'var(--muc-mo)',
+                        fontFamily: 'var(--mono)', fontSize: '9px', letterSpacing: '1px',
+                        whiteSpace: 'nowrap'
+                      }}>
+                        {statusLabels[u.verificationStatus] || u.verificationStatus}
+                      </div>
+                    ) : (
+                      <div style={{
+                        padding: '4px 10px',
+                        fontFamily: 'var(--mono)', fontSize: '9px', color: 'var(--muc-mo)',
+                        whiteSpace: 'nowrap'
+                      }}>
+                        —
+                      </div>
+                    )}
+                    {isLocked && (
+                      <div style={{
+                        padding: '2px 8px',
+                        background: 'rgba(139,44,44,0.15)',
+                        border: '1px solid var(--do)',
+                        color: 'var(--do)',
+                        fontFamily: 'var(--mono)', fontSize: '9px', letterSpacing: '1px',
+                        fontWeight: 700, whiteSpace: 'nowrap'
+                      }}>
+                        ĐÃ KHÓA
+                      </div>
+                    )}
+                  </div>
 
                   {/* ACTIONS */}
                   <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', justifyContent: 'flex-end' }}>
@@ -323,13 +360,13 @@ export default function AdminUsersPage() {
 
                     {!isSelf && (
                       <>
-                        {u.isActive ? (
-                          <button onClick={() => handleAction(u.id, 'lock')} style={btnStyle('var(--do)')}>
-                            Khóa
+                        {isLocked ? (
+                          <button onClick={() => handleAction(u.id, 'unlock')} style={btnStyle('var(--xanh-reu)')}>
+                            Mở khóa
                           </button>
                         ) : (
-                          <button onClick={() => handleAction(u.id, 'unlock')} style={btnStyle('var(--xanh-reu)')}>
-                            Mở
+                          <button onClick={() => handleAction(u.id, 'lock')} style={btnStyle('var(--do)')}>
+                            Khóa
                           </button>
                         )}
 

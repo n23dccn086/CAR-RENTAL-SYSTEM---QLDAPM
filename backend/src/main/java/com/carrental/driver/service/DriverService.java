@@ -44,6 +44,9 @@ public interface DriverService {
 
     DriverResponse rejectDriver(Long id, String reason);
 
+    // ★ MỚI: ADMIN Khóa/Mở khóa tài xế
+    DriverResponse adminUpdateDriverStatus(Long id, String status);
+
     List<DriverResponse> getAllDrivers();
 
     List<DriverResponse> getDriversByStatus(DriverStatus status);

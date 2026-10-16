@@ -42,6 +42,7 @@ public class PaymentServiceImpl implements PaymentService {
     PaymentMapper paymentMapper;
     MomoGateway momoGateway;
     NotificationService notificationService;
+    com.carrental.car.repository.CarRepository carRepository;
 
     // ===== CREATE =====
 
@@ -169,11 +170,25 @@ public class PaymentServiceImpl implements PaymentService {
                         && booking.getStatus() == BookingStatus.PENDING) {
                     booking.setStatus(BookingStatus.PAID);
                     bookingRepository.save(booking);
-                    log.info("Booking updated to PAID: id={}", booking.getId());
+                    carRepository.findById(booking.getCarId()).ifPresent(c -> {
+                        c.setStatus(com.carrental.car.entity.CarStatus.RENTED);
+                        carRepository.save(c);
+                    });
+                    log.info("Booking updated to PAID: id={}, car {} -> RENTED", booking.getId(), booking.getCarId());
                 } else if (payment.getPaymentType() == PaymentType.REMAINING
                         && booking.getStatus() == BookingStatus.RETURNED) {
                     booking.setStatus(BookingStatus.COMPLETED);
                     bookingRepository.save(booking);
+                    boolean hasOtherActive = bookingRepository.existsByCarIdAndStatusIn(
+                            booking.getCarId(),
+                            List.of(BookingStatus.PENDING, BookingStatus.PAID, BookingStatus.APPROVED, BookingStatus.RENTED)
+                    );
+                    if (!hasOtherActive) {
+                        carRepository.findById(booking.getCarId()).ifPresent(c -> {
+                            c.setStatus(com.carrental.car.entity.CarStatus.AVAILABLE);
+                            carRepository.save(c);
+                        });
+                    }
                     log.info("Booking updated to COMPLETED: id={}", booking.getId());
                 }
             }
@@ -216,7 +231,11 @@ public class PaymentServiceImpl implements PaymentService {
                     && booking.getStatus() == BookingStatus.PENDING) {
                 booking.setStatus(BookingStatus.PAID);
                 bookingRepository.save(booking);
-                log.info("Booking {} updated to PAID", booking.getId());
+                carRepository.findById(booking.getCarId()).ifPresent(c -> {
+                    c.setStatus(com.carrental.car.entity.CarStatus.RENTED);
+                    carRepository.save(c);
+                });
+                log.info("Booking {} updated to PAID, car {} -> RENTED", booking.getId(), booking.getCarId());
 
                 // Thông báo cho Owner: Đơn mới
                 try {
@@ -236,6 +255,16 @@ public class PaymentServiceImpl implements PaymentService {
                     && booking.getStatus() == BookingStatus.RETURNED) {
                 booking.setStatus(BookingStatus.COMPLETED);
                 bookingRepository.save(booking);
+                boolean hasOtherActive = bookingRepository.existsByCarIdAndStatusIn(
+                        booking.getCarId(),
+                        List.of(BookingStatus.PENDING, BookingStatus.PAID, BookingStatus.APPROVED, BookingStatus.RENTED)
+                );
+                if (!hasOtherActive) {
+                    carRepository.findById(booking.getCarId()).ifPresent(c -> {
+                        c.setStatus(com.carrental.car.entity.CarStatus.AVAILABLE);
+                        carRepository.save(c);
+                    });
+                }
                 log.info("Booking {} updated to COMPLETED", booking.getId());
 
                 // Thông báo cho Khách + Chủ xe

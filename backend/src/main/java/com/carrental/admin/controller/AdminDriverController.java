@@ -97,6 +97,42 @@ public class AdminDriverController {
                 driverService.rejectDriver(id, reason));
     }
 
+    /**
+     * Khóa tài xế.
+     * PUT /api/v1/admin/drivers/{id}/lock
+     */
+    @PutMapping("/{id}/lock")
+    public ApiResponse<DriverResponse> lockDriver(@PathVariable Long id) {
+        log.info("REST: Admin lock driver id: {}", id);
+        return ApiResponse.success("Đã khóa tài xế",
+                driverService.adminUpdateDriverStatus(id, "INACTIVE"));
+    }
+
+    /**
+     * Mở khóa tài xế.
+     * PUT /api/v1/admin/drivers/{id}/unlock
+     */
+    @PutMapping("/{id}/unlock")
+    public ApiResponse<DriverResponse> unlockDriver(@PathVariable Long id) {
+        log.info("REST: Admin unlock driver id: {}", id);
+        return ApiResponse.success("Đã mở khóa tài xế",
+                driverService.adminUpdateDriverStatus(id, "ACTIVE"));
+    }
+
+    /**
+     * Cập nhật trạng thái tài xế.
+     * PATCH /api/v1/admin/drivers/{id}/status
+     */
+    @PatchMapping("/{id}/status")
+    public ApiResponse<DriverResponse> updateStatus(
+            @PathVariable Long id,
+            @RequestBody java.util.Map<String, String> body) {
+        String status = body.get("status");
+        log.info("REST: Admin update driver {} status: {}", id, status);
+        return ApiResponse.success("Cập nhật trạng thái thành công",
+                driverService.adminUpdateDriverStatus(id, status));
+    }
+
     private String mapSortField(String jpaField) {
         return switch (jpaField) {
             case "createdAt" -> "createdAt";

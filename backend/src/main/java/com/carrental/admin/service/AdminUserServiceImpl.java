@@ -26,13 +26,14 @@ public class AdminUserServiceImpl implements AdminUserService {
 
     UserRepository userRepository;
     com.carrental.user.repository.UserDocumentRepository documentRepository;
+    com.carrental.driver.repository.DriverRepository driverRepository;
 
     // ===== READ — CHỈ LẤY USER CHƯA XÓA MỀM =====
 
     @Override
     public List<AdminUserResponse> getAllUsers() {
         return userRepository.findAll().stream()
-                .filter(u -> u.getDeletedAt() == null)   // ← BỎ USER ĐÃ XÓA
+                .filter(this::filterAndFixUser)
                 .map(this::toResponse)
                 .toList();
     }
@@ -40,7 +41,7 @@ public class AdminUserServiceImpl implements AdminUserService {
     @Override
     public List<AdminUserResponse> getUsersByRole(Role role) {
         return userRepository.findByRole(role).stream()
-                .filter(u -> u.getDeletedAt() == null)   // ← BỎ USER ĐÃ XÓA
+                .filter(this::filterAndFixUser)
                 .map(this::toResponse)
                 .toList();
     }
@@ -48,9 +49,20 @@ public class AdminUserServiceImpl implements AdminUserService {
     @Override
     public List<AdminUserResponse> getUsersByStatus(VerificationStatus status) {
         return userRepository.findByVerificationStatus(status).stream()
-                .filter(u -> u.getDeletedAt() == null)   // ← BỎ USER ĐÃ XÓA
+                .filter(this::filterAndFixUser)
                 .map(this::toResponse)
                 .toList();
+    }
+
+    private boolean filterAndFixUser(User u) {
+        // Tự động khôi phục user nếu trước đó bị gán nhầm deletedAt do bug lock cũ
+        if (u.getDeletedAt() != null && !Boolean.FALSE.equals(u.getIsActive())) {
+            u.setIsActive(false);
+            u.setDeletedAt(null);
+            userRepository.save(u);
+            return true;
+        }
+        return u.getDeletedAt() == null;
     }
 
     @Override
@@ -69,8 +81,19 @@ public class AdminUserServiceImpl implements AdminUserService {
         User user = userRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.USER_NOT_FOUND));
 
-        user.setDeletedAt(LocalDateTime.now());
+        // Khóa tài khoản (KHÔNG gán deletedAt để user vẫn hiển thị trong danh sách)
+        user.setIsActive(false);
         User updated = userRepository.save(user);
+
+        // Đồng bộ tài xế nếu user này là tài xế
+        if (driverRepository != null && user.getPhone() != null) {
+            driverRepository.findByPhone(user.getPhone()).ifPresent(driver -> {
+                driver.setStatus(com.carrental.driver.entity.DriverStatus.INACTIVE);
+                driverRepository.save(driver);
+                log.info("Synced driver {} to INACTIVE after user {} locked", driver.getId(), id);
+            });
+        }
+
         return toResponse(updated);
     }
 
@@ -81,8 +104,22 @@ public class AdminUserServiceImpl implements AdminUserService {
         User user = userRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.USER_NOT_FOUND));
 
+        // Mở khóa tài khoản
+        user.setIsActive(true);
         user.setDeletedAt(null);
         User updated = userRepository.save(user);
+
+        // Đồng bộ tài xế nếu user này là tài xế
+        if (driverRepository != null && user.getPhone() != null) {
+            driverRepository.findByPhone(user.getPhone()).ifPresent(driver -> {
+                if (driver.getStatus() == com.carrental.driver.entity.DriverStatus.INACTIVE) {
+                    driver.setStatus(com.carrental.driver.entity.DriverStatus.ACTIVE);
+                    driverRepository.save(driver);
+                    log.info("Synced driver {} to ACTIVE after user {} unlocked", driver.getId(), id);
+                }
+            });
+        }
+
         return toResponse(updated);
     }
 
@@ -99,6 +136,14 @@ public class AdminUserServiceImpl implements AdminUserService {
         user.setDeletedAt(LocalDateTime.now());
         user.setIsActive(false);
         userRepository.save(user);
+
+        // Đồng bộ tài xế nếu có
+        if (driverRepository != null && user.getPhone() != null) {
+            driverRepository.findByPhone(user.getPhone()).ifPresent(driver -> {
+                driver.setStatus(com.carrental.driver.entity.DriverStatus.INACTIVE);
+                driverRepository.save(driver);
+            });
+        }
 
         log.info("User soft-deleted: {}", id);
     }
@@ -159,7 +204,7 @@ public class AdminUserServiceImpl implements AdminUserService {
                 .rejectionReason(user.getRejectionReason())
                 .address(user.getAddress())
                 .dateOfBirth(user.getDateOfBirth())
-                .isActive(user.getDeletedAt() == null && Boolean.TRUE.equals(user.getIsActive()))
+                .isActive(user.getDeletedAt() == null && !Boolean.FALSE.equals(user.getIsActive()))
                 .lastLoginAt(user.getLastLoginAt())
                 .createdAt(user.getCreatedAt())
                 .updatedAt(user.getUpdatedAt())

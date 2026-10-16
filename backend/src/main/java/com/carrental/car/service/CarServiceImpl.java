@@ -203,7 +203,7 @@ public class CarServiceImpl implements CarService {
     public List<CarResponse> getAllCars(String status) {
         List<Car> cars;
         if (status == null || status.isBlank()) {
-            cars = carRepository.findByStatusAndDeletedAtIsNull(CarStatus.AVAILABLE);
+            cars = carRepository.findAvailableCarsWithoutActiveBookings();
         } else if (status.equalsIgnoreCase("ALL")) {
             cars = carRepository.findAll().stream()
                     .filter(c -> c.getDeletedAt() == null)
@@ -420,7 +420,7 @@ public class CarServiceImpl implements CarService {
     @Override
     @Transactional(readOnly = true)
     public List<CarResponse> getAvailableCars() {
-        List<Car> cars = carRepository.findByStatusAndDeletedAtIsNull(CarStatus.AVAILABLE);
+        List<Car> cars = carRepository.findAvailableCarsWithoutActiveBookings();
         return cars.stream().map(this::enrichStats).toList();
     }
 

@@ -55,11 +55,19 @@ public interface CarRepository extends JpaRepository<Car, Long> {
                 "AND (CAST(:seats AS text) IS NULL OR c.seats IN (:seats)) " +
                 "AND (:minPrice IS NULL OR c.price_per_day >= :minPrice) " +
                 "AND (:maxPrice IS NULL OR c.price_per_day <= :maxPrice) " +
-                "AND (CAST(:startDate AS timestamp) IS NULL OR CAST(:endDate AS timestamp) IS NULL OR NOT EXISTS (" +
-                "    SELECT 1 FROM bookings b WHERE b.car_id = c.id " +
-                "    AND b.status NOT IN ('CANCELLED', 'COMPLETED') " +
-                "    AND b.start_date < CAST(:endDate AS timestamp) AND b.end_date > CAST(:startDate AS timestamp)" +
-                ")) " +
+                "AND (" +
+                "    CASE " +
+                "        WHEN CAST(:startDate AS timestamp) IS NOT NULL AND CAST(:endDate AS timestamp) IS NOT NULL THEN NOT EXISTS (" +
+                "            SELECT 1 FROM bookings b WHERE b.car_id = c.id " +
+                "            AND b.status IN ('PENDING', 'PAID', 'APPROVED', 'RENTED') " +
+                "            AND b.start_date < CAST(:endDate AS timestamp) AND b.end_date > CAST(:startDate AS timestamp)" +
+                "        )" +
+                "        ELSE NOT EXISTS (" +
+                "            SELECT 1 FROM bookings b WHERE b.car_id = c.id " +
+                "            AND b.status IN ('PENDING', 'PAID', 'APPROVED', 'RENTED')" +
+                "        )" +
+                "    END" +
+                ") " +
                 "AND (CAST(:startDate AS timestamp) IS NULL OR CAST(:endDate AS timestamp) IS NULL OR NOT EXISTS (" +
                 "    SELECT 1 FROM car_blocked_dates cbd WHERE cbd.car_id = c.id " +
                 "    AND cbd.start_date < CAST(:endDate AS date) AND cbd.end_date > CAST(:startDate AS date)" +
@@ -76,11 +84,19 @@ public interface CarRepository extends JpaRepository<Car, Long> {
                 "AND (CAST(:seats AS text) IS NULL OR c.seats IN (:seats)) " +
                 "AND (:minPrice IS NULL OR c.price_per_day >= :minPrice) " +
                 "AND (:maxPrice IS NULL OR c.price_per_day <= :maxPrice) " +
-                "AND (CAST(:startDate AS timestamp) IS NULL OR CAST(:endDate AS timestamp) IS NULL OR NOT EXISTS (" +
-                "    SELECT 1 FROM bookings b WHERE b.car_id = c.id " +
-                "    AND b.status NOT IN ('CANCELLED', 'COMPLETED') " +
-                "    AND b.start_date < CAST(:endDate AS timestamp) AND b.end_date > CAST(:startDate AS timestamp)" +
-                ")) " +
+                "AND (" +
+                "    CASE " +
+                "        WHEN CAST(:startDate AS timestamp) IS NOT NULL AND CAST(:endDate AS timestamp) IS NOT NULL THEN NOT EXISTS (" +
+                "            SELECT 1 FROM bookings b WHERE b.car_id = c.id " +
+                "            AND b.status IN ('PENDING', 'PAID', 'APPROVED', 'RENTED') " +
+                "            AND b.start_date < CAST(:endDate AS timestamp) AND b.end_date > CAST(:startDate AS timestamp)" +
+                "        )" +
+                "        ELSE NOT EXISTS (" +
+                "            SELECT 1 FROM bookings b WHERE b.car_id = c.id " +
+                "            AND b.status IN ('PENDING', 'PAID', 'APPROVED', 'RENTED')" +
+                "        )" +
+                "    END" +
+                ") " +
                 "AND (CAST(:startDate AS timestamp) IS NULL OR CAST(:endDate AS timestamp) IS NULL OR NOT EXISTS (" +
                 "    SELECT 1 FROM car_blocked_dates cbd WHERE cbd.car_id = c.id " +
                 "    AND cbd.start_date < CAST(:endDate AS date) AND cbd.end_date > CAST(:startDate AS date)" +
@@ -102,7 +118,7 @@ public interface CarRepository extends JpaRepository<Car, Long> {
             Pageable pageable);
 
     // ============================================================
-    // PUBLIC: SEARCH XE AVAILABLE VỚI 3 FILTER
+    // PUBLIC: SEARCH XE AVAILABLE VỚI 3 FILTER (LOẠI TRỪ XE ĐÃ ĐẶT)
     // ============================================================
 
     @Query(
@@ -111,13 +127,21 @@ public interface CarRepository extends JpaRepository<Car, Long> {
                 "AND c.deleted_at IS NULL " +
                 "AND (CAST(:location AS text) IS NULL OR LOWER(c.address) LIKE LOWER(CONCAT('%', CAST(:location AS text), '%'))) " +
                 "AND c.seats IN (:seats) " +
-                "AND (CAST(:carType AS text) IS NULL OR LOWER(c.car_type::text) LIKE LOWER(CONCAT('%', CAST(:carType AS text), '%')))",
+                "AND (CAST(:carType AS text) IS NULL OR LOWER(c.car_type::text) LIKE LOWER(CONCAT('%', CAST(:carType AS text), '%'))) " +
+                "AND NOT EXISTS (" +
+                "    SELECT 1 FROM bookings b WHERE b.car_id = c.id " +
+                "    AND b.status IN ('PENDING', 'PAID', 'APPROVED', 'RENTED')" +
+                ")",
         countQuery = "SELECT COUNT(*) FROM cars c " +
                 "WHERE c.status = 'AVAILABLE' " +
                 "AND c.deleted_at IS NULL " +
                 "AND (CAST(:location AS text) IS NULL OR LOWER(c.address) LIKE LOWER(CONCAT('%', CAST(:location AS text), '%'))) " +
                 "AND c.seats IN (:seats) " +
-                "AND (CAST(:carType AS text) IS NULL OR LOWER(c.car_type::text) LIKE LOWER(CONCAT('%', CAST(:carType AS text), '%')))",
+                "AND (CAST(:carType AS text) IS NULL OR LOWER(c.car_type::text) LIKE LOWER(CONCAT('%', CAST(:carType AS text), '%'))) " +
+                "AND NOT EXISTS (" +
+                "    SELECT 1 FROM bookings b WHERE b.car_id = c.id " +
+                "    AND b.status IN ('PENDING', 'PAID', 'APPROVED', 'RENTED')" +
+                ")",
         nativeQuery = true
     )
     Page<Car> searchWithSeats(
@@ -131,18 +155,38 @@ public interface CarRepository extends JpaRepository<Car, Long> {
                 "WHERE c.status = 'AVAILABLE' " +
                 "AND c.deleted_at IS NULL " +
                 "AND (CAST(:location AS text) IS NULL OR LOWER(c.address) LIKE LOWER(CONCAT('%', CAST(:location AS text), '%'))) " +
-                "AND (CAST(:carType AS text) IS NULL OR LOWER(c.car_type::text) LIKE LOWER(CONCAT('%', CAST(:carType AS text), '%')))",
+                "AND (CAST(:carType AS text) IS NULL OR LOWER(c.car_type::text) LIKE LOWER(CONCAT('%', CAST(:carType AS text), '%'))) " +
+                "AND NOT EXISTS (" +
+                "    SELECT 1 FROM bookings b WHERE b.car_id = c.id " +
+                "    AND b.status IN ('PENDING', 'PAID', 'APPROVED', 'RENTED')" +
+                ")",
         countQuery = "SELECT COUNT(*) FROM cars c " +
                 "WHERE c.status = 'AVAILABLE' " +
                 "AND c.deleted_at IS NULL " +
                 "AND (CAST(:location AS text) IS NULL OR LOWER(c.address) LIKE LOWER(CONCAT('%', CAST(:location AS text), '%'))) " +
-                "AND (CAST(:carType AS text) IS NULL OR LOWER(c.car_type::text) LIKE LOWER(CONCAT('%', CAST(:carType AS text), '%')))",
+                "AND (CAST(:carType AS text) IS NULL OR LOWER(c.car_type::text) LIKE LOWER(CONCAT('%', CAST(:carType AS text), '%'))) " +
+                "AND NOT EXISTS (" +
+                "    SELECT 1 FROM bookings b WHERE b.car_id = c.id " +
+                "    AND b.status IN ('PENDING', 'PAID', 'APPROVED', 'RENTED')" +
+                ")",
         nativeQuery = true
     )
     Page<Car> searchWithoutSeats(
             @Param("location") String location,
             @Param("carType") String carType,
             Pageable pageable);
+
+    @Query(
+        value = "SELECT * FROM cars c " +
+                "WHERE c.status = 'AVAILABLE' " +
+                "AND c.deleted_at IS NULL " +
+                "AND NOT EXISTS (" +
+                "    SELECT 1 FROM bookings b WHERE b.car_id = c.id " +
+                "    AND b.status IN ('PENDING', 'PAID', 'APPROVED', 'RENTED')" +
+                ")",
+        nativeQuery = true
+    )
+    List<Car> findAvailableCarsWithoutActiveBookings();
 
     // ============================================================
     // ★ OWNER: LẤY XE CỦA MÌNH VỚI FILTER + SEARCH
