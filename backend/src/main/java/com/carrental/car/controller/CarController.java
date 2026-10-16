@@ -62,7 +62,8 @@ public class CarController {
             @RequestParam(value = "fuel_type", required = false) String fuelType,
             @RequestParam(value = "min_price", required = false) Long minPrice,
             @RequestParam(value = "max_price", required = false) Long maxPrice,
-            @RequestParam(value = "carType", required = false) String carType,
+            @RequestParam(required = false) String carType,
+            @RequestParam(required = false) String status,
             @RequestParam(defaultValue = "pricePerDay,asc") String sort,
             @RequestParam(value = "page", defaultValue = "0") int page,
             @RequestParam(value = "limit", required = false) Integer limit,
@@ -74,7 +75,7 @@ public class CarController {
                 || minPrice != null || maxPrice != null || carType != null || limit != null;
 
         if (!hasFilter && page == 0 && size == null) {
-            return ApiResponse.success(carService.getAllCars());
+            return ApiResponse.success(carService.getAllCars(status));
         }
 
         LocalDate start = (dateStart != null && !dateStart.isBlank()) ? LocalDate.parse(dateStart) : null;

@@ -63,9 +63,8 @@ public class CarServiceImpl implements CarService {
             CarStatus.BROKEN,
             CarStatus.INACTIVE);
 
-    // ★ SỬA: Bỏ REJECTED — cho phép Owner sửa khi bị từ chối
+    // ★ SỬA: Chỉ khóa khi xe đang RENTED (cho phép sửa/thêm ảnh khi PENDING, REJECTED, v.v.)
     static final Set<CarStatus> LOCKED_FOR_EDIT = Set.of(
-            CarStatus.PENDING,
             CarStatus.RENTED);
 
     // ===== CREATE =====
@@ -196,7 +195,22 @@ public class CarServiceImpl implements CarService {
     @Override
     @Transactional(readOnly = true)
     public List<CarResponse> getAllCars() {
-        List<Car> cars = carRepository.findAll();
+        return getAllCars(null);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<CarResponse> getAllCars(String status) {
+        List<Car> cars;
+        if (status == null || status.isBlank()) {
+            cars = carRepository.findByStatusAndDeletedAtIsNull(CarStatus.AVAILABLE);
+        } else if (status.equalsIgnoreCase("ALL")) {
+            cars = carRepository.findAll().stream()
+                    .filter(c -> c.getDeletedAt() == null)
+                    .toList();
+        } else {
+            cars = carRepository.findByStatusAndDeletedAtIsNull(CarStatus.fromString(status));
+        }
         return cars.stream().map(this::enrichStats).toList();
     }
 

@@ -2,10 +2,12 @@ import { useState, useEffect } from "react";
 import { useParams, Link, useNavigate } from "react-router-dom";
 import { getBookingById } from "../services/bookingService";
 import api from "../services/api";
+import { useAuth } from "../hooks/useAuth";
 
 export default function BookingDetailPage() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const { user } = useAuth();
   const [booking, setBooking] = useState(null);
   const [handovers, setHandovers] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -90,20 +92,33 @@ export default function BookingDetailPage() {
 
   return (
     <div style={{ maxWidth: "900px", margin: "0 auto", padding: "60px 48px" }}>
-      <Link
-        to="/my-bookings"
+      <button
+        type="button"
+        onClick={() => {
+          if (window.history.length > 1) {
+            navigate(-1);
+          } else {
+            navigate(user?.role === 'OWNER' ? '/owner/bookings' : user?.role === 'ADMIN' ? '/admin/dashboard' : '/my-bookings');
+          }
+        }}
         style={{
+          background: 'none',
+          border: 'none',
+          padding: 0,
           fontFamily: "var(--mono)",
           fontSize: "11px",
           letterSpacing: "2px",
           textTransform: "uppercase",
           color: "var(--muc-mo)",
-          display: "inline-block",
+          display: "inline-flex",
+          alignItems: "center",
+          gap: "6px",
+          cursor: "pointer",
           marginBottom: "24px",
         }}
       >
-        ← Về chuyến đi
-      </Link>
+        ← {user?.role === 'OWNER' ? 'Về đơn của tôi' : user?.role === 'ADMIN' ? 'Quay lại' : 'Về chuyến đi'}
+      </button>
 
       <div className="chapter-num" style={{ marginBottom: "24px" }}>
         Chương Chuyến Đi — Chi Tiết
@@ -198,6 +213,31 @@ export default function BookingDetailPage() {
           <InfoRow label="Khách hàng" value={booking.customerName} />
           <InfoRow label="Chủ xe" value={booking.ownerName} />
         </div>
+
+        {(booking.customerNote || booking.ownerNote) && (
+          <div style={{ marginTop: '24px', paddingTop: '20px', borderTop: '1px solid rgba(15,14,12,0.1)' }}>
+            {booking.customerNote && (
+              <div style={{ marginBottom: '14px' }}>
+                <div style={{ fontFamily: 'var(--mono)', fontSize: '10px', letterSpacing: '1.5px', textTransform: 'uppercase', color: 'var(--muc-mo)', marginBottom: '4px' }}>
+                  Ghi chú của khách hàng:
+                </div>
+                <div style={{ fontFamily: 'var(--serif-2)', fontSize: '15px', color: 'var(--muc)', background: 'rgba(15,14,12,0.03)', padding: '10px 14px', borderLeft: '3px solid var(--dong)' }}>
+                  "{booking.customerNote}"
+                </div>
+              </div>
+            )}
+            {booking.ownerNote && (
+              <div>
+                <div style={{ fontFamily: 'var(--mono)', fontSize: '10px', letterSpacing: '1.5px', textTransform: 'uppercase', color: 'var(--xanh-reu)', marginBottom: '4px' }}>
+                  Ghi chú của chủ xe:
+                </div>
+                <div style={{ fontFamily: 'var(--serif-2)', fontSize: '15px', color: 'var(--xanh-reu)', background: 'rgba(74,93,63,0.05)', padding: '10px 14px', borderLeft: '3px solid var(--xanh-reu)', fontWeight: 600 }}>
+                  "{booking.ownerNote}"
+                </div>
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Tiền */}

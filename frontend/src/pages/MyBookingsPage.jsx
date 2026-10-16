@@ -420,6 +420,35 @@ export default function MyBookingsPage() {
                           </div>
                         </>
                       )}
+
+                    {b.customerNote && (
+                      <div style={{
+                        marginTop: '6px',
+                        fontFamily: 'var(--serif-2)',
+                        fontSize: '13px',
+                        color: 'var(--muc)',
+                        fontStyle: 'italic',
+                        background: 'rgba(15,14,12,0.04)',
+                        padding: '4px 8px',
+                        borderLeft: '2px solid var(--dong)'
+                      }}>
+                        📝 Ghi chú của bạn: "{b.customerNote}"
+                      </div>
+                    )}
+                    {b.ownerNote && (
+                      <div style={{
+                        marginTop: '4px',
+                        fontFamily: 'var(--serif-2)',
+                        fontSize: '13px',
+                        color: 'var(--xanh-reu)',
+                        fontStyle: 'italic',
+                        background: 'rgba(74,93,63,0.06)',
+                        padding: '4px 8px',
+                        borderLeft: '2px solid var(--xanh-reu)'
+                      }}>
+                        💬 Chủ xe nhắn: "{b.ownerNote}"
+                      </div>
+                    )}
                   </Link>
 
                   <div

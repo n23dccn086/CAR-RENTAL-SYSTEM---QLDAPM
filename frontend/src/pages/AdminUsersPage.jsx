@@ -1,7 +1,9 @@
 import { useState, useEffect } from 'react'
 import api from '../services/api'
+import { useAuth } from '../hooks/useAuth'
 
 export default function AdminUsersPage() {
+  const { user: currentUser } = useAuth()
   const [users, setUsers] = useState([])
   const [stats, setStats] = useState(null)
   const [loading, setLoading] = useState(true)
@@ -234,8 +236,9 @@ export default function AdminUsersPage() {
           <div>
             {currentUsers.map(u => {
               const isAdmin = u.role === 'ADMIN'
+              const isSelf = currentUser && String(currentUser.id) === String(u.id)
+              const hasDocs = !isAdmin && u.verificationStatus !== 'UNVERIFIED'
               const isPending = u.verificationStatus === 'PENDING'
-              const canVerify = !isAdmin && isPending
 
               return (
                 <div key={u.id} style={{
@@ -255,7 +258,7 @@ export default function AdminUsersPage() {
 
                   <div style={{ minWidth: 0 }}>
                     <div style={{ fontFamily: 'var(--serif)', fontSize: '18px', fontWeight: 700 }}>
-                      {u.name}
+                      {u.name} {isSelf && <span style={{ fontFamily: 'var(--mono)', fontSize: '11px', color: 'var(--dong)' }}>(Bạn)</span>}
                     </div>
                     <div style={{ fontFamily: 'var(--mono)', fontSize: '11px', letterSpacing: '1px', color: 'var(--muc-mo)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                       {u.phone} {u.email && `· ${u.email}`}
@@ -301,11 +304,14 @@ export default function AdminUsersPage() {
 
                   {/* ACTIONS */}
                   <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', justifyContent: 'flex-end' }}>
-                    {canVerify && (
+                    {hasDocs && (
+                      <button onClick={() => handleViewProfile(u)} style={btnStyle('var(--muc)')}>
+                        👁 Hồ sơ
+                      </button>
+                    )}
+
+                    {!isAdmin && isPending && (
                       <>
-                        <button onClick={() => handleViewProfile(u)} style={btnStyle('var(--muc)')}>
-                          👁 Hồ sơ
-                        </button>
                         <button onClick={() => handleApprove(u)} style={btnStyle('var(--xanh-reu)')}>
                           ✓ Duyệt
                         </button>
@@ -315,19 +321,23 @@ export default function AdminUsersPage() {
                       </>
                     )}
 
-                    {u.isActive ? (
-                      <button onClick={() => handleAction(u.id, 'lock')} style={btnStyle('var(--do)')}>
-                        Khóa
-                      </button>
-                    ) : (
-                      <button onClick={() => handleAction(u.id, 'unlock')} style={btnStyle('var(--xanh-reu)')}>
-                        Mở
-                      </button>
-                    )}
+                    {!isSelf && (
+                      <>
+                        {u.isActive ? (
+                          <button onClick={() => handleAction(u.id, 'lock')} style={btnStyle('var(--do)')}>
+                            Khóa
+                          </button>
+                        ) : (
+                          <button onClick={() => handleAction(u.id, 'unlock')} style={btnStyle('var(--xanh-reu)')}>
+                            Mở
+                          </button>
+                        )}
 
-                    <button onClick={() => handleAction(u.id, 'delete')} style={btnStyle('var(--muc-mo)')}>
-                      Xóa
-                    </button>
+                        <button onClick={() => handleAction(u.id, 'delete')} style={btnStyle('var(--muc-mo)')}>
+                          Xóa
+                        </button>
+                      </>
+                    )}
                   </div>
                 </div>
               )

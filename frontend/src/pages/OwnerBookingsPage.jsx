@@ -238,15 +238,32 @@ export default function OwnerBookingsPage() {
                       </div>
                     )}
 
-                    {b.totalExtraFees > 0 && (
+                    {b.customerNote && (
                       <div style={{
-                        marginTop: '8px', padding: '8px 12px',
-                        background: 'rgba(139,44,44,0.08)',
-                        borderLeft: '3px solid var(--do)',
-                        fontFamily: 'var(--mono)', fontSize: '11px',
-                        letterSpacing: '1px', color: 'var(--do)',
+                        marginTop: '6px',
+                        fontFamily: 'var(--serif-2)',
+                        fontSize: '13px',
+                        color: 'var(--muc)',
+                        fontStyle: 'italic',
+                        background: 'rgba(15,14,12,0.04)',
+                        padding: '4px 8px',
+                        borderLeft: '2px solid var(--dong)'
                       }}>
-                        ⚠️ Phí phát sinh: {formatPrice(b.totalExtraFees)}đ
+                        📝 Khách ghi chú: "{b.customerNote}"
+                      </div>
+                    )}
+                    {b.ownerNote && (
+                      <div style={{
+                        marginTop: '4px',
+                        fontFamily: 'var(--serif-2)',
+                        fontSize: '13px',
+                        color: 'var(--xanh-reu)',
+                        fontStyle: 'italic',
+                        background: 'rgba(74,93,63,0.06)',
+                        padding: '4px 8px',
+                        borderLeft: '2px solid var(--xanh-reu)'
+                      }}>
+                        💬 Chủ xe ghi chú: "{b.ownerNote}"
                       </div>
                     )}
                   </Link>

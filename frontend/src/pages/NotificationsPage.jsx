@@ -567,9 +567,9 @@ export default function NotificationsPage() {
                   key={n.id}
                   style={{
                     display: "grid",
-                    gridTemplateColumns: "32px 120px 1fr auto",
-                    gap: "16px",
-                    alignItems: "center",
+                    gridTemplateColumns: "32px minmax(0, 1fr) auto",
+                    gap: "20px",
+                    alignItems: "flex-start",
                     padding: "24px 0",
                     borderBottom: "1px solid rgba(15,14,12,0.12)",
                     background: isSelected
@@ -592,42 +592,61 @@ export default function NotificationsPage() {
                       cursor: "pointer",
                       width: "18px",
                       height: "18px",
+                      marginTop: "4px",
                     }}
                   />
 
-                  {/* Badge type */}
-                  <div>
+                  {/* Content Column with Badge at Top */}
+                  <div style={{ minWidth: 0 }}>
                     <div
                       style={{
-                        display: "inline-flex",
+                        display: "flex",
                         alignItems: "center",
-                        gap: "8px",
-                        padding: "4px 12px",
-                        border: `1px solid ${t.color}`,
-                        color: t.color,
-                        fontFamily: "var(--mono)",
-                        fontSize: "9px",
-                        letterSpacing: "1.5px",
-                        textTransform: "uppercase",
-                        whiteSpace: "nowrap",
+                        gap: "12px",
+                        marginBottom: "8px",
+                        flexWrap: "wrap",
                       }}
                     >
-                      {!n.isRead && (
-                        <span
-                          style={{
-                            width: "6px",
-                            height: "6px",
-                            borderRadius: "50%",
-                            background: "var(--do)",
-                          }}
-                        ></span>
-                      )}
-                      {t.label}
-                    </div>
-                  </div>
+                      <span
+                        style={{
+                          display: "inline-flex",
+                          alignItems: "center",
+                          gap: "6px",
+                          padding: "3px 10px",
+                          border: `1px solid ${t.color}`,
+                          color: t.color,
+                          fontFamily: "var(--mono)",
+                          fontSize: "9px",
+                          letterSpacing: "1.5px",
+                          textTransform: "uppercase",
+                          whiteSpace: "nowrap",
+                        }}
+                      >
+                        {!n.isRead && (
+                          <span
+                            style={{
+                              width: "6px",
+                              height: "6px",
+                              borderRadius: "50%",
+                              background: "var(--do)",
+                            }}
+                          />
+                        )}
+                        {t.label}
+                      </span>
 
-                  {/* Content */}
-                  <div>
+                      <span
+                        style={{
+                          fontFamily: "var(--mono)",
+                          fontSize: "10px",
+                          letterSpacing: "1px",
+                          color: "var(--muc-mo)",
+                        }}
+                      >
+                        {formatDateTime(n.createdAt)}
+                      </span>
+                    </div>
+
                     <div
                       style={{
                         fontFamily: "var(--serif)",
@@ -639,27 +658,17 @@ export default function NotificationsPage() {
                     >
                       {n.title}
                     </div>
+
                     <div
                       style={{
                         fontFamily: "var(--serif-2)",
                         fontStyle: "italic",
                         fontSize: "15px",
                         color: "var(--muc-mo)",
-                        marginBottom: "6px",
                         lineHeight: 1.5,
                       }}
                     >
                       {n.content}
-                    </div>
-                    <div
-                      style={{
-                        fontFamily: "var(--mono)",
-                        fontSize: "10px",
-                        letterSpacing: "1px",
-                        color: "var(--muc-mo)",
-                      }}
-                    >
-                      {formatDateTime(n.createdAt)}
                     </div>
                   </div>
 

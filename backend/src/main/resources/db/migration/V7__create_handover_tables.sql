@@ -11,7 +11,7 @@ CREATE TABLE IF NOT EXISTS handover_records (
     fuel_level          SMALLINT,              -- 0-100 (%)
     exterior_note       TEXT,
     interior_note       TEXT,
-    damages             JSONB,                 -- [{type, location, note}]
+    damages             TEXT,                  -- [{type, location, note}]
     extra_fees          DECIMAL(12,0) DEFAULT 0,
     extra_fees_note     TEXT,
     owner_signature     VARCHAR(500),

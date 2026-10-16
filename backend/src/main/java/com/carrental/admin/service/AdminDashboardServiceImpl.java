@@ -100,10 +100,14 @@ public class AdminDashboardServiceImpl implements AdminDashboardService {
         long pendingOwnerRequests = ownerRequestRepository.countByStatusAndDeletedAtIsNull("PENDING");
         long pendingDisputes = disputeRepository.countByStatus("PENDING");
 
+        BigDecimal defaultDepositPercent = configHelper.getDefaultDepositPercent();
+        Integer depositPercent = defaultDepositPercent != null ? defaultDepositPercent.intValue() : 30;
+
         return DashboardStatsResponse.builder()
                 .totalRevenue(totalRevenue)
                 .platformRevenue(platformRevenue)
                 .commissionRate(commissionRate)
+                .depositPercent(depositPercent)
                 .totalBookings(totalBookings)
                 .completedBookings(completedCount)
                 .cancelledBookings(cancelledCount)

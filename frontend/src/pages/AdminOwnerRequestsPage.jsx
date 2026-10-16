@@ -126,8 +126,10 @@ export default function AdminOwnerRequestsPage() {
   const docTypeLabels = {
     CCCD_FRONT: "CCCD — Mặt trước",
     CCCD_BACK: "CCCD — Mặt sau",
-    GPLX_FRONT: "GPLX — Mặt trước",
-    GPLX_BACK: "GPLX — Mặt sau",
+    GPKD_FRONT: "GPKD — Mặt trước",
+    GPKD_BACK: "GPKD — Mặt sau",
+    GPLX_FRONT: "GPLX / GPKD — Mặt trước",
+    GPLX_BACK: "GPLX / GPKD — Mặt sau",
     SELFIE: "Selfie cầm CCCD",
   };
 

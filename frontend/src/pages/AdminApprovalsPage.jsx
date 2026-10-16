@@ -15,10 +15,23 @@ export default function AdminApprovalsPage() {
   const [currentPage, setCurrentPage] = useState(1)
   const ITEMS_PER_PAGE = 10
 
+  // Approve modal
+  const [approveModal, setApproveModal] = useState(false)
+  const [approvingCar, setApprovingCar] = useState(null)
+  const [approveSubmitting, setApproveSubmitting] = useState(false)
+  const [approveError, setApproveError] = useState('')
+
+  // Reject modal
+  const [rejectModal, setRejectModal] = useState(false)
+  const [rejectingCar, setRejectingCar] = useState(null)
+  const [rejectReason, setRejectReason] = useState('')
+  const [rejectSubmitting, setRejectSubmitting] = useState(false)
+  const [rejectError, setRejectError] = useState('')
+
   const fetchCars = async () => {
     setLoading(true)
     try {
-      const res = await api.get('/cars')
+      const res = await api.get('/cars?status=ALL')
       setCars(res.data.data || [])
     } catch (err) {
       console.error(err)
@@ -63,30 +76,56 @@ export default function AdminApprovalsPage() {
     return () => window.removeEventListener('keydown', handleEsc)
   }, [detailModal])
 
-  const handleApprove = async (car) => {
-    if (!window.confirm(`Duyệt xe "${car.brand} ${car.model}" (${car.plate})?`)) return
+  const openApproveModal = (car) => {
+    setApprovingCar(car)
+    setApproveError('')
+    setApproveModal(true)
+  }
+
+  const handleApproveSubmit = async (e) => {
+    if (e) e.preventDefault()
+    if (!approvingCar) return
+    setApproveSubmitting(true)
     try {
-      await api.put(`/cars/${car.id}/approve`)
-      setMessage(`Đã duyệt xe ${car.plate}`)
+      await api.put(`/cars/${approvingCar.id}/approve`)
+      setMessage(`Đã duyệt xe ${approvingCar.plate}`)
+      setApproveModal(false)
+      setApprovingCar(null)
       closeDetail()
       fetchCars()
       setTimeout(() => setMessage(''), 3000)
     } catch (err) {
-      alert('Lỗi: ' + (err.response?.data?.message || err.message))
+      setApproveError(err.response?.data?.message || err.message)
+    } finally {
+      setApproveSubmitting(false)
     }
   }
 
-  const handleReject = async (car) => {
-    const reason = window.prompt('Lý do từ chối:')
-    if (!reason) return
+  const openRejectModal = (car) => {
+    setRejectingCar(car)
+    setRejectReason('')
+    setRejectError('')
+    setRejectModal(true)
+  }
+
+  const handleRejectSubmit = async (e) => {
+    e.preventDefault()
+    if (!rejectReason.trim()) {
+      setRejectError('Vui lòng nhập lý do từ chối')
+      return
+    }
+    setRejectSubmitting(true)
     try {
-      await api.put(`/cars/${car.id}/reject?reason=${encodeURIComponent(reason)}`)
-      setMessage(`Đã từ chối xe ${car.plate}`)
+      await api.put(`/cars/${rejectingCar.id}/reject?reason=${encodeURIComponent(rejectReason.trim())}`)
+      setMessage(`Đã từ chối xe ${rejectingCar.plate}`)
+      setRejectModal(false)
       closeDetail()
       fetchCars()
       setTimeout(() => setMessage(''), 3000)
     } catch (err) {
-      alert('Lỗi: ' + (err.response?.data?.message || err.message))
+      setRejectError(err.response?.data?.message || err.message)
+    } finally {
+      setRejectSubmitting(false)
     }
   }
 
@@ -208,8 +247,8 @@ export default function AdminApprovalsPage() {
                 <div style={{ display: 'flex', gap: '8px' }} onClick={(e) => e.stopPropagation()}>
                   {car.status === 'PENDING' ? (
                     <>
-                      <button onClick={() => handleApprove(car)} style={{ padding: '8px 16px', background: 'var(--xanh-reu)', border: '1px solid var(--xanh-reu)', color: 'var(--kem)', fontFamily: 'var(--mono)', fontSize: '10px', letterSpacing: '1px', textTransform: 'uppercase', cursor: 'pointer', whiteSpace: 'nowrap' }}>✓ Duyệt</button>
-                      <button onClick={() => handleReject(car)} style={{ padding: '8px 16px', background: 'transparent', border: '1px solid var(--do)', color: 'var(--do)', fontFamily: 'var(--mono)', fontSize: '10px', letterSpacing: '1px', textTransform: 'uppercase', cursor: 'pointer', whiteSpace: 'nowrap' }}>✕ Từ chối</button>
+                      <button onClick={() => openApproveModal(car)} style={{ padding: '8px 16px', background: 'var(--xanh-reu)', border: '1px solid var(--xanh-reu)', color: 'var(--kem)', fontFamily: 'var(--mono)', fontSize: '10px', letterSpacing: '1px', textTransform: 'uppercase', cursor: 'pointer', whiteSpace: 'nowrap' }}>✓ Duyệt</button>
+                      <button onClick={() => openRejectModal(car)} style={{ padding: '8px 16px', background: 'transparent', border: '1px solid var(--do)', color: 'var(--do)', fontFamily: 'var(--mono)', fontSize: '10px', letterSpacing: '1px', textTransform: 'uppercase', cursor: 'pointer', whiteSpace: 'nowrap' }}>✕ Từ chối</button>
                     </>
                   ) : (
                     <div style={{ width: '180px' }} />
@@ -241,9 +280,183 @@ export default function AdminApprovalsPage() {
           car={selectedCar}
           loading={detailLoading}
           onClose={closeDetail}
-          onApprove={handleApprove}
-          onReject={handleReject}
+          onApprove={openApproveModal}
+          onReject={openRejectModal}
         />
+      )}
+
+      {/* ===== MODAL TỪ CHỐI XE ===== */}
+      {rejectModal && rejectingCar && createPortal(
+        <div style={{
+          position: 'fixed', inset: 0, background: 'rgba(15,14,12,0.75)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          zIndex: 100000, padding: '20px'
+        }} onClick={() => setRejectModal(false)}>
+          <div style={{
+            background: 'var(--kem)', border: '1px solid var(--muc)',
+            maxWidth: '520px', width: '100%', padding: '40px', position: 'relative'
+          }} onClick={(e) => e.stopPropagation()}>
+            <button type="button" onClick={() => setRejectModal(false)} style={{
+              position: 'absolute', top: '16px', right: '16px',
+              width: '36px', height: '36px', background: 'transparent',
+              border: '1px solid var(--muc)', color: 'var(--muc)',
+              fontFamily: 'var(--mono)', fontSize: '16px', cursor: 'pointer',
+              display: 'flex', alignItems: 'center', justifyContent: 'center'
+            }}>✕</button>
+
+            <h2 style={{
+              fontFamily: 'var(--serif)', fontSize: '28px', fontWeight: 900,
+              marginBottom: '8px', paddingRight: '40px'
+            }}>
+              Từ chối cỗ xe.
+            </h2>
+            <p style={{
+              fontFamily: 'var(--mono)', fontSize: '11px', letterSpacing: '2px',
+              color: 'var(--muc-mo)', marginBottom: '24px'
+            }}>
+              {rejectingCar.brand} {rejectingCar.model} · {rejectingCar.plate}
+            </p>
+
+            {rejectError && (
+              <div style={{
+                background: 'rgba(139,44,44,0.1)', border: '1px solid var(--do)',
+                padding: '12px 16px', marginBottom: '20px',
+                color: 'var(--do)', fontFamily: 'var(--serif-2)', fontStyle: 'italic'
+              }}>
+                {rejectError}
+              </div>
+            )}
+
+            <form onSubmit={handleRejectSubmit}>
+              <label style={{
+                display: 'block', fontFamily: 'var(--mono)', fontSize: '10px',
+                letterSpacing: '3px', textTransform: 'uppercase',
+                color: 'var(--muc-mo)', marginBottom: '8px'
+              }}>
+                Lý do từ chối *
+              </label>
+              <textarea
+                value={rejectReason}
+                onChange={(e) => setRejectReason(e.target.value)}
+                rows={4}
+                maxLength={500}
+                placeholder="Nhập lý do chi tiết để chủ xe chỉnh sửa bổ sung..."
+                required
+                style={{
+                  width: '100%', padding: '14px', background: 'var(--kem-dam)',
+                  border: '1px solid rgba(15,14,12,0.2)', fontFamily: 'var(--serif-2)',
+                  fontSize: '15px', resize: 'vertical', marginBottom: '24px', boxSizing: 'border-box'
+                }}
+              />
+
+              <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end' }}>
+                <button
+                  type="button"
+                  onClick={() => setRejectModal(false)}
+                  style={{
+                    padding: '12px 20px', background: 'transparent',
+                    border: '1px solid var(--muc)', color: 'var(--muc)',
+                    fontFamily: 'var(--mono)', fontSize: '10px',
+                    letterSpacing: '2px', textTransform: 'uppercase', cursor: 'pointer'
+                  }}
+                >
+                  Hủy
+                </button>
+                <button
+                  type="submit"
+                  disabled={rejectSubmitting}
+                  style={{
+                    padding: '12px 24px', background: 'var(--do)',
+                    border: '1px solid var(--do)', color: 'var(--kem)',
+                    fontFamily: 'var(--mono)', fontSize: '10px',
+                    letterSpacing: '2px', textTransform: 'uppercase', cursor: 'pointer'
+                  }}
+                >
+                  {rejectSubmitting ? 'Đang gửi...' : 'Xác nhận từ chối'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>,
+        document.getElementById('modal-root') || document.body
+      )}
+
+      {/* ===== MODAL DUYỆT XE ===== */}
+      {approveModal && approvingCar && createPortal(
+        <div style={{
+          position: 'fixed', inset: 0, background: 'rgba(15,14,12,0.75)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          zIndex: 100000, padding: '20px'
+        }} onClick={() => setApproveModal(false)}>
+          <div style={{
+            background: 'var(--kem)', border: '1px solid var(--muc)',
+            maxWidth: '500px', width: '100%', padding: '40px', position: 'relative'
+          }} onClick={(e) => e.stopPropagation()}>
+            <button type="button" onClick={() => setApproveModal(false)} style={{
+              position: 'absolute', top: '16px', right: '16px',
+              width: '36px', height: '36px', background: 'transparent',
+              border: '1px solid var(--muc)', color: 'var(--muc)',
+              fontFamily: 'var(--mono)', fontSize: '16px', cursor: 'pointer',
+              display: 'flex', alignItems: 'center', justifyContent: 'center'
+            }}>✕</button>
+
+            <h2 style={{
+              fontFamily: 'var(--serif)', fontSize: '28px', fontWeight: 900,
+              marginBottom: '8px', color: 'var(--xanh-reu)'
+            }}>
+              Phê duyệt cỗ xe.
+            </h2>
+            <p style={{
+              fontFamily: 'var(--mono)', fontSize: '12px', letterSpacing: '2px',
+              color: 'var(--muc-mo)', marginBottom: '20px'
+            }}>
+              {approvingCar.brand} {approvingCar.model} · {approvingCar.plate}
+            </p>
+
+            <p style={{ fontFamily: 'var(--serif-2)', fontSize: '15px', lineHeight: 1.6, marginBottom: '24px' }}>
+              Xác nhận duyệt cỗ xe này? Xe sẽ chuyển sang trạng thái <strong>Sẵn sàng (AVAILABLE)</strong> và hiển thị công khai trên bộ sưu tập để khách hàng có thể đặt chuyến.
+            </p>
+
+            {approveError && (
+              <div style={{
+                background: 'rgba(139,44,44,0.1)', border: '1px solid var(--do)',
+                padding: '12px 16px', marginBottom: '20px',
+                color: 'var(--do)', fontFamily: 'var(--serif-2)', fontStyle: 'italic'
+              }}>
+                {approveError}
+              </div>
+            )}
+
+            <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end' }}>
+              <button
+                type="button"
+                onClick={() => setApproveModal(false)}
+                style={{
+                  padding: '12px 20px', background: 'transparent',
+                  border: '1px solid var(--muc)', color: 'var(--muc)',
+                  fontFamily: 'var(--mono)', fontSize: '10px',
+                  letterSpacing: '2px', textTransform: 'uppercase', cursor: 'pointer'
+                }}
+              >
+                Hủy
+              </button>
+              <button
+                type="button"
+                onClick={handleApproveSubmit}
+                disabled={approveSubmitting}
+                style={{
+                  padding: '12px 24px', background: 'var(--xanh-reu)',
+                  border: '1px solid var(--xanh-reu)', color: 'var(--kem)',
+                  fontFamily: 'var(--mono)', fontSize: '10px',
+                  letterSpacing: '2px', textTransform: 'uppercase', cursor: 'pointer'
+                }}
+              >
+                {approveSubmitting ? 'Đang duyệt...' : '✓ Xác nhận duyệt'}
+              </button>
+            </div>
+          </div>
+        </div>,
+        document.getElementById('modal-root') || document.body
       )}
     </div>
   )
@@ -396,7 +609,6 @@ function CarDetailModal({ car, loading, onClose, onApprove, onReject }) {
             <InfoRow label="Địa chỉ" value={car.address || "—"} />
             <InfoRow label="Hộp số" value={TRANSMISSION_LABELS[car.transmission] || car.transmission} />
             <InfoRow label="Nhiên liệu" value={FUEL_LABELS[car.fuelType] || car.fuelType} />
-            <InfoRow label="Hình thức thuê" value={RENTAL_MODE_LABELS[car.rentalMode] || car.rentalMode} />
           </div>
         </div>
 

@@ -25,6 +25,7 @@ import java.util.List;
 public class AdminUserServiceImpl implements AdminUserService {
 
     UserRepository userRepository;
+    com.carrental.user.repository.UserDocumentRepository documentRepository;
 
     // ===== READ — CHỈ LẤY USER CHƯA XÓA MỀM =====
 
@@ -130,6 +131,23 @@ public class AdminUserServiceImpl implements AdminUserService {
     // ===== HELPER =====
 
     private AdminUserResponse toResponse(User user) {
+        List<AdminUserResponse.DocumentInfo> docInfos = null;
+        if (documentRepository != null && user.getId() != null
+                && user.getVerificationStatus() != com.carrental.user.entity.VerificationStatus.UNVERIFIED) {
+            try {
+                docInfos = documentRepository.findByUserId(user.getId()).stream()
+                        .map(d -> AdminUserResponse.DocumentInfo.builder()
+                                .id(d.getId())
+                                .documentType(d.getDocumentType())
+                                .documentUrl(d.getDocumentUrl())
+                                .uploadedAt(d.getUploadedAt())
+                                .build())
+                        .toList();
+            } catch (Exception e) {
+                log.warn("Failed to load documents for user {}: {}", user.getId(), e.getMessage());
+            }
+        }
+
         return AdminUserResponse.builder()
                 .id(user.getId())
                 .name(user.getName())
@@ -146,6 +164,7 @@ public class AdminUserServiceImpl implements AdminUserService {
                 .createdAt(user.getCreatedAt())
                 .updatedAt(user.getUpdatedAt())
                 .deletedAt(user.getDeletedAt())
+                .documents(docInfos)
                 .build();
     }
 }
