@@ -41,7 +41,9 @@ export default function LoginPage() {
     setLoading(true)
     try {
       const res = await login(form.phone, form.password)
-      setAuth(res.data.accessToken, res.data.user)
+      const accessToken = res.data?.accessToken || res.data?.token
+      const refreshToken = res.data?.refreshToken || res.data?.refresh_token
+      setAuth(accessToken, res.data?.user, refreshToken)
 
       // ★ Redirect theo role
       const userRole = res.data.user?.role

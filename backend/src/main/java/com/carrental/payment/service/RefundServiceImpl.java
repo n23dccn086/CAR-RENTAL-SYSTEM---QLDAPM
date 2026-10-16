@@ -135,7 +135,7 @@ public class RefundServiceImpl implements RefundService {
                         String.format("Yêu cầu hoàn tiền %sđ cho đơn #%d bị từ chối. Lý do: %s.",
                                 formatMoney(refund.getAmount()), refund.getBookingId(),
                                 reason != null ? reason : "Không có lý do"),
-                        refund.getId()
+                        booking.getId()
                 );
             }
         } catch (Exception e) {

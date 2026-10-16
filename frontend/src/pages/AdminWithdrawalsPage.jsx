@@ -456,7 +456,7 @@ export default function AdminWithdrawalsPage() {
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            zIndex: 1100,
+            zIndex: 99999,
             padding: '20px',
           }}
           onClick={() => setRejectModal(false)}

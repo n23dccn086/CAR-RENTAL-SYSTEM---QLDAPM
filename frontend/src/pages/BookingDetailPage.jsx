@@ -86,6 +86,21 @@ export default function BookingDetailPage() {
 
   const pickupHandover = handovers.find((h) => h.handoverType === "PICKUP");
   const returnHandover = handovers.find((h) => h.handoverType === "RETURN");
+
+  const isCancelled = booking.status === "CANCELLED";
+
+  const needsSignPickup =
+    !isCancelled &&
+    pickupHandover &&
+    pickupHandover.status === "PENDING" &&
+    !pickupHandover.customerSignature;
+
+  const needsSignReturn =
+    !isCancelled &&
+    returnHandover &&
+    returnHandover.status === "PENDING" &&
+    !returnHandover.customerSignature;
+
   const canPayFinal =
     booking.status === "RETURNED" &&
     (booking.remainingAmount > 0 || booking.totalExtraFees > 0);
@@ -177,6 +192,271 @@ export default function BookingDetailPage() {
         </div>
       </div>
 
+      {/* ★ Banner thông báo đơn đã hủy + Trạng thái hoàn cọc */}
+      {isCancelled && (
+        <div
+          style={{
+            background: "rgba(139,44,44,0.08)",
+            border: "2px solid var(--do)",
+            padding: "24px",
+            marginBottom: "32px",
+          }}
+        >
+          <div
+            style={{
+              fontFamily: "var(--serif)",
+              fontSize: "20px",
+              fontWeight: 700,
+              color: "var(--do)",
+              marginBottom: "8px",
+            }}
+          >
+            🚫 Đơn hàng này đã bị hủy
+          </div>
+          <div
+            style={{
+              fontFamily: "var(--serif-2)",
+              fontSize: "15px",
+              color: "var(--muc)",
+              marginBottom: "16px",
+              lineHeight: 1.6,
+            }}
+          >
+            Đơn hàng đã kết thúc vào lúc {formatDate(booking.cancelledAt)}.
+            {booking.cancelReason && (
+              <span> Lý do hủy: <strong>{booking.cancelReason}</strong>.</span>
+            )}
+          </div>
+
+          {/* Refund Status Section */}
+          {booking.refund_status === "SUCCESS" && (
+            <div
+              style={{
+                padding: "12px 16px",
+                background: "rgba(40, 116, 68, 0.12)",
+                borderLeft: "4px solid #287444",
+                fontFamily: "var(--serif-2)",
+                fontSize: "14px",
+                color: "#287444",
+              }}
+            >
+              ✅ <strong>Đã hoàn tiền cọc thành công:</strong> Số tiền {formatPrice(booking.refund_amount)}đ đã được hoàn lại theo chính sách sàn.
+            </div>
+          )}
+
+          {booking.refund_status === "PENDING" && (
+            <div
+              style={{
+                padding: "12px 16px",
+                background: "rgba(201,169,97,0.15)",
+                borderLeft: "4px solid var(--dong)",
+                fontFamily: "var(--serif-2)",
+                fontSize: "14px",
+                color: "var(--muc)",
+              }}
+            >
+              ⏳ <strong>Đang chờ Admin duyệt hoàn tiền:</strong> Yêu cầu hoàn cọc {formatPrice(booking.refund_amount)}đ đang được ban quản trị xét duyệt.
+            </div>
+          )}
+
+          {booking.refund_status === "CANCELLED" && (
+            <div
+              style={{
+                padding: "14px 18px",
+                background: "rgba(139,44,44,0.12)",
+                borderLeft: "4px solid var(--do)",
+                fontFamily: "var(--serif-2)",
+                fontSize: "14px",
+                color: "var(--do)",
+                lineHeight: 1.6,
+              }}
+            >
+              <div style={{ fontWeight: 700, marginBottom: "4px" }}>
+                ❌ Yêu cầu hoàn cọc đã bị Admin từ chối
+              </div>
+              <div style={{ color: "var(--muc)" }}>
+                Lý do từ chối: <em>{booking.refund_reason || "Không đủ điều kiện hoàn cọc theo quy chế."}</em>
+              </div>
+              <div style={{ marginTop: "6px", fontSize: "12px", fontFamily: "var(--mono)", color: "var(--muc-mo)" }}>
+                ⚠️ Lưu ý: Đơn hàng đã kết thúc xử lý. Quý khách không thể tạo lại yêu cầu hoàn cọc mới cho đơn hàng này.
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ★ Banner khi tất cả tài xế đều bận hoặc không thể nhận chuyến */}
+      {!isCancelled && booking.rentalMode === "WITH_DRIVER" && (booking.driver_assignment_status === "NO_DRIVER_AVAILABLE" || (!booking.driverId && !booking.driver)) && (
+        <div
+          style={{
+            background: "rgba(139,44,44,0.08)",
+            border: "2px solid var(--do)",
+            padding: "24px",
+            marginBottom: "32px",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            gap: "20px",
+            flexWrap: "wrap",
+          }}
+        >
+          <div style={{ flex: 1 }}>
+            <div
+              style={{
+                fontFamily: "var(--serif)",
+                fontSize: "20px",
+                fontWeight: 700,
+                color: "var(--do)",
+                marginBottom: "6px",
+              }}
+            >
+              ⚠️ Tất cả tài xế của chủ xe đều đã bận hoặc không nhận chuyến
+            </div>
+            <div
+              style={{
+                fontFamily: "var(--serif-2)",
+                fontSize: "15px",
+                color: "var(--muc)",
+                lineHeight: 1.6,
+              }}
+            >
+              Hệ thống đã tự động tìm kiếm tài xế nhưng toàn bộ tài xế của chủ xe đều đang bận lịch hoặc từ chối đơn. Quý khách vui lòng <strong>lựa chọn cỗ xe khác</strong> hoặc hủy đơn để nhận lại tiền cọc.
+            </div>
+          </div>
+          <Link
+            to="/cars"
+            style={{
+              padding: "14px 28px",
+              background: "var(--do)",
+              color: "var(--kem)",
+              textDecoration: "none",
+              fontFamily: "var(--mono)",
+              fontSize: "11px",
+              letterSpacing: "2px",
+              textTransform: "uppercase",
+              fontWeight: "bold",
+              whiteSpace: "nowrap",
+            }}
+          >
+            🚗 Chọn cỗ xe khác →
+          </Link>
+        </div>
+      )}
+
+      {/* ★ Banner nhắc ký biên bản giao xe */}
+      {needsSignPickup && (
+        <div
+          style={{
+            background: "rgba(139,44,44,0.08)",
+            border: "2px solid var(--do)",
+            padding: "24px",
+            marginBottom: "32px",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            gap: "20px",
+            flexWrap: "wrap",
+          }}
+        >
+          <div>
+            <div
+              style={{
+                fontFamily: "var(--serif)",
+                fontSize: "20px",
+                fontWeight: 700,
+                color: "var(--do)",
+                marginBottom: "6px",
+              }}
+            >
+              ✍️ Chủ xe đã lập biên bản giao xe
+            </div>
+            <div
+              style={{
+                fontFamily: "var(--serif-2)",
+                fontSize: "15px",
+                color: "var(--muc)",
+              }}
+            >
+              Vui lòng kiểm tra thông tin xe, số km, mức xăng và ký xác nhận để hoàn tất thủ tục nhận xe.
+            </div>
+          </div>
+          <Link
+            to={`/handover/${pickupHandover.id}`}
+            style={{
+              padding: "14px 28px",
+              background: "var(--do)",
+              color: "var(--kem)",
+              textDecoration: "none",
+              fontFamily: "var(--mono)",
+              fontSize: "11px",
+              letterSpacing: "2px",
+              textTransform: "uppercase",
+              fontWeight: "bold",
+              whiteSpace: "nowrap",
+            }}
+          >
+            Ký biên bản giao xe →
+          </Link>
+        </div>
+      )}
+
+      {/* ★ Banner nhắc ký biên bản trả xe */}
+      {needsSignReturn && (
+        <div
+          style={{
+            background: "rgba(201,169,97,0.15)",
+            border: "2px solid var(--dong)",
+            padding: "24px",
+            marginBottom: "32px",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            gap: "20px",
+            flexWrap: "wrap",
+          }}
+        >
+          <div>
+            <div
+              style={{
+                fontFamily: "var(--serif)",
+                fontSize: "20px",
+                fontWeight: 700,
+                color: "var(--muc)",
+                marginBottom: "6px",
+              }}
+            >
+              ✍️ Chủ xe đã lập biên bản trả xe
+            </div>
+            <div
+              style={{
+                fontFamily: "var(--serif-2)",
+                fontSize: "15px",
+                color: "var(--muc)",
+              }}
+            >
+              Vui lòng kiểm tra số km thực tế, tình trạng xe và ký xác nhận hoàn thành trả xe.
+            </div>
+          </div>
+          <Link
+            to={`/handover/${returnHandover.id}`}
+            style={{
+              padding: "14px 28px",
+              background: "var(--muc)",
+              color: "var(--kem)",
+              textDecoration: "none",
+              fontFamily: "var(--mono)",
+              fontSize: "11px",
+              letterSpacing: "2px",
+              textTransform: "uppercase",
+              fontWeight: "bold",
+              whiteSpace: "nowrap",
+            }}
+          >
+            Ký biên bản trả xe →
+          </Link>
+        </div>
+      )}
+
       {/* Info */}
       <div
         style={{
@@ -210,6 +490,34 @@ export default function BookingDetailPage() {
             label="Hình thức thuê"
             value={booking.rentalMode === "SELF_DRIVE" ? "Tự lái" : "Có tài xế"}
           />
+          {booking.rentalMode === "WITH_DRIVER" && (
+            <>
+              <InfoRow
+                label="Tài xế"
+                value={
+                  booking.driverName || booking.driver?.name
+                    ? `${booking.driverName || booking.driver?.name} ${booking.driverPhone || booking.driver?.phone ? `(${booking.driverPhone || booking.driver?.phone})` : ''}`
+                    : "Chưa có tài xế"
+                }
+              />
+              <InfoRow
+                label="Trạng thái tài xế"
+                value={
+                  booking.driver_assignment_status === "ACCEPTED"
+                    ? "✅ Đã nhận chuyến"
+                    : booking.driver_assignment_status === "PENDING"
+                    ? "⏳ Chờ xác nhận"
+                    : booking.driver_assignment_status === "NO_DRIVER_AVAILABLE"
+                    ? "❌ Tất cả tài xế đều bận"
+                    : booking.driver_assignment_status === "REJECTED"
+                    ? "❌ Đã từ chối"
+                    : booking.driver_assignment_status === "EXPIRED"
+                    ? "⏰ Quá hạn phản hồi"
+                    : (booking.driverName ? "Đã gán" : "Chưa gán")
+                }
+              />
+            </>
+          )}
           <InfoRow label="Khách hàng" value={booking.customerName} />
           <InfoRow label="Chủ xe" value={booking.ownerName} />
         </div>
@@ -376,17 +684,17 @@ export default function BookingDetailPage() {
                 to={`/handover/${pickupHandover.id}`}
                 style={{
                   padding: "16px",
-                  background: "var(--kem)",
-                  border: "1px solid var(--muc)",
+                  background: isCancelled ? "rgba(15,14,12,0.06)" : "var(--kem)",
+                  border: isCancelled ? "1px dashed var(--muc-mo)" : "1px solid var(--muc)",
                   textDecoration: "none",
-                  color: "var(--muc)",
+                  color: isCancelled ? "var(--muc-mo)" : "var(--muc)",
                   fontFamily: "var(--mono)",
                   fontSize: "11px",
                   letterSpacing: "1.5px",
                   textTransform: "uppercase",
                 }}
               >
-                📝 Biên bản giao xe ({pickupHandover.status})
+                📝 Biên bản giao xe ({isCancelled ? 'Vô hiệu hóa' : pickupHandover.status})
               </Link>
             )}
             {returnHandover && (
@@ -394,17 +702,17 @@ export default function BookingDetailPage() {
                 to={`/handover/${returnHandover.id}`}
                 style={{
                   padding: "16px",
-                  background: "var(--kem)",
-                  border: "1px solid var(--muc)",
+                  background: isCancelled ? "rgba(15,14,12,0.06)" : "var(--kem)",
+                  border: isCancelled ? "1px dashed var(--muc-mo)" : "1px solid var(--muc)",
                   textDecoration: "none",
-                  color: "var(--muc)",
+                  color: isCancelled ? "var(--muc-mo)" : "var(--muc)",
                   fontFamily: "var(--mono)",
                   fontSize: "11px",
                   letterSpacing: "1.5px",
                   textTransform: "uppercase",
                 }}
               >
-                📝 Biên bản nhận xe ({returnHandover.status})
+                📝 Biên bản nhận xe ({isCancelled ? 'Vô hiệu hóa' : returnHandover.status})
               </Link>
             )}
           </div>
@@ -413,6 +721,46 @@ export default function BookingDetailPage() {
 
       {/* Actions */}
       <div style={{ display: "flex", gap: "12px", flexWrap: "wrap" }}>
+        {/* ★ Nút Ký biên bản giao xe */}
+        {needsSignPickup && (
+          <Link
+            to={`/handover/${pickupHandover.id}`}
+            style={{
+              padding: "16px 32px",
+              background: "var(--do)",
+              color: "var(--kem)",
+              textDecoration: "none",
+              fontFamily: "var(--mono)",
+              fontSize: "12px",
+              letterSpacing: "2px",
+              textTransform: "uppercase",
+              fontWeight: "bold",
+            }}
+          >
+            ✍️ Ký biên bản giao xe
+          </Link>
+        )}
+
+        {/* ★ Nút Ký biên bản trả xe */}
+        {needsSignReturn && (
+          <Link
+            to={`/handover/${returnHandover.id}`}
+            style={{
+              padding: "16px 32px",
+              background: "var(--muc)",
+              color: "var(--kem)",
+              textDecoration: "none",
+              fontFamily: "var(--mono)",
+              fontSize: "12px",
+              letterSpacing: "2px",
+              textTransform: "uppercase",
+              fontWeight: "bold",
+            }}
+          >
+            ✍️ Ký biên bản trả xe
+          </Link>
+        )}
+
         {/* ★ MỚI: NÚT THANH TOÁN CỌC — CHỈ KHI PENDING */}
         {booking.status === "PENDING" && (
           <Link

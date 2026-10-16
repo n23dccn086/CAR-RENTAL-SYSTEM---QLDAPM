@@ -38,9 +38,14 @@ export default function HandoverFormModal({
   const [uploading, setUploading] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState('')
+  const [config, setConfig] = useState(null)
+  const [pickupKm, setPickupKm] = useState(null)
+
+  const isPickup = handoverType === 'PICKUP'
 
   useEffect(() => {
     if (open) {
+      const nowStr = new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 16)
       setForm({
         kmReading: '',
         fuelLevel: 80,
@@ -49,18 +54,123 @@ export default function HandoverFormModal({
         extraFees: 0,
         extraFeesNote: '',
         damages: '',
-        actualReturnTime: '',
+        actualReturnTime: !isPickup ? nowStr : '',
       })
       setImages([])
       setError('')
     }
-  }, [open])
+  }, [open, isPickup])
+
+  // Load config & pickup km khi tạo biên bản trả xe
+  useEffect(() => {
+    if (!open || isPickup) return
+
+    const keys = [
+      'default_km_per_day',
+      'km_overage_bracket_1_limit',
+      'km_overage_bracket_1_price',
+      'km_overage_bracket_2_limit',
+      'km_overage_bracket_2_price',
+      'km_overage_bracket_3_price',
+      'late_fee_per_hour',
+    ]
+    Promise.all(
+      keys.map(k =>
+        api.get(`/admin/config/${k}`)
+          .then(r => r.data.data?.configValue)
+          .catch(() => null)
+      )
+    ).then(values => {
+      const cfg = {}
+      keys.forEach((k, i) => { cfg[k] = values[i] })
+      setConfig(cfg)
+    })
+
+    if (booking?.id) {
+      api.get(`/handovers/booking/${booking.id}`)
+        .then(res => {
+          const list = res.data.data || []
+          const pickup = list.find(h => h.handoverType === 'PICKUP')
+          if (pickup) setPickupKm(pickup.kmReading)
+        })
+        .catch(() => {})
+    }
+  }, [open, booking?.id, isPickup])
 
   if (!open || !booking) return null
 
-  const isPickup = handoverType === 'PICKUP'
   const title = isPickup ? 'Tạo biên bản giao xe' : 'Tạo biên bản nhận xe'
   const subtitle = `Đơn #${booking.id} · ${booking.carName || 'Xe'} ${booking.carPlate ? `(${booking.carPlate})` : ''}`
+
+  // ===== TÍNH TOÁN DỰ KIẾN CHI PHÍ CHO BIÊN BẢN NHẬN XE =====
+  let kmDriven = 0
+  let kmAllowed = 0
+  let kmOver = 0
+  let kmOverageFee = 0
+  const returnKm = parseInt(form.kmReading)
+
+  if (pickupKm != null && !isNaN(returnKm) && returnKm > pickupKm && booking) {
+    kmDriven = returnKm - pickupKm
+    const start = new Date(booking.startDate)
+    const end = new Date(booking.endDate)
+    const hours = Math.max(0, (end - start) / (1000 * 60 * 60))
+    const days = Math.max(1, Math.ceil(hours / 24))
+
+    const kmPerDay = parseInt(config?.default_km_per_day) || 300
+    kmAllowed = kmPerDay * days
+    kmOver = Math.max(0, kmDriven - kmAllowed)
+
+    if (kmOver > 0) {
+      const limit1 = parseInt(config?.km_overage_bracket_1_limit) || 50
+      const price1 = parseInt(config?.km_overage_bracket_1_price) || 5000
+      const limit2 = parseInt(config?.km_overage_bracket_2_limit) || 100
+      const price2 = parseInt(config?.km_overage_bracket_2_price) || 8000
+      const price3 = parseInt(config?.km_overage_bracket_3_price) || 12000
+
+      if (kmOver <= limit1) {
+        kmOverageFee = kmOver * price1
+      } else if (kmOver <= limit2) {
+        kmOverageFee = (limit1 * price1) + ((kmOver - limit1) * price2)
+      } else {
+        kmOverageFee = (limit1 * price1) + ((limit2 - limit1) * price2) + ((kmOver - limit2) * price3)
+      }
+    }
+  }
+
+  // Tính phí phạt trễ hạn
+  let lateMinutes = 0
+  let lateFee = 0
+  if (form.actualReturnTime && booking?.endDate) {
+    const end = new Date(booking.endDate).getTime()
+    const actual = new Date(form.actualReturnTime).getTime()
+    const diffMs = actual - end
+    if (diffMs > 0) {
+      lateMinutes = Math.floor(diffMs / (1000 * 60))
+      if (lateMinutes >= 15) {
+        const start = new Date(booking.startDate).getTime()
+        const totalDurationDays = Math.max(1, Math.ceil((end - start) / (1000 * 60 * 60 * 24)))
+        const pricePerDay = Number(booking.pricePerDay || (booking.totalPrice ? Math.round(booking.totalPrice / totalDurationDays) : 1000000))
+        const feePerHour = parseInt(config?.late_fee_per_hour) || 100000
+
+        if (lateMinutes < 120) {
+          lateFee = feePerHour
+        } else if (lateMinutes < 360) {
+          lateFee = Math.round(pricePerDay / 2)
+        } else if (lateMinutes < 720) {
+          lateFee = pricePerDay
+        } else {
+          lateFee = Math.round(pricePerDay * 1.2)
+        }
+      }
+    }
+  }
+
+  const extraFees = Number(form.extraFees) || 0
+  const totalExtraFees = kmOverageFee + lateFee + extraFees
+  const rentalPrice = Number(booking.totalPrice) || 0
+  const depositAmount = Number(booking.depositAmount) || 0
+  const remainingRental = Math.max(0, rentalPrice - depositAmount)
+  const finalEstimatedToPay = remainingRental + totalExtraFees
 
   // ===== UPLOAD ẢNH =====
   const handleUploadImage = async (file) => {
@@ -153,7 +263,7 @@ export default function HandoverFormModal({
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
-        zIndex: 1000,
+        zIndex: 99999,
         padding: '20px',
         overflowY: 'auto',
       }}
@@ -280,6 +390,8 @@ export default function HandoverFormModal({
             <KmOveragePreview
               booking={booking}
               returnKm={parseInt(form.kmReading)}
+              config={config}
+              pickupKm={pickupKm}
             />
           )}
 
@@ -295,17 +407,33 @@ export default function HandoverFormModal({
                 }
                 style={inputStyle}
               />
-              <div
-                style={{
-                  fontFamily: 'var(--serif-2)',
-                  fontStyle: 'italic',
-                  fontSize: '12px',
-                  color: 'var(--muc-mo)',
-                  marginTop: '4px',
-                }}
-              >
-                Nếu trả muộn sẽ tự động tính phí theo bảng giá
-              </div>
+              {lateFee > 0 ? (
+                <div
+                  style={{
+                    marginTop: '8px',
+                    padding: '8px 12px',
+                    background: 'rgba(139,44,44,0.08)',
+                    borderLeft: '3px solid var(--do)',
+                    fontFamily: 'var(--serif-2)',
+                    fontSize: '13px',
+                    color: 'var(--do)',
+                  }}
+                >
+                  ⚠️ Trả muộn {Math.floor(lateMinutes / 60)}h{lateMinutes % 60}p — Phí phạt trễ hạn dự kiến: <strong>+{new Intl.NumberFormat('vi-VN').format(lateFee)}đ</strong>
+                </div>
+              ) : (
+                <div
+                  style={{
+                    fontFamily: 'var(--serif-2)',
+                    fontStyle: 'italic',
+                    fontSize: '12px',
+                    color: 'var(--muc-mo)',
+                    marginTop: '4px',
+                  }}
+                >
+                  Nếu trả muộn sẽ tự động tính phí theo bảng giá
+                </div>
+              )}
             </div>
           )}
 
@@ -371,6 +499,74 @@ export default function HandoverFormModal({
                     maxLength={255}
                     style={inputStyle}
                   />
+                </div>
+              </div>
+
+              {/* Tóm tắt quyết toán tài chính dự kiến */}
+              <div
+                style={{
+                  padding: '20px 24px',
+                  background: 'var(--kem-dam)',
+                  border: '2px solid var(--dong)',
+                  marginBottom: '24px',
+                  fontFamily: 'var(--mono)',
+                  fontSize: '12px',
+                  lineHeight: 1.9,
+                }}
+              >
+                <div style={{ fontWeight: 'bold', color: 'var(--muc)', marginBottom: '8px', textTransform: 'uppercase', letterSpacing: '1px', fontSize: '13px' }}>
+                  💡 Thông tin cọc & quyết toán đơn #{booking.id}
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
+                  <span>• Giá thuê đơn:</span>
+                  <strong>{new Intl.NumberFormat('vi-VN').format(rentalPrice)}đ</strong>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', color: 'var(--xanh-reu)', marginBottom: '4px' }}>
+                  <span>• Khách đã cọc:</span>
+                  <strong>- {new Intl.NumberFormat('vi-VN').format(depositAmount)}đ</strong>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 0', borderTop: '1px dashed rgba(15,14,12,0.15)', marginBottom: '4px' }}>
+                  <span>• Tiền thuê xe còn lại:</span>
+                  <strong>{new Intl.NumberFormat('vi-VN').format(remainingRental)}đ</strong>
+                </div>
+
+                {kmOverageFee > 0 && (
+                  <div style={{ display: 'flex', justifyContent: 'space-between', color: 'var(--do)', marginBottom: '4px' }}>
+                    <span>• Phí vượt km ({kmOver?.toLocaleString('vi-VN')} km):</span>
+                    <strong>+ {new Intl.NumberFormat('vi-VN').format(kmOverageFee)}đ</strong>
+                  </div>
+                )}
+
+                {lateFee > 0 && (
+                  <div style={{ display: 'flex', justifyContent: 'space-between', color: 'var(--do)', marginBottom: '4px' }}>
+                    <span>• Phí trễ hạn ({Math.floor(lateMinutes / 60)}h{lateMinutes % 60}p):</span>
+                    <strong>+ {new Intl.NumberFormat('vi-VN').format(lateFee)}đ</strong>
+                  </div>
+                )}
+
+                {extraFees > 0 && (
+                  <div style={{ display: 'flex', justifyContent: 'space-between', color: 'var(--dong)', marginBottom: '4px' }}>
+                    <span>• Phí phát sinh khác{form.extraFeesNote ? ` (${form.extraFeesNote})` : ''}:</span>
+                    <strong>+ {new Intl.NumberFormat('vi-VN').format(extraFees)}đ</strong>
+                  </div>
+                )}
+
+                <div
+                  style={{
+                    marginTop: '12px',
+                    paddingTop: '12px',
+                    borderTop: '2px solid var(--do)',
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'baseline',
+                  }}
+                >
+                  <span style={{ fontWeight: 'bold', fontSize: '12px', color: 'var(--do)', textTransform: 'uppercase' }}>
+                    TỔNG TIỀN KHÁCH CẦN THANH TOÁN (DỰ KIẾN):
+                  </span>
+                  <span style={{ fontFamily: 'var(--serif)', fontSize: '26px', fontWeight: 900, color: 'var(--do)' }}>
+                    {new Intl.NumberFormat('vi-VN').format(finalEstimatedToPay)}đ
+                  </span>
                 </div>
               </div>
             </>
@@ -533,12 +729,21 @@ export default function HandoverFormModal({
 // ============================================================
 // ★ UC-C13: COMPONENT PREVIEW PHÍ VƯỢT KM
 // ============================================================
-function KmOveragePreview({ booking, returnKm }) {
-  const [config, setConfig] = useState(null)
-  const [pickupKm, setPickupKm] = useState(null)
+function KmOveragePreview({ booking, returnKm, config: parentConfig, pickupKm: parentPickupKm }) {
+  const [config, setConfig] = useState(parentConfig || null)
+  const [pickupKm, setPickupKm] = useState(parentPickupKm ?? null)
 
-  // Load config từ admin
   useEffect(() => {
+    if (parentConfig) setConfig(parentConfig)
+  }, [parentConfig])
+
+  useEffect(() => {
+    if (parentPickupKm !== undefined) setPickupKm(parentPickupKm)
+  }, [parentPickupKm])
+
+  // Load config từ admin nếu chưa có từ props
+  useEffect(() => {
+    if (parentConfig) return
     const keys = [
       'default_km_per_day',
       'km_overage_bracket_1_limit',
@@ -558,10 +763,11 @@ function KmOveragePreview({ booking, returnKm }) {
       keys.forEach((k, i) => { cfg[k] = values[i] })
       setConfig(cfg)
     })
-  }, [])
+  }, [parentConfig])
 
-  // Load km PICKUP của booking
+  // Load km PICKUP của booking nếu chưa có từ props
   useEffect(() => {
+    if (parentPickupKm !== undefined && parentPickupKm !== null) return
     api.get(`/handovers/booking/${booking.id}`)
       .then(res => {
         const list = res.data.data || []
@@ -569,7 +775,7 @@ function KmOveragePreview({ booking, returnKm }) {
         if (pickup) setPickupKm(pickup.kmReading)
       })
       .catch(() => {})
-  }, [booking.id])
+  }, [booking.id, parentPickupKm])
 
   if (!config || pickupKm == null || !returnKm) return null
 

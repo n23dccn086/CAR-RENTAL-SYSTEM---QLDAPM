@@ -317,6 +317,9 @@ export default function WheelNav() {
             top: "calc(100% + 16px)",
             right: 0,
             minWidth: "280px",
+            maxHeight: "70vh",
+            display: "flex",
+            flexDirection: "column",
             background: "var(--kem)",
             border: "1px solid var(--muc)",
             boxShadow: "0 20px 60px rgba(15,14,12,0.25)",
@@ -333,6 +336,7 @@ export default function WheelNav() {
               alignItems: "center",
               gap: "12px",
               position: "relative",
+              flexShrink: 0,
             }}
           >
             <svg
@@ -382,7 +386,17 @@ export default function WheelNav() {
             </div>
           </div>
 
-          <div style={{ padding: "8px 0" }}>
+          <div
+            className="wheel-nav-scroll"
+            style={{
+              padding: "8px 0",
+              overflowY: "auto",
+              flex: 1,
+              minHeight: 0,
+              scrollbarWidth: "thin",
+              scrollbarColor: "var(--dong) transparent",
+            }}
+          >
             {navItems.map((item, i) => {
               const active = location.pathname === item.path;
               return (
@@ -425,102 +439,103 @@ export default function WheelNav() {
                 </Link>
               );
             })}
-          </div>
 
-          <div
-            style={{
-              borderTop: "1px solid rgba(15,14,12,0.1)",
-              padding: "8px 0",
-            }}
-          >
-            {isLoggedIn ? (
-              <button
-                onClick={handleLogout}
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "14px",
-                  width: "100%",
-                  padding: "12px 20px",
-                  background: "transparent",
-                  border: "none",
-                  fontFamily: "var(--serif-2)",
-                  fontSize: "16px",
-                  color: "var(--do)",
-                  cursor: "pointer",
-                  textAlign: "left",
-                  transition: "all 0.3s",
-                }}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.background = "rgba(139,44,44,0.08)";
-                  e.currentTarget.style.paddingLeft = "26px";
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.background = "transparent";
-                  e.currentTarget.style.paddingLeft = "20px";
-                }}
-              >
-                <span
-                  style={{
-                    fontFamily: "var(--serif)",
-                    fontSize: "18px",
-                    width: "20px",
-                  }}
-                >
-                  ←
-                </span>
-                <span>Đăng xuất</span>
-              </button>
-            ) : (
-              <>
-                <Link
-                  to="/login"
+            <div
+              style={{
+                borderTop: "1px solid rgba(15,14,12,0.1)",
+                padding: "8px 0",
+                marginTop: "4px",
+              }}
+            >
+              {isLoggedIn ? (
+                <button
+                  onClick={handleLogout}
                   style={{
                     display: "flex",
                     alignItems: "center",
                     gap: "14px",
+                    width: "100%",
                     padding: "12px 20px",
+                    background: "transparent",
+                    border: "none",
                     fontFamily: "var(--serif-2)",
                     fontSize: "16px",
+                    color: "var(--do)",
+                    cursor: "pointer",
+                    textAlign: "left",
+                    transition: "all 0.3s",
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.background = "rgba(139,44,44,0.08)";
+                    e.currentTarget.style.paddingLeft = "26px";
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.background = "transparent";
+                    e.currentTarget.style.paddingLeft = "20px";
                   }}
                 >
                   <span
                     style={{
                       fontFamily: "var(--serif)",
                       fontSize: "18px",
-                      color: "var(--dong)",
                       width: "20px",
                     }}
                   >
-                    →
+                    ←
                   </span>
-                  <span>Đăng nhập</span>
-                </Link>
-                <Link
-                  to="/register"
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: "14px",
-                    padding: "12px 20px",
-                    fontFamily: "var(--serif-2)",
-                    fontSize: "16px",
-                  }}
-                >
-                  <span
+                  <span>Đăng xuất</span>
+                </button>
+              ) : (
+                <>
+                  <Link
+                    to="/login"
                     style={{
-                      fontFamily: "var(--serif)",
-                      fontSize: "18px",
-                      color: "var(--dong)",
-                      width: "20px",
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "14px",
+                      padding: "12px 20px",
+                      fontFamily: "var(--serif-2)",
+                      fontSize: "16px",
                     }}
                   >
-                    ✦
-                  </span>
-                  <span>Đăng ký</span>
-                </Link>
-              </>
-            )}
+                    <span
+                      style={{
+                        fontFamily: "var(--serif)",
+                        fontSize: "18px",
+                        color: "var(--dong)",
+                        width: "20px",
+                      }}
+                    >
+                      →
+                    </span>
+                    <span>Đăng nhập</span>
+                  </Link>
+                  <Link
+                    to="/register"
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "14px",
+                      padding: "12px 20px",
+                      fontFamily: "var(--serif-2)",
+                      fontSize: "16px",
+                    }}
+                  >
+                    <span
+                      style={{
+                        fontFamily: "var(--serif)",
+                        fontSize: "18px",
+                        color: "var(--dong)",
+                        width: "20px",
+                      }}
+                    >
+                      ✦
+                    </span>
+                    <span>Đăng ký</span>
+                  </Link>
+                </>
+              )}
+            </div>
           </div>
         </div>
       )}

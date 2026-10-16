@@ -25,6 +25,7 @@ public class DriverAssignmentResponse {
     LocalDateTime deadlineAt;
     LocalDateTime respondedAt;
     Integer attemptNumber;
+    Boolean expired;
 
     // Thông tin booking
     String carName;

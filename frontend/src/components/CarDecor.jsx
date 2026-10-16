@@ -10,7 +10,7 @@ export default function CarDecor() {
   }, [])
 
   return (
-    <div style={{ position: 'fixed', inset: 0, pointerEvents: 'none', zIndex: 1, overflow: 'hidden' }}>
+    <div style={{ position: 'fixed', inset: 0, pointerEvents: 'none', zIndex: 0, overflow: 'hidden' }}>
       {/* Bánh răng quay góc trái dưới */}
       <svg
         style={{

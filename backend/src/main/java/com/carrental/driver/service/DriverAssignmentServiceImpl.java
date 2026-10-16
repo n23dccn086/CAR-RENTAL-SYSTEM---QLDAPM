@@ -76,8 +76,22 @@ public class DriverAssignmentServiceImpl implements DriverAssignmentService {
             } catch (Exception e) {
                 log.warn("Failed to send notification: {}", e.getMessage());
             }
+            try {
+                notificationService.createNotification(
+                        booking.getCustomerId(),
+                        NotificationType.BOOKING_DRIVER_REJECTED,
+                        "Tất cả tài xế của chủ xe đều bận",
+                        String.format("Tất cả tài xế của chủ xe cho đơn đặt xe #%d đều bận hoặc chưa có lịch trống. Quý khách vui lòng lựa chọn xe khác hoặc hủy đơn để nhận lại tiền cọc.", bookingId),
+                        bookingId
+                );
+            } catch (Exception e) {
+                log.warn("Failed to notify customer: {}", e.getMessage());
+            }
             return null;
         }
+
+        booking.setDriverId(driver.getId());
+        bookingRepository.save(booking);
 
         DriverAssignment assignment = createAssignment(booking, driver, 1);
         DriverAssignment saved = assignmentRepository.save(assignment);
@@ -149,14 +163,31 @@ public class DriverAssignmentServiceImpl implements DriverAssignmentService {
 
         if (attemptCount >= 5) {
             log.warn("Max attempts reached for booking: {}", bookingId);
-            notificationService.createNotification(
-                    booking.getOwnerId(),
-                    NotificationType.SYSTEM,
-                    "Không thể tự động gán tài xế",
-                    String.format("Đơn #%d đã thử gán %d tài xế nhưng không ai nhận.",
-                            bookingId, attemptCount),
-                    bookingId
-            );
+            booking.setDriverId(null);
+            bookingRepository.save(booking);
+            try {
+                notificationService.createNotification(
+                        booking.getOwnerId(),
+                        NotificationType.SYSTEM,
+                        "Không thể tự động gán tài xế",
+                        String.format("Đơn #%d đã thử gán %d tài xế nhưng không ai nhận.",
+                                bookingId, attemptCount),
+                        bookingId
+                );
+            } catch (Exception e) {
+                log.warn("Failed to notify owner: {}", e.getMessage());
+            }
+            try {
+                notificationService.createNotification(
+                        booking.getCustomerId(),
+                        NotificationType.BOOKING_DRIVER_REJECTED,
+                        "Tất cả tài xế của chủ xe đều bận",
+                        String.format("Tất cả tài xế của chủ xe cho đơn đặt xe #%d đều đã bận hoặc không nhận chuyến. Quý khách vui lòng lựa chọn cỗ xe khác hoặc hủy đơn để nhận lại tiền cọc.", bookingId),
+                        bookingId
+                );
+            } catch (Exception e) {
+                log.warn("Failed to notify customer: {}", e.getMessage());
+            }
             return null;
         }
 
@@ -173,20 +204,52 @@ public class DriverAssignmentServiceImpl implements DriverAssignmentService {
 
         if (driver == null) {
             log.warn("No more available drivers for booking: {}", bookingId);
-            notificationService.createNotification(
-                    booking.getOwnerId(),
-                    NotificationType.SYSTEM,
-                    "Không còn tài xế khả dụng",
-                    String.format("Đơn #%d không còn tài xế nào rảnh.", bookingId),
-                    bookingId
-            );
+            booking.setDriverId(null);
+            bookingRepository.save(booking);
+            try {
+                notificationService.createNotification(
+                        booking.getOwnerId(),
+                        NotificationType.SYSTEM,
+                        "Không còn tài xế khả dụng",
+                        String.format("Đơn #%d không còn tài xế nào rảnh.", bookingId),
+                        bookingId
+                );
+            } catch (Exception e) {
+                log.warn("Failed to notify owner: {}", e.getMessage());
+            }
+            try {
+                notificationService.createNotification(
+                        booking.getCustomerId(),
+                        NotificationType.BOOKING_DRIVER_REJECTED,
+                        "Tất cả tài xế của chủ xe đều bận",
+                        String.format("Tất cả tài xế của chủ xe cho đơn đặt xe #%d đều đã bận hoặc từ chối chuyến. Quý khách vui lòng lựa chọn cỗ xe khác hoặc hủy đơn để nhận lại tiền cọc.", bookingId),
+                        bookingId
+                );
+            } catch (Exception e) {
+                log.warn("Failed to notify customer: {}", e.getMessage());
+            }
             return null;
         }
+
+        booking.setDriverId(driver.getId());
+        bookingRepository.save(booking);
 
         DriverAssignment assignment = createAssignment(booking, driver, (int) attemptCount + 1);
         DriverAssignment saved = assignmentRepository.save(assignment);
 
         sendAssignmentNotification(saved, booking, driver);
+
+        try {
+            notificationService.createNotification(
+                    booking.getCustomerId(),
+                    NotificationType.BOOKING_DRIVER_ASSIGNED,
+                    "Hệ thống đã chọn tài xế mới",
+                    String.format("Tài xế trước đó không thể nhận đơn #%d. Hệ thống đã tự động gán ngẫu nhiên tài xế mới: %s.", bookingId, driver.getName()),
+                    bookingId
+            );
+        } catch (Exception e) {
+            log.warn("Failed to notify customer about new driver: {}", e.getMessage());
+        }
 
         return saved;
     }
@@ -260,12 +323,16 @@ public class DriverAssignmentServiceImpl implements DriverAssignmentService {
             throw new BadRequestException(ErrorCode.VALIDATION_ERROR, "Đã quá hạn phản hồi (3 giờ)");
         }
 
+        Booking booking = bookingRepository.findById(assignment.getBookingId())
+                .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.BOOKING_NOT_FOUND));
+
+        if (booking.getStatus() == BookingStatus.CANCELLED) {
+            throw new BadRequestException(ErrorCode.VALIDATION_ERROR, "Đơn hàng này đã bị hủy, không thể nhận chuyến");
+        }
+
         assignment.setStatus(AssignmentStatus.ACCEPTED);
         assignment.setRespondedAt(LocalDateTime.now());
         assignmentRepository.save(assignment);
-
-        Booking booking = bookingRepository.findById(assignment.getBookingId())
-                .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.BOOKING_NOT_FOUND));
 
         booking.setDriverId(assignment.getDriverId());
         if (booking.getStatus() == BookingStatus.PAID) {
@@ -359,12 +426,16 @@ public class DriverAssignmentServiceImpl implements DriverAssignmentService {
                     "Đã quá hạn phản hồi (3 giờ)");
         }
 
+        Booking booking = bookingRepository.findById(assignment.getBookingId())
+                .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.BOOKING_NOT_FOUND));
+
+        if (booking.getStatus() == BookingStatus.CANCELLED) {
+            throw new BadRequestException(ErrorCode.VALIDATION_ERROR, "Đơn hàng này đã bị hủy, không thể nhận chuyến");
+        }
+
         assignment.setStatus(AssignmentStatus.ACCEPTED);
         assignment.setRespondedAt(LocalDateTime.now());
         assignmentRepository.save(assignment);
-
-        Booking booking = bookingRepository.findById(assignment.getBookingId())
-                .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.BOOKING_NOT_FOUND));
 
         if (booking.getDriverId() == null) {
             booking.setDriverId(assignment.getDriverId());

@@ -132,6 +132,8 @@ public class DriverAssignmentController {
                         .deadlineAt(assignment.getDeadlineAt())
                         .respondedAt(assignment.getRespondedAt())
                         .attemptNumber(assignment.getAttemptNumber())
+                        .expired(assignment.getStatus() == com.carrental.driver.entity.AssignmentStatus.EXPIRED
+                                || (assignment.getDeadlineAt() != null && java.time.LocalDateTime.now().isAfter(assignment.getDeadlineAt())))
                         .createdAt(assignment.getCreatedAt());
 
         if (driver != null) {

@@ -46,19 +46,25 @@ public interface BookingRepository extends JpaRepository<Booking, Long> {
     boolean existsByCarIdAndStatusIn(Long carId, List<BookingStatus> statuses);
 
     /**
-     * Kiểm tra tài xế có booking đang active chồng lấn thời gian không.
+     * Kiểm tra tài xế có booking đang active chồng lấn thời gian không (loại trừ bookingId nếu có).
      */
     @Query("""
             SELECT COUNT(b) > 0 FROM Booking b
             WHERE b.driverId = :driverId
-            AND b.status NOT IN ('CANCELLED', 'COMPLETED')
+            AND (:excludeBookingId IS NULL OR b.id != :excludeBookingId)
+            AND b.status NOT IN (com.carrental.booking.entity.BookingStatus.CANCELLED, com.carrental.booking.entity.BookingStatus.COMPLETED)
             AND b.startDate < :endDate
             AND b.endDate > :startDate
             """)
-    boolean existsByDriverIdAndTimeOverlap(
+    boolean existsByDriverIdAndTimeOverlapExcludingBooking(
             @Param("driverId") Long driverId,
             @Param("startDate") LocalDateTime startDate,
-            @Param("endDate") LocalDateTime endDate);
+            @Param("endDate") LocalDateTime endDate,
+            @Param("excludeBookingId") Long excludeBookingId);
+
+    default boolean existsByDriverIdAndTimeOverlap(Long driverId, LocalDateTime startDate, LocalDateTime endDate) {
+        return existsByDriverIdAndTimeOverlapExcludingBooking(driverId, startDate, endDate, null);
+    }
 
     @Query("SELECT COUNT(b) FROM Booking b " +
             "WHERE b.carId = :carId AND b.status = com.carrental.booking.entity.BookingStatus.COMPLETED")

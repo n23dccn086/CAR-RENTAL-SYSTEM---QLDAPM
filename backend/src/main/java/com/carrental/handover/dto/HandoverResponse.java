@@ -56,6 +56,18 @@ public class HandoverResponse {
 
     String recordHash;
 
+    Long ownerId;
+    Long customerId;
+    Boolean isOwner;
+    Boolean isCustomer;
+
+    // ===== FINANCIAL SETTLEMENT FIELDS (RETURN HANDOVER) =====
+    Long rentalPrice;
+    Long depositAmount;
+    Long remainingRentalPrice;
+    BigDecimal totalExtraFees;
+    BigDecimal finalAmountToPay;
+
     LocalDateTime createdAt;
     LocalDateTime updatedAt;
 
@@ -149,6 +161,26 @@ public class HandoverResponse {
 
     public LocalDateTime getUpdated_at() {
         return updatedAt;
+    }
+
+    public Long getRental_price() {
+        return rentalPrice;
+    }
+
+    public Long getDeposit_amount() {
+        return depositAmount;
+    }
+
+    public Long getRemaining_rental_price() {
+        return remainingRentalPrice;
+    }
+
+    public BigDecimal getTotal_extra_fees() {
+        return totalExtraFees != null ? totalExtraFees : BigDecimal.ZERO;
+    }
+
+    public BigDecimal getFinal_amount_to_pay() {
+        return finalAmountToPay != null ? finalAmountToPay : BigDecimal.ZERO;
     }
 
     @Data

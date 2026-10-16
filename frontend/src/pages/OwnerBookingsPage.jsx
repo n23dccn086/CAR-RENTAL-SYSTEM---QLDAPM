@@ -317,7 +317,7 @@ export default function OwnerBookingsPage() {
                       </button>
                     )}
 
-                    {pickupHandover && (
+                    {pickupHandover && b.status !== 'CANCELLED' && (
                       <button onClick={() => viewHandover(pickupHandover.id)} style={{
                         padding: '10px 18px', background: 'transparent',
                         border: '1px solid var(--muc)', color: 'var(--muc)',
@@ -328,7 +328,7 @@ export default function OwnerBookingsPage() {
                       </button>
                     )}
 
-                    {returnHandover && (
+                    {returnHandover && b.status !== 'CANCELLED' && (
                       <button onClick={() => viewHandover(returnHandover.id)} style={{
                         padding: '10px 18px', background: 'transparent',
                         border: '1px solid var(--muc)', color: 'var(--muc)',
@@ -397,7 +397,7 @@ export default function OwnerBookingsPage() {
         <div style={{
           position: 'fixed', inset: 0, background: 'rgba(15,14,12,0.7)',
           display: 'flex', alignItems: 'center', justifyContent: 'center',
-          zIndex: 1000, padding: '20px'
+          zIndex: 99999, padding: '20px'
         }} onClick={() => setApproveModal(false)}>
           <div style={{
             background: 'var(--kem)', border: '1px solid var(--muc)',
@@ -498,7 +498,7 @@ export default function OwnerBookingsPage() {
         <div style={{
           position: 'fixed', inset: 0, background: 'rgba(15,14,12,0.7)',
           display: 'flex', alignItems: 'center', justifyContent: 'center',
-          zIndex: 1000, padding: '20px'
+          zIndex: 99999, padding: '20px'
         }} onClick={() => setCancelModal(false)}>
           <div style={{
             background: 'var(--kem)', border: '1px solid var(--muc)',

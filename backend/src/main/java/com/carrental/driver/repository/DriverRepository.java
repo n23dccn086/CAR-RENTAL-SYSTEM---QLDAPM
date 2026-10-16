@@ -23,7 +23,11 @@ public interface DriverRepository extends JpaRepository<Driver, Long> {
 
     List<Driver> findByOwnerIdAndStatusAndDeletedAtIsNull(Long ownerId, DriverStatus status);
 
+    List<Driver> findByOwnerIdAndStatusInAndDeletedAtIsNull(Long ownerId, List<DriverStatus> statuses);
+
     List<Driver> findByStatusAndDeletedAtIsNull(DriverStatus status);
+
+    List<Driver> findByStatusInAndDeletedAtIsNull(List<DriverStatus> statuses);
 
     List<Driver> findByOwnerId(Long ownerId);
 

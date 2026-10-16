@@ -787,7 +787,7 @@ function ResolveModal({
         display: "flex",
         alignItems: "center",
         justifyContent: "center",
-        zIndex: 1000,
+        zIndex: 99999,
         padding: "20px",
         overflowY: "auto",
       }}
@@ -1196,7 +1196,7 @@ function DetailModal({
         display: "flex",
         alignItems: "center",
         justifyContent: "center",
-        zIndex: 1000,
+        zIndex: 99999,
         padding: "20px",
         overflowY: "auto",
       }}

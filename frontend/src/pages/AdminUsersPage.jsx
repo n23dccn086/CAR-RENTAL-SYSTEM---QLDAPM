@@ -404,7 +404,7 @@ export default function AdminUsersPage() {
         <div style={{
           position: 'fixed', inset: 0, background: 'rgba(15,14,12,0.7)',
           display: 'flex', alignItems: 'center', justifyContent: 'center',
-          zIndex: 1000, padding: '20px', overflowY: 'auto'
+          zIndex: 99999, padding: '20px', overflowY: 'auto'
         }} onClick={() => setProfileModal(false)}>
           <div style={{
             background: 'var(--kem)', border: '1px solid var(--muc)',
@@ -521,7 +521,7 @@ export default function AdminUsersPage() {
         <div style={{
           position: 'fixed', inset: 0, background: 'rgba(15,14,12,0.7)',
           display: 'flex', alignItems: 'center', justifyContent: 'center',
-          zIndex: 1100, padding: '20px'
+          zIndex: 99999, padding: '20px'
         }} onClick={() => setRejectModal(false)}>
           <div style={{
             background: 'var(--kem)', border: '1px solid var(--muc)',

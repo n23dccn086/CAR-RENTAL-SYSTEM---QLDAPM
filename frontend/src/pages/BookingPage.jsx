@@ -42,27 +42,55 @@ export default function BookingPage() {
       .catch(() => setDepositPercent(30))
   }, [])
 
-  // Load drivers khi WITH_DRIVER
+  // Load drivers khi WITH_DRIVER & tự động random tài xế rảnh lịch
   useEffect(() => {
     if (form.rentalMode === 'WITH_DRIVER' && car?.ownerId) {
       setLoadingDrivers(true)
-      api.get('/drivers/available')
+      const hasDates = form.startDate && form.endDate && new Date(form.startDate) < new Date(form.endDate)
+      const params = {
+        ownerId: car.ownerId,
+        ...(hasDates ? { startDate: form.startDate, endDate: form.endDate } : {})
+      }
+
+      api.get('/drivers/available', { params })
         .then(res => {
-          const allDrivers = res.data.data || []
-          // Chỉ lấy driver thuộc cùng Owner với xe
-          const sameOwnerDrivers = allDrivers.filter(d => d.ownerId === car.ownerId)
-          setDrivers(sameOwnerDrivers)
+          const freeDrivers = res.data.data || []
+          setDrivers(freeDrivers)
+
+          // Tự động chọn ngẫu nhiên tài xế chưa có lịch làm việc
+          if (freeDrivers.length > 0) {
+            setForm(prev => {
+              const currentValid = freeDrivers.some(d => String(d.id) === String(prev.driverId))
+              if (!currentValid || !prev.driverId) {
+                const randomIdx = Math.floor(Math.random() * freeDrivers.length)
+                return { ...prev, driverId: String(freeDrivers[randomIdx].id) }
+              }
+              return prev
+            })
+          } else {
+            setForm(prev => ({ ...prev, driverId: '' }))
+          }
         })
         .catch(err => {
           console.error('Failed to load drivers:', err)
           setDrivers([])
+          setForm(prev => ({ ...prev, driverId: '' }))
         })
         .finally(() => setLoadingDrivers(false))
     } else {
       setDrivers([])
       setForm(prev => ({ ...prev, driverId: '' }))
     }
-  }, [form.rentalMode, car])
+  }, [form.rentalMode, car?.ownerId, form.startDate, form.endDate])
+
+  const handleRandomizeDriver = () => {
+    if (drivers.length <= 1) return
+    const currentId = String(form.driverId)
+    const otherDrivers = drivers.filter(d => String(d.id) !== currentId)
+    const pool = otherDrivers.length > 0 ? otherDrivers : drivers
+    const randomPick = pool[Math.floor(Math.random() * pool.length)]
+    setForm(prev => ({ ...prev, driverId: String(randomPick.id) }))
+  }
 
   const handleChange = (e) => setForm({ ...form, [e.target.name]: e.target.value })
 
@@ -129,8 +157,14 @@ export default function BookingPage() {
 
   const total = calcTotal()
   const depositAmount = Math.round(total * depositPercent / 100)
-  const noDriverAvailable = form.rentalMode === 'WITH_DRIVER' && !loadingDrivers && drivers.length === 0
+  const noDriverAvailable =
+    form.rentalMode === 'WITH_DRIVER' &&
+    !loadingDrivers &&
+    form.startDate &&
+    form.endDate &&
+    drivers.length === 0
   const isCarUnavailable = car && car.status !== 'AVAILABLE'
+  const selectedDriver = drivers.find(d => String(d.id) === String(form.driverId))
 
   return (
     <div style={{ maxWidth: '1200px', margin: '0 auto', padding: '60px 48px' }}>
@@ -238,16 +272,40 @@ export default function BookingPage() {
             </select>
           </div>
 
-          {/* ★ COMBOBOX CHỌN TÀI XẾ */}
+          {/* ★ KHỐI TỰ ĐỘNG CHỌN TÀI XẾ RẢNH LỊCH */}
           {form.rentalMode === 'WITH_DRIVER' && (
             <div style={{ marginBottom: '24px' }}>
               <label style={{ fontFamily: 'var(--mono)', fontSize: '10px', letterSpacing: '3px', textTransform: 'uppercase', color: 'var(--muc-mo)', display: 'block', marginBottom: '8px' }}>
-                Chọn tài xế *
+                Tài xế phục vụ chuyến đi *
               </label>
 
-              {loadingDrivers ? (
-                <div style={{ padding: '14px', background: 'var(--kem-dam)', border: '1px solid rgba(15,14,12,0.2)', fontFamily: 'var(--serif-2)', fontStyle: 'italic', color: 'var(--muc-mo)' }}>
-                  Đang tải danh sách tài xế...
+              {!form.startDate || !form.endDate ? (
+                <div style={{
+                  padding: '16px 20px',
+                  background: 'var(--kem-dam)',
+                  border: '1px dashed var(--muc)',
+                  fontFamily: 'var(--serif-2)',
+                  color: 'var(--muc)',
+                  lineHeight: 1.6
+                }}>
+                  <div style={{ fontWeight: 700, marginBottom: '4px' }}>
+                    📅 Vui lòng chọn Ngày nhận xe và Ngày trả xe ở trên
+                  </div>
+                  <div style={{ fontSize: '13px', color: 'var(--muc-mo)' }}>
+                    Hệ thống sẽ tự động rà soát lịch làm việc và chọn ngẫu nhiên một tài xế <strong>chưa có lịch làm việc (rảnh lịch)</strong> cho quý khách.
+                  </div>
+                </div>
+              ) : loadingDrivers ? (
+                <div style={{
+                  padding: '24px',
+                  background: 'var(--kem-dam)',
+                  border: '1px solid rgba(15,14,12,0.2)',
+                  textAlign: 'center',
+                  fontFamily: 'var(--serif-2)',
+                  fontStyle: 'italic',
+                  color: 'var(--muc-mo)'
+                }}>
+                  🔄 Đang kiểm tra lịch làm việc của tài xế...
                 </div>
               ) : drivers.length === 0 ? (
                 <div style={{
@@ -259,10 +317,10 @@ export default function BookingPage() {
                   color: 'var(--do)'
                 }}>
                   <div style={{ fontWeight: 700, fontSize: '16px', marginBottom: '8px' }}>
-                    ⚠️ Chủ xe hiện không có tài xế nào khả dụng!
+                    ⚠️ Không có tài xế nào rảnh trong khoảng thời gian này!
                   </div>
                   <div style={{ fontSize: '14px', marginBottom: '16px', color: 'var(--muc)' }}>
-                    Để tiếp tục đặt xe, quý khách có thể chuyển sang hình thức <strong>Tự lái</strong> hoặc quay lại chọn cỗ xe khác có tài xế sẵn sàng.
+                    Tất cả tài xế của chủ xe đều đã có lịch làm việc từ <strong>{new Date(form.startDate).toLocaleString('vi-VN')}</strong> đến <strong>{new Date(form.endDate).toLocaleString('vi-VN')}</strong>. Quý khách vui lòng chọn khoảng thời gian khác hoặc chuyển sang hình thức <strong>Tự lái</strong>.
                   </div>
                   <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
                     <button
@@ -302,28 +360,190 @@ export default function BookingPage() {
                     </Link>
                   </div>
                 </div>
-              ) : (
-                <select
-                  name="driverId"
-                  value={form.driverId}
-                  onChange={handleChange}
-                  required
-                  style={{ width: '100%', padding: '14px 16px', background: 'var(--kem-dam)', border: '1px solid rgba(15,14,12,0.2)', fontFamily: 'var(--serif-2)', fontSize: '16px' }}
-                >
-                  <option value="">-- Chọn tài xế --</option>
-                  {drivers.map(d => (
-                    <option key={d.id} value={d.id}>
-                      {d.name} — {d.rating?.toFixed(1) || '0.0'}★ — Đang hoạt động
-                    </option>
-                  ))}
-                </select>
-              )}
+              ) : selectedDriver ? (
+                <div style={{
+                  background: 'var(--kem-dam)',
+                  border: '2px solid var(--muc)',
+                  padding: '20px',
+                  position: 'relative'
+                }}>
+                  {/* Header Badge */}
+                  <div style={{
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                    flexWrap: 'wrap',
+                    gap: '8px',
+                    marginBottom: '16px',
+                    paddingBottom: '12px',
+                    borderBottom: '1px dashed rgba(15,14,12,0.2)'
+                  }}>
+                    <div style={{
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '6px',
+                      padding: '4px 10px',
+                      background: 'rgba(40, 116, 68, 0.12)',
+                      border: '1px solid #287444',
+                      borderRadius: '3px',
+                      fontFamily: 'var(--mono)',
+                      fontSize: '11px',
+                      color: '#287444',
+                      fontWeight: 700,
+                      letterSpacing: '0.5px'
+                    }}>
+                      <span>🤖 HỆ THỐNG ĐÃ TỰ ĐỘNG CHỌN TÀI XẾ</span>
+                    </div>
+                    <span style={{
+                      fontFamily: 'var(--mono)',
+                      fontSize: '11px',
+                      color: '#287444',
+                      fontWeight: 600
+                    }}>
+                      ● Rảnh lịch ({drivers.length} tài xế khả dụng)
+                    </span>
+                  </div>
 
-              {drivers.length > 0 && (
-                <div style={{ fontFamily: 'var(--serif-2)', fontStyle: 'italic', fontSize: '12px', color: 'var(--muc-mo)', marginTop: '6px' }}>
-                  💡 Chỉ hiển thị tài xế đang hoạt động của chủ xe này.
+                  {/* Driver Info */}
+                  <div style={{ display: 'flex', gap: '16px', alignItems: 'center' }}>
+                    <div style={{
+                      width: '60px',
+                      height: '60px',
+                      borderRadius: '50%',
+                      overflow: 'hidden',
+                      background: 'var(--muc)',
+                      color: 'var(--kem)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      fontSize: '22px',
+                      fontWeight: 700,
+                      flexShrink: 0,
+                      border: '2px solid var(--kem)'
+                    }}>
+                      {selectedDriver.avatarUrl ? (
+                        <img
+                          src={selectedDriver.avatarUrl}
+                          alt={selectedDriver.name}
+                          style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                          onError={(e) => { e.target.style.display = 'none' }}
+                        />
+                      ) : (
+                        selectedDriver.name ? selectedDriver.name.charAt(0).toUpperCase() : 'TX'
+                      )}
+                    </div>
+
+                    <div style={{ flex: 1 }}>
+                      <div style={{ display: 'flex', alignItems: 'baseline', gap: '8px', flexWrap: 'wrap' }}>
+                        <h4 style={{
+                          fontFamily: 'var(--serif)',
+                          fontSize: '20px',
+                          fontWeight: 900,
+                          margin: 0,
+                          color: 'var(--muc)'
+                        }}>
+                          {selectedDriver.name}
+                        </h4>
+                        <span style={{
+                          fontFamily: 'var(--mono)',
+                          fontSize: '11px',
+                          background: 'rgba(224, 159, 62, 0.2)',
+                          color: '#b87704',
+                          padding: '2px 8px',
+                          borderRadius: '2px',
+                          fontWeight: 700
+                        }}>
+                          ★ {selectedDriver.rating ? Number(selectedDriver.rating).toFixed(1) : '5.0'} ({selectedDriver.totalTrips || 0} chuyến)
+                        </span>
+                      </div>
+
+                      <div style={{
+                        display: 'flex',
+                        gap: '14px',
+                        flexWrap: 'wrap',
+                        marginTop: '6px',
+                        fontFamily: 'var(--serif-2)',
+                        fontSize: '13px',
+                        color: 'var(--muc-mo)'
+                      }}>
+                        <span>⏱ Kinh nghiệm: <strong>{selectedDriver.experienceYears || 0} năm</strong></span>
+                        <span>🪪 GPLX: <strong>Hạng {selectedDriver.licenseClass || 'B2'}</strong></span>
+                        <span>📞 Hotline: <strong>{selectedDriver.phone}</strong></span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Verification Note */}
+                  <div style={{
+                    marginTop: '14px',
+                    padding: '8px 12px',
+                    background: 'rgba(40, 116, 68, 0.05)',
+                    borderLeft: '3px solid #287444',
+                    fontFamily: 'var(--serif-2)',
+                    fontSize: '12px',
+                    color: '#287444'
+                  }}>
+                    ✓ Đã kiểm tra lịch làm việc: Tài xế hoàn toàn rảnh trong suốt khung giờ chuyến đi của quý khách.
+                  </div>
+
+                  {/* Action Row */}
+                  <div style={{
+                    marginTop: '16px',
+                    display: 'flex',
+                    gap: '12px',
+                    alignItems: 'center',
+                    flexWrap: 'wrap',
+                    paddingTop: '12px',
+                    borderTop: '1px dashed rgba(15,14,12,0.2)'
+                  }}>
+                    <button
+                      type="button"
+                      onClick={handleRandomizeDriver}
+                      disabled={drivers.length <= 1}
+                      title={drivers.length <= 1 ? 'Chỉ có 1 tài xế rảnh lịch' : 'Chọn ngẫu nhiên tài xế rảnh khác'}
+                      style={{
+                        padding: '9px 16px',
+                        background: drivers.length > 1 ? 'var(--muc)' : 'rgba(15,14,12,0.3)',
+                        color: 'var(--kem)',
+                        border: 'none',
+                        fontFamily: 'var(--mono)',
+                        fontSize: '11px',
+                        letterSpacing: '1px',
+                        textTransform: 'uppercase',
+                        cursor: drivers.length > 1 ? 'pointer' : 'not-allowed',
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: '6px',
+                        transition: 'all 0.2s ease'
+                      }}
+                    >
+                      <span>🎲 Đổi ngẫu nhiên tài xế khác</span>
+                    </button>
+
+                    <div style={{ flex: 1, minWidth: '200px' }}>
+                      <select
+                        name="driverId"
+                        value={form.driverId}
+                        onChange={handleChange}
+                        style={{
+                          width: '100%',
+                          padding: '8px 12px',
+                          background: 'var(--kem)',
+                          border: '1px solid rgba(15,14,12,0.3)',
+                          fontFamily: 'var(--serif-2)',
+                          fontSize: '13px'
+                        }}
+                      >
+                        {drivers.map(d => (
+                          <option key={d.id} value={d.id}>
+                            {d.name} ({d.rating ? Number(d.rating).toFixed(1) : '5.0'}★ — {d.experienceYears || 0} năm KN)
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
                 </div>
-              )}
+              ) : null}
             </div>
           )}
 
@@ -352,7 +572,11 @@ export default function BookingPage() {
               cursor: (needsVerification || noDriverAvailable || isCarUnavailable) ? 'not-allowed' : 'pointer'
             }}
           >
-            <span>{isCarUnavailable ? 'Hết xe / Đã được đặt' : loading ? 'Đang xử lý...' : 'Xác nhận đặt xe'}</span>
+            <span>
+              {isCarUnavailable ? 'Hết xe / Đã được đặt' :
+               noDriverAvailable ? 'Tài xế đã kín lịch làm việc' :
+               loading ? 'Đang xử lý...' : 'Xác nhận đặt xe'}
+            </span>
           </button>
         </form>
 

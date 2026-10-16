@@ -17,10 +17,15 @@ import com.carrental.common.constant.ErrorCode;
 import com.carrental.common.exception.BadRequestException;
 import com.carrental.common.exception.ResourceNotFoundException;
 import com.carrental.common.exception.UnauthorizedException;
+import com.carrental.driver.entity.AssignmentStatus;
 import com.carrental.driver.entity.Driver;
+import com.carrental.driver.entity.DriverAssignment;
 import com.carrental.driver.entity.DriverStatus;
+import com.carrental.driver.repository.DriverAssignmentRepository;
 import com.carrental.driver.repository.DriverRepository;
 import com.carrental.driver.service.DriverAssignmentService;
+import com.carrental.handover.entity.HandoverRecord;
+import com.carrental.handover.entity.HandoverStatus;
 import com.carrental.handover.repository.HandoverRecordRepository;
 import com.carrental.notification.entity.NotificationType;
 import com.carrental.notification.service.NotificationService;
@@ -65,6 +70,7 @@ public class BookingServiceImpl implements BookingService {
     HandoverRecordRepository handoverRepository;
     ConfigHelper configHelper;
     DriverAssignmentService driverAssignmentService;
+    DriverAssignmentRepository driverAssignmentRepository;
 
     // ===== CREATE =====
 
@@ -106,22 +112,46 @@ public class BookingServiceImpl implements BookingService {
 
         Long driverId = request.getDriverId();
         if (request.getRentalMode() == RentalMode.WITH_DRIVER) {
+            List<Driver> activeDrivers = driverRepository.findByOwnerIdAndStatusInAndDeletedAtIsNull(
+                    car.getOwnerId(), List.of(DriverStatus.ACTIVE, DriverStatus.BUSY));
+
+            List<Driver> freeDrivers = activeDrivers.stream()
+                    .filter(d -> !bookingRepository.existsByDriverIdAndTimeOverlap(
+                            d.getId(), request.getStartDate(), request.getEndDate()))
+                    .toList();
+
+            if (freeDrivers.isEmpty()) {
+                throw new BadRequestException(ErrorCode.VALIDATION_ERROR,
+                        "Chủ xe hiện không có tài xế nào còn lịch trống trong khoảng thời gian này. Vui lòng chọn thời gian khác hoặc thuê tự lái.");
+            }
+
             if (driverId == null) {
-                throw new BadRequestException(ErrorCode.VALIDATION_ERROR,
-                        "Vui lòng chọn tài xế cho đơn thuê có tài xế.");
-            }
+                // Tự động random tài xế chưa có lịch làm việc trong khoảng thời gian này
+                Driver randomDriver = freeDrivers.get(new java.util.Random().nextInt(freeDrivers.size()));
+                driverId = randomDriver.getId();
+                log.info("System auto-assigned random free driver id={} ({}) for booking car {}",
+                        randomDriver.getId(), randomDriver.getName(), car.getId());
+            } else {
+                Long finalDriverId = driverId;
+                Driver driver = driverRepository.findById(finalDriverId)
+                        .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.DRIVER_NOT_FOUND));
 
-            Driver driver = driverRepository.findById(driverId)
-                    .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.DRIVER_NOT_FOUND));
+                if (!driver.getOwnerId().equals(car.getOwnerId())) {
+                    throw new BadRequestException(ErrorCode.VALIDATION_ERROR,
+                            "Tài xế được chọn không thuộc chủ xe của cỗ xe này.");
+                }
 
-            if (!driver.getOwnerId().equals(car.getOwnerId())) {
-                throw new BadRequestException(ErrorCode.VALIDATION_ERROR,
-                        "Tài xế được chọn không thuộc chủ xe của cỗ xe này.");
-            }
+                if (driver.getStatus() != DriverStatus.ACTIVE && driver.getStatus() != DriverStatus.BUSY) {
+                    throw new BadRequestException(ErrorCode.VALIDATION_ERROR,
+                            "Tài xế được chọn hiện không hoạt động.");
+                }
 
-            if (driver.getStatus() != DriverStatus.ACTIVE) {
-                throw new BadRequestException(ErrorCode.VALIDATION_ERROR,
-                        "Tài xế được chọn hiện không hoạt động.");
+                boolean isBusy = bookingRepository.existsByDriverIdAndTimeOverlap(
+                        finalDriverId, request.getStartDate(), request.getEndDate());
+                if (isBusy) {
+                    throw new BadRequestException(ErrorCode.VALIDATION_ERROR,
+                            "Tài xế đã có lịch làm việc trong khoảng thời gian này. Vui lòng chọn tài xế khác hoặc để hệ thống tự động chọn.");
+                }
             }
         } else {
             driverId = null;
@@ -328,6 +358,22 @@ public class BookingServiceImpl implements BookingService {
 
         releaseCarIfNoActiveBookings(booking.getCarId());
 
+        // Hủy toàn bộ biên bản bàn giao của đơn bị hủy
+        try {
+            List<HandoverRecord> handovers = handoverRepository.findByBookingId(id);
+            for (HandoverRecord hr : handovers) {
+                if (hr.getStatus() != HandoverStatus.CANCELLED) {
+                    hr.setStatus(HandoverStatus.CANCELLED);
+                    handoverRepository.save(hr);
+                    log.info("Handover {} for booking {} marked as CANCELLED due to cancellation", hr.getId(), id);
+                }
+            }
+        } catch (Exception e) {
+            log.warn("Failed to cancel handovers for booking {}: {}", id, e.getMessage());
+        }
+
+        cleanupDriverAssignmentsAndStatus(booking);
+
         // ★ Thông báo cho Owner
         try {
             notificationService.createNotification(
@@ -468,6 +514,22 @@ public class BookingServiceImpl implements BookingService {
 
         releaseCarIfNoActiveBookings(booking.getCarId());
 
+        // Hủy toàn bộ biên bản bàn giao của đơn bị hủy
+        try {
+            List<HandoverRecord> handovers = handoverRepository.findByBookingId(id);
+            for (HandoverRecord hr : handovers) {
+                if (hr.getStatus() != HandoverStatus.CANCELLED) {
+                    hr.setStatus(HandoverStatus.CANCELLED);
+                    handoverRepository.save(hr);
+                    log.info("Handover {} for booking {} marked as CANCELLED due to owner rejection", hr.getId(), id);
+                }
+            }
+        } catch (Exception e) {
+            log.warn("Failed to cancel handovers for booking {}: {}", id, e.getMessage());
+        }
+
+        cleanupDriverAssignmentsAndStatus(booking);
+
         // ★ Thông báo cho Customer
         try {
             notificationService.createNotification(
@@ -575,6 +637,24 @@ public class BookingServiceImpl implements BookingService {
         Booking updated = bookingRepository.save(booking);
 
         releaseCarIfNoActiveBookings(booking.getCarId());
+
+        if (booking.getDriverId() != null) {
+            try {
+                driverRepository.findById(booking.getDriverId()).ifPresent(driver -> {
+                    int trips = driver.getTotalTrips() != null ? driver.getTotalTrips() : 0;
+                    driver.setTotalTrips(trips + 1);
+                    boolean hasOther = bookingRepository.existsByDriverIdAndTimeOverlap(
+                            driver.getId(), LocalDateTime.now(), LocalDateTime.now());
+                    if (!hasOther && driver.getStatus() == DriverStatus.BUSY) {
+                        driver.setStatus(DriverStatus.ACTIVE);
+                    }
+                    driverRepository.save(driver);
+                    log.info("Driver {} totalTrips incremented to {}", driver.getId(), trips + 1);
+                });
+            } catch (Exception e) {
+                log.warn("Failed to update driver trips on completion: {}", e.getMessage());
+            }
+        }
 
         // ★ Thông báo cho Customer
         try {
@@ -775,6 +855,77 @@ public class BookingServiceImpl implements BookingService {
                     booking.getId(), e.getMessage());
         }
 
+        try {
+            List<Refund> refunds = refundRepository.findByBookingId(booking.getId());
+            if (!refunds.isEmpty()) {
+                Refund latestRefund = refunds.get(refunds.size() - 1);
+                response.setRefundAmount(latestRefund.getAmount());
+                response.setRefundStatus(latestRefund.getStatus().name());
+                response.setRefundReason(latestRefund.getReason());
+            }
+        } catch (Exception e) {
+            log.warn("Failed to load refund for booking {}: {}", booking.getId(), e.getMessage());
+        }
+
+        if (booking.getDriverId() != null) {
+            driverRepository.findById(booking.getDriverId()).ifPresent(d -> {
+                response.setDriverName(d.getName());
+                response.setDriverPhone(d.getPhone());
+            });
+        }
+
+        try {
+            if (booking.getRentalMode() == RentalMode.WITH_DRIVER) {
+                List<DriverAssignment> assignments = driverAssignmentRepository
+                        .findByBookingIdOrderByCreatedAtDesc(booking.getId());
+                if (!assignments.isEmpty()) {
+                    DriverAssignment latest = assignments.get(0);
+                    if (booking.getDriverId() == null &&
+                            (latest.getStatus() == AssignmentStatus.REJECTED || latest.getStatus() == AssignmentStatus.EXPIRED)) {
+                        response.setDriverAssignmentStatus("NO_DRIVER_AVAILABLE");
+                    } else {
+                        response.setDriverAssignmentStatus(latest.getStatus().name());
+                    }
+                } else if (booking.getDriverId() == null) {
+                    response.setDriverAssignmentStatus("NO_DRIVER_AVAILABLE");
+                }
+            }
+        } catch (Exception e) {
+            log.warn("Failed to load driver assignment status for booking {}: {}", booking.getId(), e.getMessage());
+        }
+
         return response;
+    }
+
+    private void cleanupDriverAssignmentsAndStatus(Booking booking) {
+        if (booking == null) return;
+        try {
+            List<DriverAssignment> assignments = driverAssignmentRepository.findByBookingIdOrderByCreatedAtDesc(booking.getId());
+            for (DriverAssignment da : assignments) {
+                if (da.getStatus() == AssignmentStatus.PENDING) {
+                    da.setStatus(AssignmentStatus.CANCELLED);
+                    da.setRespondedAt(LocalDateTime.now());
+                    driverAssignmentRepository.save(da);
+                    log.info("Driver assignment {} for booking {} CANCELLED due to booking cancellation", da.getId(), booking.getId());
+                }
+            }
+        } catch (Exception e) {
+            log.warn("Failed to cancel driver assignments for booking {}: {}", booking.getId(), e.getMessage());
+        }
+
+        if (booking.getDriverId() != null) {
+            try {
+                driverRepository.findById(booking.getDriverId()).ifPresent(driver -> {
+                    boolean hasOther = bookingRepository.existsByDriverIdAndTimeOverlap(
+                            driver.getId(), LocalDateTime.now(), LocalDateTime.now());
+                    if (!hasOther && driver.getStatus() == DriverStatus.BUSY) {
+                        driver.setStatus(DriverStatus.ACTIVE);
+                        driverRepository.save(driver);
+                    }
+                });
+            } catch (Exception e) {
+                log.warn("Failed to reset driver status: {}", e.getMessage());
+            }
+        }
     }
 }
