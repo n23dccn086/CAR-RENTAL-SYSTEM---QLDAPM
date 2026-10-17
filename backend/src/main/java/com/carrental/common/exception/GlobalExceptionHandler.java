@@ -59,7 +59,15 @@ public class GlobalExceptionHandler {
                 traceId
         );
 
-        return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(response);
+        HttpStatus status = HttpStatus.UNAUTHORIZED;
+        if (errorCode == ErrorCode.PERMISSION_DENIED
+                || errorCode == ErrorCode.UNAUTHORIZED
+                || errorCode == ErrorCode.BOOKING_NOT_OWNED
+                || errorCode == ErrorCode.CAR_NOT_OWNED) {
+            status = HttpStatus.FORBIDDEN;
+        }
+
+        return ResponseEntity.status(status).body(response);
     }
 
     // ===== Xử lý AppException (custom exception) =====

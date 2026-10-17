@@ -22,6 +22,9 @@ import com.carrental.handover.repository.HandoverImageRepository;
 import com.carrental.handover.repository.HandoverRecordRepository;
 import com.carrental.notification.entity.NotificationType;
 import com.carrental.notification.service.NotificationService;
+import com.carrental.user.entity.Role;
+import com.carrental.user.entity.User;
+import com.carrental.user.repository.UserRepository;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
@@ -49,6 +52,7 @@ public class HandoverServiceImpl implements HandoverService {
     HandoverImageRepository imageRepository;
     BookingRepository bookingRepository;
     CarRepository carRepository;
+    UserRepository userRepository;
     HandoverMapper handoverMapper;
     NotificationService notificationService;
     ConfigHelper configHelper;
@@ -72,9 +76,11 @@ public class HandoverServiceImpl implements HandoverService {
         Booking booking = bookingRepository.findById(request.getBookingId())
                 .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.BOOKING_NOT_FOUND));
 
-        if (!booking.getOwnerId().equals(userId)) {
+        User user = userRepository.findById(userId).orElse(null);
+        boolean isAdmin = user != null && user.getRole() == Role.ADMIN;
+        if (!booking.getOwnerId().equals(userId) && !isAdmin) {
             throw new UnauthorizedException(ErrorCode.PERMISSION_DENIED,
-                    "Chỉ chủ xe mới có thể tạo biên bản");
+                    "Chỉ chủ xe hoặc quản trị viên mới có thể tạo biên bản");
         }
 
         String type = request.getHandoverType();
@@ -525,9 +531,13 @@ public class HandoverServiceImpl implements HandoverService {
         Booking booking = bookingRepository.findById(bookingId)
                 .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.BOOKING_NOT_FOUND));
 
+        User user = userRepository.findById(userId).orElse(null);
+        boolean isAdmin = user != null && user.getRole() == Role.ADMIN;
         boolean isOwner = booking.getOwnerId().equals(userId);
         boolean isCustomer = booking.getCustomerId().equals(userId);
-        if (!isOwner && !isCustomer) {
+        boolean isDriver = booking.getDriverId() != null && booking.getDriverId().equals(userId);
+
+        if (!isAdmin && !isOwner && !isCustomer && !isDriver) {
             throw new UnauthorizedException(ErrorCode.PERMISSION_DENIED,
                     "Bạn không có quyền truy cập biên bản này");
         }
@@ -716,7 +726,9 @@ public class HandoverServiceImpl implements HandoverService {
         Booking booking = bookingRepository.findById(request.getBookingId())
                 .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.BOOKING_NOT_FOUND));
 
-        if (!booking.getOwnerId().equals(userId) && !booking.getCustomerId().equals(userId)) {
+        User user = userRepository.findById(userId).orElse(null);
+        boolean isAdmin = user != null && user.getRole() == Role.ADMIN;
+        if (!booking.getOwnerId().equals(userId) && !booking.getCustomerId().equals(userId) && !isAdmin) {
             throw new UnauthorizedException(ErrorCode.PERMISSION_DENIED,
                     "Bạn không có quyền tạo biên bản cho đơn này");
         }
@@ -835,7 +847,9 @@ public class HandoverServiceImpl implements HandoverService {
         Booking booking = bookingRepository.findById(request.getBookingId())
                 .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.BOOKING_NOT_FOUND));
 
-        if (!booking.getOwnerId().equals(userId) && !booking.getCustomerId().equals(userId)) {
+        User user = userRepository.findById(userId).orElse(null);
+        boolean isAdmin = user != null && user.getRole() == Role.ADMIN;
+        if (!booking.getOwnerId().equals(userId) && !booking.getCustomerId().equals(userId) && !isAdmin) {
             throw new UnauthorizedException(ErrorCode.PERMISSION_DENIED,
                     "Bạn không có quyền tạo biên bản cho đơn này");
         }
