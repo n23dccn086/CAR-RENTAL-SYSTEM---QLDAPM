@@ -8,11 +8,24 @@ const api = axios.create({
   headers: { 'Content-Type': 'application/json' },
 })
 
-// Request interceptor: tự động gán Bearer access token
+// Request interceptor: tự động gán Bearer access token (trừ các endpoint auth public)
 api.interceptors.request.use((config) => {
-  const token = localStorage.getItem('token')
-  if (token) {
-    config.headers.Authorization = `Bearer ${token}`
+  const url = config.url || ''
+  const isAuthEndpoint =
+    url.includes('/auth/login') ||
+    url.includes('/auth/register') ||
+    url.includes('/auth/refresh') ||
+    url.includes('/auth/forgot-password') ||
+    url.includes('/auth/reset-password')
+
+  if (!isAuthEndpoint) {
+    const token = localStorage.getItem('token')
+    if (token) {
+      config.headers.Authorization = `Bearer ${token}`
+    }
+  } else {
+    // Đảm bảo không gửi token cũ/hết hạn vào endpoint đăng nhập/đăng ký
+    delete config.headers.Authorization
   }
   return config
 })
@@ -56,11 +69,25 @@ api.interceptors.response.use(
       url.includes('/auth/refresh')
 
     if ((status === 401 || status === 403) && !isAuthEndpoint) {
-      // Phân biệt 403 quyền truy cập (Forbidden) và 403 do token hết hạn
+      // Phân biệt lỗi phân quyền (Forbidden) và lỗi token hết hạn (Unauthorized)
+      const errorCode = error.response?.data?.code
+      const isPermissionDenied =
+        status === 403 ||
+        errorCode === 2102 || // PERMISSION_DENIED
+        errorCode === 3002 || // UNAUTHORIZED (FORBIDDEN)
+        errorCode === 4004 || // CAR_NOT_OWNED
+        errorCode === 5006    // BOOKING_NOT_OWNED
+
+      // Nếu là lỗi do không có quyền truy cập dữ liệu, tuyệt đối không đăng xuất người dùng
+      if (isPermissionDenied) {
+        return Promise.reject(error)
+      }
+
+      // Kiểm tra token thực sự có hết hạn không
       let isTokenExpired = status === 401
       const currentToken = localStorage.getItem('token')
 
-      if (status === 403 && currentToken) {
+      if (currentToken) {
         try {
           const payload = JSON.parse(atob(currentToken.split('.')[1]))
           const exp = payload.exp * 1000
@@ -72,7 +99,7 @@ api.interceptors.response.use(
         }
       }
 
-      // Nếu là lỗi 403 quyền hạn thật (không phải hết hạn token), trả về lỗi thông thường
+      // Nếu không phải hết hạn token, trả về lỗi thông thường
       if (!isTokenExpired) {
         return Promise.reject(error)
       }

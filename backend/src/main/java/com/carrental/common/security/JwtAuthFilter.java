@@ -39,6 +39,21 @@ public class JwtAuthFilter extends OncePerRequestFilter {
     JwtService jwtService;
 
     @Override
+    protected boolean shouldNotFilter(HttpServletRequest request) {
+        String path = request.getServletPath();
+        if (!StringUtils.hasText(path)) {
+            path = request.getRequestURI();
+        }
+        return path.contains("/auth/login")
+                || path.contains("/auth/register")
+                || path.contains("/auth/refresh")
+                || path.contains("/auth/forgot-password")
+                || path.contains("/auth/reset-password")
+                || path.contains("/v3/api-docs")
+                || path.contains("/swagger-ui");
+    }
+
+    @Override
     protected void doFilterInternal(HttpServletRequest request,
                                     HttpServletResponse response,
                                     FilterChain filterChain) throws ServletException, IOException {

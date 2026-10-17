@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import FormInput from '../components/FormInput'
 import { login } from '../services/authService'
@@ -10,6 +10,23 @@ export default function LoginPage() {
   const [form, setForm] = useState({ phone: '', password: '' })
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
+
+  useEffect(() => {
+    // Khi vào trang đăng nhập, dọn sạch token cũ đã hết hạn nếu có
+    const token = localStorage.getItem('token')
+    if (token) {
+      try {
+        const payload = JSON.parse(atob(token.split('.')[1]))
+        if (Date.now() > payload.exp * 1000) {
+          localStorage.removeItem('token')
+          localStorage.removeItem('refreshToken')
+          localStorage.removeItem('user')
+        }
+      } catch {
+        localStorage.removeItem('token')
+      }
+    }
+  }, [])
 
   const handleChange = (e) => {
     setForm({ ...form, [e.target.name]: e.target.value })
