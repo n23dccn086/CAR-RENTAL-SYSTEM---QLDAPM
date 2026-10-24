@@ -131,6 +131,27 @@ public class BookingController {
     }
 
     /**
+     * Khách gửi lại yêu cầu hoàn cọc sau khi bị Admin từ chối
+     * POST /api/v1/bookings/{id}/re-request-refund
+     */
+    @PostMapping("/{id}/re-request-refund")
+    public ApiResponse<BookingResponse> reRequestRefund(
+            @PathVariable Long id,
+            @RequestBody(required = false) CancelBookingRequest requestBody,
+            HttpServletRequest httpRequest) {
+
+        Long customerId = extractUserId(httpRequest);
+        String reason = (requestBody != null && requestBody.getReason() != null)
+                ? requestBody.getReason()
+                : null;
+
+        log.info("REST request to re-request refund: id={}, customerId={}, reason={}", id, customerId, reason);
+
+        return ApiResponse.success("Gửi lại yêu cầu hoàn cọc thành công",
+                bookingService.reRequestRefund(id, customerId, reason));
+    }
+
+    /**
      * Chủ xe duyệt đơn (hỗ trợ cả POST theo API contract và PUT theo frontend)
      * POST /api/v1/bookings/{id}/approve
      * PUT  /api/v1/bookings/{id}/approve?note=...

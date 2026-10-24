@@ -1,7 +1,9 @@
 import { useState, useEffect } from "react";
 import api from "../services/api";
+import { useDialog } from "../context/DialogContext";
 
 export default function AdminDisputesPage() {
+  const { confirm, prompt, alert: dialogAlert } = useDialog();
   const [disputes, setDisputes] = useState([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState("");
@@ -56,38 +58,73 @@ export default function AdminDisputesPage() {
   };
 
   const handleApproveRaiser = async (id) => {
-    if (!window.confirm("Duyệt form người khởi kiện (Bên A)?")) return;
+    const ok = await confirm({
+      title: "Duyệt form người khởi kiện",
+      subtitle: "Giải quyết khiếu nại — Bên A",
+      message: "Xác nhận duyệt bản khai và bằng chứng của người khởi kiện (Bên A)?",
+      confirmText: "Xác nhận duyệt",
+      variant: "success",
+    });
+    if (!ok) return;
+
     try {
       await api.put(`/admin/disputes/${id}/approve-raiser`);
       showMessage("Đã duyệt form người khởi kiện");
       fetchDisputes();
       setDetailModal(false);
     } catch (err) {
-      alert("Lỗi: " + (err.response?.data?.message || err.message));
+      dialogAlert({
+        title: "Lỗi thao tác",
+        message: err.response?.data?.message || err.message,
+        variant: "danger"
+      });
     }
   };
 
   const handleApproveAgainst = async (id) => {
-    if (!window.confirm("Duyệt form người bị kiện (Bên B)?")) return;
+    const ok = await confirm({
+      title: "Duyệt form người bị kiện",
+      subtitle: "Giải quyết khiếu nại — Bên B",
+      message: "Xác nhận duyệt bản giải trình và bằng chứng của người bị kiện (Bên B)?",
+      confirmText: "Xác nhận duyệt",
+      variant: "success",
+    });
+    if (!ok) return;
+
     try {
       await api.put(`/admin/disputes/${id}/approve-against`);
       showMessage("Đã duyệt form người bị kiện");
       fetchDisputes();
       setDetailModal(false);
     } catch (err) {
-      alert("Lỗi: " + (err.response?.data?.message || err.message));
+      dialogAlert({
+        title: "Lỗi thao tác",
+        message: err.response?.data?.message || err.message,
+        variant: "danger"
+      });
     }
   };
 
   const handleRequestEvidence = async (dispute, target) => {
     const targetLabel =
       target === "RAISER"
-        ? "Bên A"
+        ? "Bên A (Khởi kiện)"
         : target === "AGAINST"
-          ? "Bên B"
+          ? "Bên B (Bị kiện)"
           : "cả 2 bên";
-    const request = window.prompt(`Yêu cầu ${targetLabel} bổ sung bằng chứng:`);
+
+    const request = await prompt({
+      title: `Yêu cầu bổ sung bằng chứng`,
+      subtitle: `Gửi yêu cầu tới ${targetLabel}`,
+      message: `Vui lòng nhập nội dung chi tiết các tài liệu, biên bản hoặc hình ảnh mà ${targetLabel} cần tải lên bổ sung:`,
+      inputLabel: "Nội dung yêu cầu bổ sung *",
+      placeholder: "Ví dụ: Yêu cầu cung cấp thêm video quay góc trước xe lúc nhận xe để đối chiếu vết trầy xước...",
+      required: true,
+      confirmText: "Gửi yêu cầu",
+      variant: "default",
+    });
     if (!request) return;
+
     try {
       await api.put(
         `/admin/disputes/${dispute.id}/request-evidence?target=${target}&request=${encodeURIComponent(request)}`,
@@ -96,7 +133,11 @@ export default function AdminDisputesPage() {
       fetchDisputes();
       setDetailModal(false);
     } catch (err) {
-      alert("Lỗi: " + (err.response?.data?.message || err.message));
+      dialogAlert({
+        title: "Lỗi gửi yêu cầu",
+        message: err.response?.data?.message || err.message,
+        variant: "danger"
+      });
     }
   };
 

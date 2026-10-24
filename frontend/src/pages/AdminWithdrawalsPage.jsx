@@ -4,8 +4,10 @@ import {
   approveWithdrawal,
   rejectWithdrawal,
 } from '../services/withdrawalService'
+import { useDialog } from '../context/DialogContext'
 
 export default function AdminWithdrawalsPage() {
+  const { prompt, alert: dialogAlert } = useDialog()
   const [withdrawals, setWithdrawals] = useState([])
   const [loading, setLoading] = useState(true)
   const [filter, setFilter] = useState('PENDING')
@@ -42,14 +44,18 @@ export default function AdminWithdrawalsPage() {
 
   const handleApprove = async (item) => {
     const displayAmount = item.netAmount || item.amount
-    const txId = window.prompt(
-      `Duyệt yêu cầu rút #${item.id}?\n\n` +
-      `Số tiền yêu cầu: ${formatPrice(item.amount)}đ\n` +
-      `Phí rút: ${formatPrice(item.fee || 0)}đ\n` +
-      `→ Chuyển khoản: ${formatPrice(displayAmount)}đ\n\n` +
-      `Nhập mã giao dịch (không bắt buộc):`,
-      'TXN_' + Date.now()
-    )
+    const txId = await prompt({
+      title: `Duyệt yêu cầu rút tiền #${item.id}`,
+      subtitle: "Giải ngân tài chính",
+      message: `Số tiền yêu cầu: ${formatPrice(item.amount)}đ · Phí: ${formatPrice(item.fee || 0)}đ\n→ Thực chuyển: ${formatPrice(displayAmount)}đ`,
+      inputLabel: "Mã giao dịch ngân hàng (TxID)",
+      placeholder: "Nhập mã giao dịch chuyển khoản...",
+      defaultValue: 'TXN_' + Date.now(),
+      required: false,
+      inputType: 'text',
+      confirmText: "Xác nhận giải ngân",
+      variant: "success",
+    })
     if (txId === null) return
 
     try {
@@ -58,7 +64,11 @@ export default function AdminWithdrawalsPage() {
       fetchData()
       setTimeout(() => setMessage(''), 4000)
     } catch (err) {
-      alert('Lỗi: ' + (err.response?.data?.message || err.message))
+      dialogAlert({
+        title: "Lỗi duyệt rút tiền",
+        message: err.response?.data?.message || err.message,
+        variant: "danger"
+      })
     }
   }
 

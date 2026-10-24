@@ -80,6 +80,18 @@ const CONFIG_META = {
     hint: "Phí mỗi km vượt trên mốc bậc 2",
     min: 0,
   },
+  max_km_overage_per_day: {
+    label: "Giới hạn km vượt tối đa / ngày",
+    unit: "km/ngày",
+    hint: "Số km vượt tối đa cho phép mỗi ngày (mặc định 500 km/ngày). Vượt ngưỡng này sẽ cảnh báo và chặn lưu vào database.",
+    min: 50,
+  },
+  max_total_km_overage: {
+    label: "Trần km vượt tối đa cả chuyến",
+    unit: "km",
+    hint: "Trần tối đa số km vượt cho cả chuyến đi (mặc định 2,000 km) nhằm ngăn chặn sai lệch nhập nhầm ODO gây số tiền quá lớn.",
+    min: 100,
+  },
 
   // ===== HOÀN CỌC — KHÁCH HỦY =====
   refund_before_24h_percent: {
@@ -145,6 +157,8 @@ const CONFIG_GROUPS = [
     title: "Phí vượt km (áp dụng MỌI loại xe — chỉ thuê tự lái)",
     keys: [
       "default_km_per_day",
+      "max_km_overage_per_day",
+      "max_total_km_overage",
       "km_overage_bracket_1_limit",
       "km_overage_bracket_1_price",
       "km_overage_bracket_2_limit",

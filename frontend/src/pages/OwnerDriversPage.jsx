@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { createPortal } from "react-dom";
 import api from "../services/api";
+import { useDialog } from "../context/DialogContext";
 
 const STATUS_MAP = {
   PENDING: { label: "Chờ duyệt", color: "var(--dong)" },
@@ -13,6 +14,7 @@ const STATUS_MAP = {
 const LOCKED_STATUSES = ["PENDING", "BUSY"];
 
 export default function OwnerDriversPage() {
+  const { confirm, alert: dialogAlert } = useDialog();
   const [drivers, setDrivers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [totalPages, setTotalPages] = useState(0);
@@ -120,16 +122,23 @@ export default function OwnerDriversPage() {
     if (!file) return;
 
     if (!file.name.toLowerCase().endsWith(".xlsx")) {
-      alert("Chỉ hỗ trợ file .xlsx");
+      dialogAlert({
+        title: "Định dạng file không hỗ trợ",
+        message: "Chỉ hỗ trợ file Excel định dạng .xlsx",
+        variant: "danger"
+      });
       e.target.value = "";
       return;
     }
 
-    if (
-      !window.confirm(
-        `Import tài xế từ file "${file.name}"?\n\nTài xế mới sẽ ở trạng thái "Chờ Admin duyệt".`,
-      )
-    ) {
+    const ok = await confirm({
+      title: "Nhập danh sách tài xế",
+      subtitle: "Import Excel",
+      message: `Import tài xế từ file "${file.name}"?\n\nTài xế mới sau khi import sẽ ở trạng thái "Chờ Admin duyệt".`,
+      confirmText: "Bắt đầu import",
+      variant: "gold",
+    });
+    if (!ok) {
       e.target.value = "";
       return;
     }
@@ -154,11 +163,19 @@ export default function OwnerDriversPage() {
         }
       }
 
-      alert(detailMsg);
+      dialogAlert({
+        title: "Kết quả Import",
+        message: detailMsg,
+        variant: "success"
+      });
       setPage(0);
       fetchDrivers();
     } catch (err) {
-      alert("Lỗi import: " + (err.response?.data?.message || err.message));
+      dialogAlert({
+        title: "Lỗi import",
+        message: err.response?.data?.message || err.message,
+        variant: "danger"
+      });
     } finally {
       setImporting(false);
       e.target.value = "";
@@ -169,7 +186,14 @@ export default function OwnerDriversPage() {
     const newStatus = driver.status === "ACTIVE" ? "INACTIVE" : "ACTIVE";
     const action = newStatus === "INACTIVE" ? "Khóa" : "Mở khóa";
 
-    if (!window.confirm(`${action} tài xế "${driver.name}"?`)) return;
+    const ok = await confirm({
+      title: `${action} tài xế`,
+      subtitle: "Trạng thái hoạt động",
+      message: `Bạn có chắc muốn ${action.toLowerCase()} tài xế "${driver.name}" (${driver.phone})?`,
+      confirmText: action,
+      variant: newStatus === "INACTIVE" ? "danger" : "success",
+    });
+    if (!ok) return;
 
     try {
       await api.patch(`/drivers/${driver.id}/status`, { status: newStatus });
@@ -180,7 +204,11 @@ export default function OwnerDriversPage() {
       );
       showMessage(`Đã ${action.toLowerCase()} tài xế ${driver.name}`);
     } catch (err) {
-      alert("Lỗi: " + (err.response?.data?.message || err.message));
+      dialogAlert({
+        title: "Lỗi cập nhật trạng thái",
+        message: err.response?.data?.message || err.message,
+        variant: "danger"
+      });
     }
   };
 
@@ -272,12 +300,16 @@ export default function OwnerDriversPage() {
   const handleDelete = async (driver) => {
     const isRejected = driver.status === "REJECTED";
 
-    const message = isRejected
-      ? `XÓA VĨNH VIỄN tài xế "${driver.name}" (${driver.phone})?\n\n` +
-        `⚠️ Hành động này KHÔNG THỂ hoàn tác!`
-      : `Xóa tài xế "${driver.name}"?`;
-
-    if (!window.confirm(message)) return;
+    const ok = await confirm({
+      title: isRejected ? "Xóa vĩnh viễn tài xế" : "Xóa tài xế",
+      subtitle: "Hành động nguy hiểm",
+      message: isRejected
+        ? `XÓA VĨNH VIỄN tài xế "${driver.name}" (${driver.phone})?\n\nHành động này không thể hoàn tác!`
+        : `Bạn có chắc chắn muốn xóa tài xế "${driver.name}"?`,
+      confirmText: isRejected ? "Xóa vĩnh viễn" : "Xác nhận xóa",
+      variant: "danger",
+    });
+    if (!ok) return;
 
     try {
       await api.delete(`/drivers/${driver.id}`);
@@ -285,7 +317,11 @@ export default function OwnerDriversPage() {
       closeDetail();
       fetchDrivers();
     } catch (err) {
-      alert("Lỗi: " + (err.response?.data?.message || err.message));
+      dialogAlert({
+        title: "Lỗi xóa tài xế",
+        message: err.response?.data?.message || err.message,
+        variant: "danger"
+      });
     }
   };
 

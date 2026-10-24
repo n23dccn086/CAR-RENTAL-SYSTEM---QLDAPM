@@ -414,6 +414,84 @@ public class BookingServiceImpl implements BookingService {
 
     @Override
     @Transactional
+    public BookingResponse reRequestRefund(Long id, Long customerId, String reason) {
+        log.info("Customer {} re-requesting refund for booking {}: reason={}", customerId, id, reason);
+
+        Booking booking = getBookingEntityById(id);
+
+        if (!booking.getCustomerId().equals(customerId)) {
+            throw new UnauthorizedException(ErrorCode.PERMISSION_DENIED, "Bạn không có quyền thực hiện thao tác này");
+        }
+
+        if (booking.getStatus() != BookingStatus.CANCELLED) {
+            throw new BadRequestException(ErrorCode.VALIDATION_ERROR, "Chỉ có thể yêu cầu hoàn cọc cho đơn hàng đã hủy");
+        }
+
+        // Kiểm tra xem đã có refund PENDING chưa
+        List<Refund> existingRefunds = refundRepository.findByBookingId(id);
+        boolean hasPending = existingRefunds.stream().anyMatch(r -> r.getStatus() == PaymentStatus.PENDING);
+        if (hasPending) {
+            throw new BadRequestException(ErrorCode.VALIDATION_ERROR, "Đơn hàng đang có yêu cầu hoàn tiền chờ duyệt. Vui lòng đợi quản trị viên xử lý.");
+        }
+
+        Payment payment = paymentRepository
+                .findByBookingIdAndStatus(id, PaymentStatus.SUCCESS)
+                .orElse(null);
+
+        if (payment == null) {
+            throw new BadRequestException(ErrorCode.VALIDATION_ERROR, "Đơn hàng chưa có giao dịch thanh toán thành công để hoàn tiền.");
+        }
+
+        // Xác định số tiền hoàn (lấy từ refund trước đó nếu có, hoặc tính theo cọc)
+        Long refundAmount = null;
+        for (int i = existingRefunds.size() - 1; i >= 0; i--) {
+            Refund prev = existingRefunds.get(i);
+            if (prev.getAmount() != null && prev.getAmount() > 0) {
+                refundAmount = prev.getAmount();
+                break;
+            }
+        }
+        if (refundAmount == null || refundAmount <= 0) {
+            long depositPaid = (booking.getDepositAmount() != null && booking.getDepositAmount() > 0)
+                    ? booking.getDepositAmount()
+                    : (booking.getTotalPrice() != null ? booking.getTotalPrice() * 30 / 100 : 0L);
+            refundAmount = depositPaid;
+        }
+
+        String effectiveReason = "Khách gửi lại yêu cầu hoàn cọc: " +
+                (reason != null && !reason.isBlank() ? reason.trim() : "Đề nghị xem xét lại");
+
+        Refund refund = Refund.builder()
+                .paymentId(payment.getId())
+                .bookingId(id)
+                .amount(refundAmount)
+                .reason(effectiveReason)
+                .status(PaymentStatus.PENDING)
+                .build();
+        refundRepository.save(refund);
+        log.info("Created re-requested refund for booking {}: amount={}", id, refundAmount);
+
+        // Thông báo cho tất cả Admin
+        try {
+            List<User> admins = userRepository.findByRole(Role.ADMIN);
+            for (User admin : admins) {
+                notificationService.createNotification(
+                        admin.getId(),
+                        NotificationType.REFUND_REQUESTED,
+                        "Yêu cầu hoàn tiền lại (Khiếu nại)",
+                        String.format("Khách gửi lại yêu cầu hoàn cọc đơn #%d (%,dđ). Lý do: %s",
+                                id, refundAmount, (reason != null ? reason : "Không có lý do")),
+                        id);
+            }
+        } catch (Exception e) {
+            log.warn("Failed to notify admins: {}", e.getMessage());
+        }
+
+        return buildResponse(booking, null);
+    }
+
+    @Override
+    @Transactional
     public BookingResponse approveBooking(Long id, Long ownerId, String note) {
         log.info("Approve booking: id={}, ownerId={}", id, ownerId);
 

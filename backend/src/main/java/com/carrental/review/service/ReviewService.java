@@ -26,6 +26,8 @@ public interface ReviewService {
 
     List<ReviewResponse> getReviewsByOwner(Long ownerId);
 
+    List<ReviewResponse> getAllReviews();
+
     // ===== DELETE =====
 
     void deleteReview(Long reviewId, Long userId);

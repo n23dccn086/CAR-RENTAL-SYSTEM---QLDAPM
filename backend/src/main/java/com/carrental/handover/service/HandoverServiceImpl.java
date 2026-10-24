@@ -461,8 +461,14 @@ public class HandoverServiceImpl implements HandoverService {
     private KmOverageResult calculateKmOverage(
             Booking booking, int pickupKm, int returnKm) {
 
+        if (returnKm < pickupKm) {
+            throw new BadRequestException(ErrorCode.VALIDATION_ERROR,
+                    String.format("Số km trả xe (%d km) không thể nhỏ hơn số km lúc nhận xe (%d km). Vui lòng kiểm tra lại đồng hồ công-tơ-mét.",
+                            returnKm, pickupKm));
+        }
+
         int kmDriven = returnKm - pickupKm;
-        if (kmDriven <= 0) {
+        if (kmDriven == 0) {
             return new KmOverageResult(0, 0, 0, BigDecimal.ZERO);
         }
 
@@ -475,6 +481,17 @@ public class HandoverServiceImpl implements HandoverService {
         }
 
         int kmOver = kmDriven - kmAllowed;
+
+        // ★ GIỚI HẠN VƯỢT QUÁ KM (ngăn chặn lỗi nhập nhầm số ODO gây phát sinh số tiền quá lớn vào DB)
+        int maxOverPerDay = configHelper.getMaxKmOveragePerDay();
+        int maxTotalCap = configHelper.getMaxTotalKmOverage();
+        int maxAllowedOver = Math.min(maxTotalCap, maxOverPerDay * rentalDays);
+
+        if (kmOver > maxAllowedOver) {
+            throw new BadRequestException(ErrorCode.VALIDATION_ERROR,
+                    String.format("Số km vượt quá (%d km) vượt quá giới hạn tối đa cho phép (%d km cho chuyến đi %d ngày, tối đa %d km/ngày). Vui lòng kiểm tra lại số ODO nhập vào để tránh phát sinh chi phí sai lệch quá lớn.",
+                            kmOver, maxAllowedOver, rentalDays, maxOverPerDay));
+        }
 
         int limit1 = configHelper.getKmOverageBracket1Limit();
         BigDecimal price1 = configHelper.getKmOverageBracket1Price();
@@ -585,12 +602,30 @@ public class HandoverServiceImpl implements HandoverService {
             response.setIsOwner(isOwner);
             response.setIsCustomer(isCustomer);
 
-            boolean canSign = record.getStatus() == HandoverStatus.PENDING
+            boolean isCancelled = booking.getStatus() == BookingStatus.CANCELLED
+                    || record.getStatus() == HandoverStatus.CANCELLED;
+
+            if (booking.getStatus() == BookingStatus.CANCELLED && record.getStatus() != HandoverStatus.CANCELLED) {
+                try {
+                    record.setStatus(HandoverStatus.CANCELLED);
+                    handoverRepository.save(record);
+                } catch (Exception e) {
+                    log.warn("Failed to auto-update handover status to CANCELLED: {}", e.getMessage());
+                }
+            }
+
+            if (isCancelled) {
+                response.setStatus(HandoverStatus.CANCELLED.name());
+            }
+
+            boolean canSign = !isCancelled
+                    && record.getStatus() == HandoverStatus.PENDING
                     && ((isOwner && record.getOwnerSignature() == null)
                         || (isCustomer && record.getCustomerSignature() == null));
             response.setCanSign(canSign);
 
-            boolean canCreate = isOwner
+            boolean canCreate = !isCancelled
+                    && isOwner
                     && record.getStatus() == HandoverStatus.PENDING
                     && record.getOwnerSignature() == null;
             response.setCanCreate(canCreate);

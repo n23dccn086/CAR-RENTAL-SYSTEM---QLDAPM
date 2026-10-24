@@ -73,6 +73,11 @@ public class ReviewController {
         return ApiResponse.success(reviewService.getReviewsByOwner(ownerId));
     }
 
+    @GetMapping("/all")
+    public ApiResponse<List<ReviewResponse>> getAllReviews() {
+        return ApiResponse.success(reviewService.getAllReviews());
+    }
+
     @DeleteMapping("/{id}")
     public ApiResponse<Void> deleteReview(
             @PathVariable Long id,

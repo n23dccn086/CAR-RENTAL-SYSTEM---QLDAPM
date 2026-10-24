@@ -31,6 +31,8 @@ public interface BookingService {
 
     BookingResponse cancelBooking(Long id, Long customerId, String reason);
 
+    BookingResponse reRequestRefund(Long id, Long customerId, String reason);
+
     BookingResponse approveBooking(Long id, Long ownerId, String note);
 
     BookingResponse rejectBooking(Long id, Long ownerId, String reason);

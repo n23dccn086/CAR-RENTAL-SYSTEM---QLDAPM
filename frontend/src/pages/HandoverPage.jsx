@@ -57,7 +57,8 @@ export default function HandoverPage() {
             getBookingById(data.bookingId).catch(() => null),
             api.get(`/payments/booking/${data.bookingId}`).catch(() => null),
           ])
-          if (bRes?.data) setBooking(bRes.data)
+          const bData = bRes?.data?.data || bRes?.data || bRes
+          if (bData && (bData.id || bData.status)) setBooking(bData)
           if (pRes?.data?.data) setPayments(pRes.data.data)
         } catch (e) {
           console.warn("Could not load booking or payment details", e)
@@ -72,6 +73,11 @@ export default function HandoverPage() {
 
   // ===== KÝ =====
   const handleSign = async (role) => {
+    if (isCancelled) {
+      setSignError('Đơn hàng này đã bị hủy. Biên bản bàn giao đã bị vô hiệu hóa hoàn toàn.')
+      return
+    }
+
     if (!signatureData) {
       setSignError('Vui lòng vẽ chữ ký trước')
       return
@@ -159,8 +165,10 @@ export default function HandoverPage() {
   const isPickup = handover.handoverType === 'PICKUP'
   const title = isPickup ? 'Biên bản giao xe' : 'Biên bản nhận xe'
   const hasOwnerSigned = !!handover.ownerSignature
-  const hasCustomerSigned = !!handover.customerSignature
-  const isCancelled = handover.status === 'CANCELLED' || booking?.status === 'CANCELLED'
+  const isCancelled =
+    handover.status === 'CANCELLED' ||
+    handover.bookingStatus === 'CANCELLED' ||
+    booking?.status === 'CANCELLED'
   const isCompleted = !isCancelled && hasOwnerSigned && hasCustomerSigned
 
   const isOwner = handover.isOwner ?? (handover.ownerId != null && user?.id === handover.ownerId)
