@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { createPortal } from 'react-dom'
 import api from '../services/api'
+import { useDialog } from '../context/DialogContext'
 
 const STATUS_MAP = {
   PENDING:  { label: 'Chờ duyệt',       color: 'var(--dong)' },
@@ -11,6 +12,7 @@ const STATUS_MAP = {
 }
 
 export default function AdminDriversPage() {
+  const { confirm, alert: dialogAlert } = useDialog()
   const [drivers, setDrivers] = useState([])
   const [loading, setLoading] = useState(true)
   const [filter, setFilter] = useState('PENDING')
@@ -94,38 +96,71 @@ export default function AdminDriversPage() {
   }, [detailModal])
 
   const handleApprove = async (driver) => {
-    if (!window.confirm(`Duyệt tài xế "${driver.name}" (${driver.phone})?`)) return
+    const ok = await confirm({
+      title: "Phê duyệt tài xế",
+      subtitle: "Hồ sơ đối tác",
+      message: `Xác nhận phê duyệt tài xế "${driver.name}" (${driver.phone})? Tài xế sẽ được kích hoạt trạng thái "Đang hoạt động" và đủ điều kiện nhận chuyến.`,
+      confirmText: "Xác nhận duyệt",
+      variant: "success",
+    })
+    if (!ok) return
     try {
       await api.put(`/admin/drivers/${driver.id}/approve`)
       showMessage(`✅ Đã duyệt tài xế ${driver.name}`)
       closeDetail()
       fetchDrivers()
     } catch (err) {
-      alert('Lỗi: ' + (err.response?.data?.message || err.message))
+      dialogAlert({
+        title: "Lỗi duyệt tài xế",
+        message: err.response?.data?.message || err.message,
+        variant: "danger"
+      })
     }
   }
 
   const handleLockDriver = async (driver) => {
-    if (!window.confirm(`Khóa tài xế "${driver.name}" (${driver.phone})?`)) return
+    const ok = await confirm({
+      title: "Khóa tài xế",
+      subtitle: "Hạn chế quyền hạn",
+      message: `Khóa tài xế "${driver.name}" (${driver.phone})? Tài xế sẽ tạm ngừng hoạt động và không thể nhận chuyến.`,
+      confirmText: "Khóa tài xế",
+      variant: "danger",
+    })
+    if (!ok) return
     try {
       await api.put(`/admin/drivers/${driver.id}/lock`)
       showMessage(`✅ Đã khóa tài xế ${driver.name}`)
       closeDetail()
       fetchDrivers()
     } catch (err) {
-      alert('Lỗi: ' + (err.response?.data?.message || err.message))
+      dialogAlert({
+        title: "Lỗi khóa tài xế",
+        message: err.response?.data?.message || err.message,
+        variant: "danger"
+      })
     }
   }
 
   const handleUnlockDriver = async (driver) => {
-    if (!window.confirm(`Mở khóa tài xế "${driver.name}" (${driver.phone})?`)) return
+    const ok = await confirm({
+      title: "Mở khóa tài xế",
+      subtitle: "Khôi phục hoạt động",
+      message: `Mở khóa cho tài xế "${driver.name}" (${driver.phone}) để tiếp tục nhận chuyến?`,
+      confirmText: "Mở khóa",
+      variant: "success",
+    })
+    if (!ok) return
     try {
       await api.put(`/admin/drivers/${driver.id}/unlock`)
       showMessage(`✅ Đã mở khóa tài xế ${driver.name}`)
       closeDetail()
       fetchDrivers()
     } catch (err) {
-      alert('Lỗi: ' + (err.response?.data?.message || err.message))
+      dialogAlert({
+        title: "Lỗi mở khóa tài xế",
+        message: err.response?.data?.message || err.message,
+        variant: "danger"
+      })
     }
   }
 

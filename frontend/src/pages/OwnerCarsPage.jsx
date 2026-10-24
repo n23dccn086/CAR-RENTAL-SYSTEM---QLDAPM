@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { createPortal } from "react-dom";
 import { Link } from "react-router-dom";
 import api from "../services/api";
+import { useDialog } from "../context/DialogContext";
 
 const SEAT_OPTIONS = [4, 5, 7];
 
@@ -65,6 +66,7 @@ const CAR_TYPE_LABELS = {
 };
 
 export default function OwnerCarsPage() {
+  const { confirm, alert: dialogAlert } = useDialog();
   const [cars, setCars] = useState([]);
   const [loading, setLoading] = useState(true);
   const [totalPages, setTotalPages] = useState(0);
@@ -165,16 +167,23 @@ export default function OwnerCarsPage() {
     if (!file) return;
 
     if (!file.name.toLowerCase().endsWith(".xlsx")) {
-      alert("Chỉ hỗ trợ file .xlsx");
+      dialogAlert({
+        title: "Định dạng file không hỗ trợ",
+        message: "Chỉ hỗ trợ file Excel định dạng .xlsx",
+        variant: "danger"
+      });
       e.target.value = "";
       return;
     }
 
-    if (
-      !window.confirm(
-        `Import xe từ file "${file.name}"?\n\nXe mới sẽ ở trạng thái "Chờ Admin duyệt".`,
-      )
-    ) {
+    const ok = await confirm({
+      title: "Nhập danh sách xe",
+      subtitle: "Import Excel",
+      message: `Import cỗ xe từ tập tin "${file.name}"?\n\nCác xe mới sau khi import sẽ ở trạng thái "Chờ Admin duyệt" trước khi công khai.`,
+      confirmText: "Bắt đầu import",
+      variant: "gold",
+    });
+    if (!ok) {
       e.target.value = "";
       return;
     }
@@ -199,11 +208,19 @@ export default function OwnerCarsPage() {
         }
       }
 
-      alert(detailMsg);
+      dialogAlert({
+        title: "Kết quả Import",
+        message: detailMsg,
+        variant: "success"
+      });
       setPage(0);
       fetchCars();
     } catch (err) {
-      alert("Lỗi import: " + (err.response?.data?.message || err.message));
+      dialogAlert({
+        title: "Lỗi import xe",
+        message: err.response?.data?.message || err.message,
+        variant: "danger"
+      });
     } finally {
       setImporting(false);
       e.target.value = "";
@@ -214,13 +231,14 @@ export default function OwnerCarsPage() {
     if (newStatus === car.status) return;
 
     const statusLabel = STATUS_MAP[newStatus]?.label || newStatus;
-    if (
-      !window.confirm(
-        `Đổi trạng thái xe "${car.brand} ${car.model}" (${car.plate}) thành "${statusLabel}"?`,
-      )
-    ) {
-      return;
-    }
+    const ok = await confirm({
+      title: "Thay đổi trạng thái cỗ xe",
+      subtitle: `${car.brand} ${car.model} · ${car.plate}`,
+      message: `Xác nhận chuyển trạng thái xe sang "${statusLabel}"?`,
+      confirmText: "Xác nhận chuyển",
+      variant: newStatus === "INACTIVE" || newStatus === "BROKEN" ? "danger" : "success",
+    });
+    if (!ok) return;
 
     setUpdatingId(car.id);
     try {
@@ -230,7 +248,11 @@ export default function OwnerCarsPage() {
       );
       showMessage(`Đã đổi trạng thái xe ${car.plate}`);
     } catch (err) {
-      alert("Lỗi: " + (err.response?.data?.message || err.message));
+      dialogAlert({
+        title: "Lỗi đổi trạng thái",
+        message: err.response?.data?.message || err.message,
+        variant: "danger"
+      });
       fetchCars();
     } finally {
       setUpdatingId(null);
@@ -240,14 +262,16 @@ export default function OwnerCarsPage() {
   const handleDelete = async (car) => {
     const isRejected = car.status === "REJECTED";
 
-    const message = isRejected
-      ? `XÓA VĨNH VIỄN xe "${car.brand} ${car.model}" (${car.plate})?\n\n` +
-        `⚠️ Hành động này KHÔNG THỂ hoàn tác!\n` +
-        `Xe và tất cả ảnh, giấy tờ sẽ bị xóa khỏi hệ thống.`
-      : `Xóa xe "${car.brand} ${car.model}" (${car.plate})?\n\n` +
-        `Xe sẽ bị ẩn khỏi Bộ sưu tập.`;
-
-    if (!window.confirm(message)) return;
+    const ok = await confirm({
+      title: isRejected ? "Xóa vĩnh viễn xe" : "Xóa cỗ xe",
+      subtitle: isRejected ? "Hành động không thể hoàn tác" : "Gỡ khỏi bộ sưu tập",
+      message: isRejected
+        ? `XÓA VĨNH VIỄN xe "${car.brand} ${car.model}" (${car.plate})?\n\nXe và tất cả dữ liệu liên quan sẽ bị xóa sạch khỏi hệ thống.`
+        : `Xóa xe "${car.brand} ${car.model}" (${car.plate}) khỏi danh sách hiển thị?`,
+      confirmText: isRejected ? "Xóa vĩnh viễn" : "Xác nhận xóa",
+      variant: "danger",
+    });
+    if (!ok) return;
 
     try {
       await api.delete(`/cars/${car.id}`);
@@ -255,7 +279,11 @@ export default function OwnerCarsPage() {
       closeDetail();
       fetchCars();
     } catch (err) {
-      alert("Lỗi: " + (err.response?.data?.message || err.message));
+      dialogAlert({
+        title: "Lỗi xóa xe",
+        message: err.response?.data?.message || err.message,
+        variant: "danger"
+      });
     }
   };
 

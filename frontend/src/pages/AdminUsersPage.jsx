@@ -1,8 +1,10 @@
 import { useState, useEffect } from 'react'
 import api from '../services/api'
 import { useAuth } from '../hooks/useAuth'
+import { useDialog } from '../context/DialogContext'
 
 export default function AdminUsersPage() {
+  const { confirm, alert: dialogAlert } = useDialog()
   const { user: currentUser } = useAuth()
   const [users, setUsers] = useState([])
   const [stats, setStats] = useState(null)
@@ -55,8 +57,18 @@ export default function AdminUsersPage() {
   }, [filter])
 
   const handleAction = async (id, action) => {
-    const actionLabel = action === 'lock' ? 'khóa' : action === 'unlock' ? 'mở khóa' : 'xóa'
-    if (!window.confirm(`Xác nhận ${actionLabel} user #${id}?`)) return
+    const actionLabel = action === 'lock' ? 'khóa' : action === 'unlock' ? 'mở khóa' : 'xóa vĩnh viễn'
+    const isDanger = action === 'lock' || action === 'delete'
+
+    const ok = await confirm({
+      title: `${actionLabel.toUpperCase()} tài khoản #${id}`,
+      subtitle: "Quản trị người dùng",
+      message: `Xác nhận bạn muốn ${actionLabel} người dùng mang mã định danh #${id}?`,
+      confirmText: action === 'lock' ? 'Khóa tài khoản' : action === 'unlock' ? 'Mở khóa' : 'Xóa vĩnh viễn',
+      variant: isDanger ? 'danger' : 'success',
+    })
+    if (!ok) return
+
     try {
       if (action === 'lock') await api.put(`/admin/users/${id}/lock`)
       if (action === 'unlock') await api.put(`/admin/users/${id}/unlock`)
@@ -88,7 +100,15 @@ export default function AdminUsersPage() {
 
   // ===== DUYỆT =====
   const handleApprove = async (user) => {
-    if (!window.confirm(`Duyệt hồ sơ xác thực cho "${user.name}"?`)) return
+    const ok = await confirm({
+      title: "Duyệt hồ sơ xác thực",
+      subtitle: "Xác thực danh tính (KYC)",
+      message: `Xác nhận duyệt hồ sơ định danh KYC cho "${user.name}"? Tài khoản sẽ chuyển sang trạng thái đã xác thực.`,
+      confirmText: "Xác nhận duyệt",
+      variant: "success",
+    })
+    if (!ok) return
+
     try {
       await api.put(`/admin/users/${user.id}/verify`)
       setMsg(`Đã duyệt xác thực cho ${user.name}`)
@@ -96,7 +116,11 @@ export default function AdminUsersPage() {
       setProfileModal(false)
       setTimeout(() => setMsg(''), 3000)
     } catch (err) {
-      alert('Lỗi: ' + (err.response?.data?.message || err.message))
+      dialogAlert({
+        title: "Lỗi duyệt hồ sơ",
+        message: err.response?.data?.message || err.message,
+        variant: "danger"
+      })
     }
   }
 

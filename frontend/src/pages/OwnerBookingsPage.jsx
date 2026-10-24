@@ -2,8 +2,10 @@ import { useState, useEffect } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import api from '../services/api'
 import HandoverFormModal from '../components/HandoverFormModal'
+import { useDialog } from '../context/DialogContext'
 
 export default function OwnerBookingsPage() {
+  const { alert: dialogAlert } = useDialog()
   const navigate = useNavigate()
   const [bookings, setBookings] = useState([])
   const [loading, setLoading] = useState(true)
@@ -108,7 +110,11 @@ export default function OwnerBookingsPage() {
       fetchBookings()
       setTimeout(() => setMessage(''), 5000)
     } catch (err) {
-      alert('Lỗi: ' + (err.response?.data?.message || err.message))
+      dialogAlert({
+        title: "Lỗi duyệt đơn",
+        message: err.response?.data?.message || err.message,
+        variant: "danger"
+      })
     } finally {
       setApproveSubmitting(false)
     }
@@ -122,7 +128,11 @@ export default function OwnerBookingsPage() {
 
   const handleOwnerCancel = async () => {
     if (!cancelReason.trim()) {
-      alert('Vui lòng nhập lý do hủy và lời xin lỗi khách')
+      dialogAlert({
+        title: "Thiếu lý do hủy",
+        message: "Vui lòng nhập lý do hủy đơn và lời xin lỗi khách hàng trước khi xác nhận.",
+        variant: "danger"
+      })
       return
     }
     setCancelSubmitting(true)
@@ -133,7 +143,11 @@ export default function OwnerBookingsPage() {
       fetchBookings()
       setTimeout(() => setMessage(''), 5000)
     } catch (err) {
-      alert('Lỗi: ' + (err.response?.data?.message || err.message))
+      dialogAlert({
+        title: "Lỗi hủy đơn",
+        message: err.response?.data?.message || err.message,
+        variant: "danger"
+      })
     } finally {
       setCancelSubmitting(false)
     }

@@ -25,6 +25,7 @@ public class ReviewResponse {
     String reviewerAvatar;
     String customerName;
     String carName;
+    String ownerName;
 
     Integer carRating;
     Integer ownerRating;
@@ -70,6 +71,10 @@ public class ReviewResponse {
 
     public String getCar_name() {
         return carName;
+    }
+
+    public String getOwner_name() {
+        return ownerName;
     }
 
     public Integer getCar_rating() {

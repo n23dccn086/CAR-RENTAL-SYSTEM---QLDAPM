@@ -1,4 +1,4 @@
-import { Routes, Route } from "react-router-dom";
+import { Routes, Route, Navigate } from "react-router-dom";
 import Cursor from "./components/Cursor";
 import Header from "./components/Header";
 import Footer from "./components/Footer";
@@ -28,8 +28,7 @@ import NotificationsPage from "./pages/NotificationsPage";
 import ReviewPage from "./pages/ReviewPage";
 import OwnerReviewsPage from "./pages/OwnerReviewsPage";
 import AdminApprovalsPage from "./pages/AdminApprovalsPage";
-import DisputesPage from "./pages/DisputesPage";
-import AdminDisputesPage from "./pages/AdminDisputesPage";
+import AdminReviewsPage from "./pages/AdminReviewsPage";
 import VerificationPage from "./pages/VerificationPage";
 import HandoverPage from "./pages/HandoverPage";
 import OwnerWithdrawalsPage from "./pages/OwnerWithdrawalsPage";
@@ -59,6 +58,7 @@ function App() {
           <Route path="/login" element={<LoginPage />} />
           <Route path="/register" element={<RegisterPage />} />
           <Route path="/search" element={<SearchPage />} />
+          <Route path="/cars" element={<SearchPage />} />
           <Route path="/cars/:id" element={<CarDetailPage />} />
 
           {/* ===== DRIVER MAGIC LINK — PUBLIC ===== */}
@@ -124,11 +124,7 @@ function App() {
 
           <Route
             path="/disputes"
-            element={
-              <ProtectedRoute allowedRoles={["CUSTOMER", "OWNER", "ADMIN"]}>
-                <DisputesPage />
-              </ProtectedRoute>
-            }
+            element={<Navigate to="/my-bookings" replace />}
           />
 
           <Route
@@ -305,13 +301,19 @@ function App() {
             }
           />
 
+          {/* ★ Admin Reviews */}
           <Route
-            path="/admin/disputes"
+            path="/admin/reviews"
             element={
               <ProtectedRoute allowedRoles={["ADMIN"]}>
-                <AdminDisputesPage />
+                <AdminReviewsPage />
               </ProtectedRoute>
             }
+          />
+
+          <Route
+            path="/admin/disputes"
+            element={<Navigate to="/admin/dashboard" replace />}
           />
 
           {/* ★ Admin Withdrawals (UC-AD05) */}

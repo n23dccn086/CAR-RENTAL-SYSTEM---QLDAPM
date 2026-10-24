@@ -109,6 +109,14 @@ public class ConfigHelper {
         return getDecimalConfig("km_overage_bracket_3_price", new BigDecimal("12000"));
     }
 
+    public int getMaxKmOveragePerDay() {
+        return getDecimalConfig("max_km_overage_per_day", new BigDecimal("500")).intValue();
+    }
+
+    public int getMaxTotalKmOverage() {
+        return getDecimalConfig("max_total_km_overage", new BigDecimal("2000")).intValue();
+    }
+
     // ===== SUPPORT =====
 
     public String getSupportHotline() {

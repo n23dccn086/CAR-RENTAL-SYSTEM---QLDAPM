@@ -210,6 +210,14 @@ public class ReviewServiceImpl implements ReviewService {
         return reviews.stream().map(this::buildResponse).toList();
     }
 
+    @Override
+    public List<ReviewResponse> getAllReviews() {
+        return reviewRepository.findAll(Sort.by(Sort.Direction.DESC, "createdAt"))
+                .stream()
+                .map(this::buildResponse)
+                .toList();
+    }
+
     // ===== DELETE =====
 
     @Override
@@ -221,7 +229,11 @@ public class ReviewServiceImpl implements ReviewService {
                 .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.REVIEW_NOT_FOUND));
 
         if (!review.getCustomerId().equals(userId)) {
-            throw new UnauthorizedException(ErrorCode.PERMISSION_DENIED);
+            User user = userRepository.findById(userId).orElse(null);
+            boolean isAdmin = user != null && com.carrental.user.entity.Role.ADMIN.equals(user.getRole());
+            if (!isAdmin) {
+                throw new UnauthorizedException(ErrorCode.PERMISSION_DENIED);
+            }
         }
 
         reviewRepository.delete(review);
@@ -251,6 +263,13 @@ public class ReviewServiceImpl implements ReviewService {
             Car car = carRepository.findById(review.getCarId()).orElse(null);
             if (car != null) {
                 response.setCarName(car.getBrand() + " " + car.getModel());
+            }
+        }
+
+        if (review.getOwnerId() != null) {
+            User owner = userRepository.findById(review.getOwnerId()).orElse(null);
+            if (owner != null) {
+                response.setOwnerName(owner.getName());
             }
         }
 

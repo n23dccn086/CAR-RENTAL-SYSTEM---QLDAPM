@@ -67,6 +67,8 @@ export default function HandoverFormModal({
 
     const keys = [
       'default_km_per_day',
+      'max_km_overage_per_day',
+      'max_total_km_overage',
       'km_overage_bracket_1_limit',
       'km_overage_bracket_1_price',
       'km_overage_bracket_2_limit',
@@ -107,20 +109,32 @@ export default function HandoverFormModal({
   let kmAllowed = 0
   let kmOver = 0
   let kmOverageFee = 0
+  let rentalDays = 1
+  let maxOverPerDay = 500
+  let maxTotalCap = 2000
+  let maxAllowedOver = 500
+  let isOverageExceeded = false
+
   const returnKm = parseInt(form.kmReading)
+  const isReturnKmInvalid = !isPickup && pickupKm != null && !isNaN(returnKm) && returnKm < pickupKm
 
   if (pickupKm != null && !isNaN(returnKm) && returnKm > pickupKm && booking) {
     kmDriven = returnKm - pickupKm
     const start = new Date(booking.startDate)
     const end = new Date(booking.endDate)
     const hours = Math.max(0, (end - start) / (1000 * 60 * 60))
-    const days = Math.max(1, Math.ceil(hours / 24))
+    rentalDays = Math.max(1, Math.ceil(hours / 24))
 
     const kmPerDay = parseInt(config?.default_km_per_day) || 300
-    kmAllowed = kmPerDay * days
+    kmAllowed = kmPerDay * rentalDays
     kmOver = Math.max(0, kmDriven - kmAllowed)
 
-    if (kmOver > 0) {
+    maxOverPerDay = parseInt(config?.max_km_overage_per_day) || 500
+    maxTotalCap = parseInt(config?.max_total_km_overage) || 2000
+    maxAllowedOver = Math.min(maxTotalCap, maxOverPerDay * rentalDays)
+    isOverageExceeded = kmOver > maxAllowedOver
+
+    if (kmOver > 0 && !isOverageExceeded) {
       const limit1 = parseInt(config?.km_overage_bracket_1_limit) || 50
       const price1 = parseInt(config?.km_overage_bracket_1_price) || 5000
       const limit2 = parseInt(config?.km_overage_bracket_2_limit) || 100
@@ -219,8 +233,13 @@ export default function HandoverFormModal({
     if (isNaN(km) || km < 0) {
       return setError('Số km không hợp lệ')
     }
-    if (form.fuelLevel < 0 || form.fuelLevel > 100) {
-      return setError('Mức xăng phải từ 0 đến 100')
+    if (!isPickup) {
+      if (pickupKm != null && km < pickupKm) {
+        return setError(`Số ODO trả xe (${km.toLocaleString('vi-VN')} km) không thể nhỏ hơn ODO lúc nhận xe (${pickupKm.toLocaleString('vi-VN')} km). Vui lòng kiểm tra lại.`)
+      }
+      if (isOverageExceeded) {
+        return setError(`Số km vượt quá (${kmOver.toLocaleString('vi-VN')} km) vượt quá mức trần tối đa cho phép (${maxAllowedOver.toLocaleString('vi-VN')} km). Không thể lưu biên bản để tránh tính sai lệch số tiền phạt quá lớn vào database.`)
+      }
     }
 
     setSubmitting(true)
@@ -357,8 +376,27 @@ export default function HandoverFormModal({
                 placeholder="VD: 25000"
                 min="0"
                 required
-                style={inputStyle}
+                style={{
+                  ...inputStyle,
+                  borderColor: (isOverageExceeded || isReturnKmInvalid) ? 'var(--do)' : (inputStyle.borderColor || 'rgba(15,14,12,0.2)'),
+                  background: (isOverageExceeded || isReturnKmInvalid) ? 'rgba(139,44,44,0.06)' : (inputStyle.background || 'var(--kem)')
+                }}
               />
+              {!isPickup && pickupKm != null && (
+                <div style={{ fontFamily: 'var(--mono)', fontSize: '11px', color: 'var(--muc-mo)', marginTop: '6px' }}>
+                  ODO nhận: <strong>{pickupKm.toLocaleString('vi-VN')} km</strong> · Định mức: <strong>{kmAllowed.toLocaleString('vi-VN')} km</strong>
+                </div>
+              )}
+              {isReturnKmInvalid && (
+                <div style={{ fontFamily: 'var(--mono)', fontSize: '11px', color: 'var(--do)', marginTop: '4px', fontWeight: 600 }}>
+                  ⚠️ ODO trả xe không thể nhỏ hơn ODO lúc nhận ({pickupKm?.toLocaleString('vi-VN')} km)!
+                </div>
+              )}
+              {isOverageExceeded && (
+                <div style={{ fontFamily: 'var(--mono)', fontSize: '11px', color: 'var(--do)', marginTop: '4px', fontWeight: 700 }}>
+                  🚨 Vượt trần tối đa ({kmOver.toLocaleString('vi-VN')} km &gt; {maxAllowedOver.toLocaleString('vi-VN')} km)!
+                </div>
+              )}
             </div>
             <div>
               <label style={labelStyle}>Mức xăng ({form.fuelLevel}%)</label>
@@ -703,21 +741,22 @@ export default function HandoverFormModal({
             </button>
             <button
               type="submit"
-              disabled={submitting}
+              disabled={submitting || isOverageExceeded || isReturnKmInvalid}
               style={{
                 flex: 2,
                 padding: '16px',
-                background: 'var(--do)',
-                border: '1px solid var(--do)',
+                background: (isOverageExceeded || isReturnKmInvalid) ? 'var(--muc-mo)' : 'var(--do)',
+                border: `1px solid ${(isOverageExceeded || isReturnKmInvalid) ? 'var(--muc-mo)' : 'var(--do)'}`,
                 color: 'var(--kem)',
                 fontFamily: 'var(--mono)',
                 fontSize: '11px',
                 letterSpacing: '2px',
                 textTransform: 'uppercase',
-                cursor: submitting ? 'wait' : 'pointer',
+                cursor: (submitting || isOverageExceeded || isReturnKmInvalid) ? 'not-allowed' : 'pointer',
+                opacity: (isOverageExceeded || isReturnKmInvalid) ? 0.6 : 1,
               }}
             >
-              {submitting ? 'Đang tạo...' : 'Tạo biên bản'}
+              {submitting ? 'Đang tạo...' : (isOverageExceeded ? 'Chặn tạo (Vượt trần km)' : (isReturnKmInvalid ? 'Chặn tạo (ODO không hợp lệ)' : 'Tạo biên bản'))}
             </button>
           </div>
         </form>
@@ -746,6 +785,8 @@ function KmOveragePreview({ booking, returnKm, config: parentConfig, pickupKm: p
     if (parentConfig) return
     const keys = [
       'default_km_per_day',
+      'max_km_overage_per_day',
+      'max_total_km_overage',
       'km_overage_bracket_1_limit',
       'km_overage_bracket_1_price',
       'km_overage_bracket_2_limit',
@@ -792,7 +833,7 @@ function KmOveragePreview({ booking, returnKm, config: parentConfig, pickupKm: p
         fontSize: '14px',
         color: 'var(--do)',
       }}>
-        ⚠️ Số km không hợp lệ (return &lt; pickup)
+        ⚠️ Số ODO không hợp lệ (ODO trả xe nhỏ hơn ODO lúc nhận xe)
       </div>
     )
   }
@@ -819,7 +860,62 @@ function KmOveragePreview({ booking, returnKm, config: parentConfig, pickupKm: p
         fontStyle: 'italic',
         fontSize: '14px',
       }}>
-        ✓ Đã chạy <strong>{kmDriven.toLocaleString('vi-VN')} km</strong> / {kmAllowed.toLocaleString('vi-VN')} km — Chưa vượt định mức
+        ✓ Đã chạy <strong>{kmDriven.toLocaleString('vi-VN')} km</strong> / {kmAllowed.toLocaleString('vi-VN')} km ({days} ngày × {kmPerDay} km/ngày) — Chưa vượt định mức
+      </div>
+    )
+  }
+
+  // ★ KIỂM TRA VƯỢT QUÁ TRẦN KM CHO PHÉP (nghi vấn nhập nhầm ODO)
+  const maxOverPerDay = parseInt(config.max_km_overage_per_day) || 500
+  const maxTotalCap = parseInt(config.max_total_km_overage) || 2000
+  const maxAllowedOver = Math.min(maxTotalCap, maxOverPerDay * days)
+
+  if (kmOver > maxAllowedOver) {
+    return (
+      <div style={{
+        marginBottom: '24px',
+        padding: '16px 20px',
+        background: 'rgba(139,44,44,0.1)',
+        border: '2px solid var(--do)',
+        borderLeft: '6px solid var(--do)',
+      }}>
+        <div style={{
+          fontFamily: 'var(--mono)',
+          fontSize: '11px',
+          fontWeight: 700,
+          letterSpacing: '1.5px',
+          color: 'var(--do)',
+          marginBottom: '8px',
+          textTransform: 'uppercase',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '8px',
+        }}>
+          🚨 CẢNH BÁO: SỐ KM VƯỢT QUÁ QUÁ LỚN — NGHI VẤN NHẬP NHẦM ODO
+        </div>
+        <div style={{
+          fontFamily: 'var(--serif-2)',
+          fontSize: '14px',
+          lineHeight: 1.6,
+          color: 'var(--muc)',
+          marginBottom: '10px',
+        }}>
+          ODO nhận: <strong>{pickupKm.toLocaleString('vi-VN')} km</strong> · ODO trả: <strong>{returnKm.toLocaleString('vi-VN')} km</strong>
+          <br />
+          Đoạn đường đã chạy: <strong style={{ color: 'var(--do)' }}>{kmDriven.toLocaleString('vi-VN')} km</strong> trong {days} ngày thuê.
+          <br />
+          Vượt định mức: <strong style={{ color: 'var(--do)' }}>{kmOver.toLocaleString('vi-VN')} km</strong> (Trần cho phép: <strong>{maxAllowedOver.toLocaleString('vi-VN')} km</strong>, tối đa {maxOverPerDay} km/ngày).
+        </div>
+        <div style={{
+          fontFamily: 'var(--mono)',
+          fontSize: '11px',
+          color: 'var(--do)',
+          fontWeight: 600,
+          background: 'rgba(139,44,44,0.08)',
+          padding: '8px 12px',
+        }}>
+          ⛔ Hệ thống TỪ CHỐI LƯU số tiền này vào Database để tránh phát sinh chi phí bất thường quá lớn. Vui lòng kiểm tra lại công-tơ-mét trước khi tiếp tục.
+        </div>
       </div>
     )
   }

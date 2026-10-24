@@ -2,8 +2,10 @@ import { useState, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { getMyBookings } from "../services/bookingService";
 import api from "../services/api";
+import { useDialog } from "../context/DialogContext";
 
 export default function MyBookingsPage() {
+  const { prompt, alert: dialogAlert } = useDialog();
   const navigate = useNavigate();
   const [bookings, setBookings] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -130,27 +132,21 @@ export default function MyBookingsPage() {
         minute: "2-digit",
       });
 
-    const message =
-      `Bạn có chắc muốn hủy đơn #${booking.id}?\n\n` +
-      `📅 Ngày nhận xe: ${fmtDate(booking.startDate)}\n` +
-      `⏰ Thời gian còn lại: ${timeInfo}\n\n` +
-      `📋 Chính sách hoàn cọc:\n` +
-      `   • Trước 24h      → Hoàn 100% cọc\n` +
-      `   • Từ 4h - 24h    → Hoàn 70% cọc\n` +
-      `   • Dưới 4h        → Hoàn 50% cọc\n` +
-      `   • Sau giờ nhận   → Hoàn 0%\n\n` +
-      `⚖️ Áp dụng cho đơn này: ${ruleReason}\n` +
-      `💰 Tiền cọc: ${fmt(deposit)}đ\n` +
-      `✅ Sẽ hoàn: ${refundPercent}% (${fmt(refundAmount)}đ)\n` +
-      `❌ Sẽ mất: ${100 - refundPercent}% (${fmt(lostAmount)}đ)\n\n` +
-      `Tiếp tục hủy đơn?`;
-
-    if (!window.confirm(message)) return;
-
-    const reason = window.prompt(
-      "Lý do hủy đơn (không bắt buộc):",
-      "Khách hủy",
-    );
+    const reason = await prompt({
+      title: `Hủy chuyến đi #${booking.id}`,
+      subtitle: "Chính sách hoàn cọc",
+      message: `📅 Ngày nhận xe: ${fmtDate(booking.startDate)} · ${timeInfo}\n\n` +
+        `• Quy chế áp dụng: ${ruleReason}\n` +
+        `• Tiền cọc đã thanh toán: ${fmt(deposit)}đ\n` +
+        `• Dự kiến hoàn: ${refundPercent}% (${fmt(refundAmount)}đ)\n` +
+        `• Phí giữ xe/mất cọc: ${100 - refundPercent}% (${fmt(lostAmount)}đ)`,
+      inputLabel: "Lý do hủy đơn",
+      placeholder: "Nhập lý do hủy chuyến (không bắt buộc)...",
+      defaultValue: "Khách hủy",
+      required: false,
+      confirmText: "Xác nhận hủy đơn",
+      variant: "danger",
+    });
     if (reason === null) return;
 
     try {
@@ -163,22 +159,69 @@ export default function MyBookingsPage() {
       fetchBookings();
       setTimeout(() => setMessage(""), 5000);
     } catch (err) {
-      alert(
-        "Hủy đơn thất bại: " + (err.response?.data?.message || err.message),
-      );
+      dialogAlert({
+        title: "Hủy đơn thất bại",
+        message: err.response?.data?.message || err.message,
+        variant: "danger"
+      });
     }
   };
 
   const canCancel = (status) =>
     !["RENTED", "RETURNED", "COMPLETED", "CANCELLED"].includes(status);
 
+  const handleReRequestRefund = async (booking) => {
+    const reason = await prompt({
+      title: `Yêu cầu hoàn cọc lại · Đơn #${booking.id}`,
+      subtitle: "Gửi khiếu nại / giải trình tới Ban Quản Trị",
+      message: `Đơn hàng #${booking.id} đã bị Admin từ chối hoàn cọc.\n` +
+        (booking.refund_reason ? `• Lý do từ chối trước đó: "${booking.refund_reason}"\n\n` : "\n") +
+        `Vui lòng nhập lý do giải trình để Admin xem xét lại:`,
+      inputLabel: "Lý do / Giải trình khiếu nại",
+      placeholder: "VD: Tôi đã liên hệ và thống nhất với chủ xe, kính mong xem xét hoàn cọc...",
+      defaultValue: "",
+      required: true,
+      confirmText: "Gửi yêu cầu",
+      variant: "warning",
+    });
+    if (reason === null) return;
+
+    try {
+      await api.post(`/bookings/${booking.id}/re-request-refund`, {
+        reason: reason.trim()
+      });
+      setMessage(`Đã gửi lại yêu cầu hoàn cọc cho đơn #${booking.id}. Vui lòng chờ Admin duyệt.`);
+      fetchBookings();
+      setTimeout(() => setMessage(""), 5000);
+    } catch (err) {
+      dialogAlert({
+        title: "Gửi yêu cầu thất bại",
+        message: err.response?.data?.message || err.message,
+        variant: "danger"
+      });
+    }
+  };
+
   const handleViewHandover = async (booking) => {
+    if (booking.status === "CANCELLED") {
+      dialogAlert({
+        title: "Biên bản bàn giao",
+        message: "Đơn hàng này đã bị hủy. Tất cả biên bản giao/nhận xe đã bị vô hiệu hóa.",
+        variant: "warning"
+      });
+      return;
+    }
+
     try {
       const res = await api.get(`/handovers/booking/${booking.id}`);
       const handovers = res.data.data || [];
 
       if (handovers.length === 0) {
-        alert("Chưa có biên bản nào cho đơn này");
+        dialogAlert({
+          title: "Biên bản bàn giao",
+          message: "Chưa có biên bản bàn giao nào được lập cho đơn này.",
+          variant: "default"
+        });
         return;
       }
 
@@ -187,7 +230,11 @@ export default function MyBookingsPage() {
 
       navigate(`/handover/${target.id}`);
     } catch (err) {
-      alert("Lỗi: " + (err.response?.data?.message || err.message));
+      dialogAlert({
+        title: "Lỗi kiểm tra biên bản",
+        message: err.response?.data?.message || err.message,
+        variant: "danger"
+      });
     }
   };
 
@@ -412,11 +459,37 @@ export default function MyBookingsPage() {
                           </div>
                         )}
                         {b.refund_status === "CANCELLED" && (
-                          <div style={{ color: "var(--do)", marginTop: "4px" }}>
-                            ❌ <strong>Admin từ chối hoàn cọc:</strong> {b.refund_reason || "Không đủ điều kiện"}.
-                            <span style={{ display: "block", fontSize: "11px", color: "var(--muc-mo)", fontStyle: "italic", marginTop: "2px" }}>
-                              (Không thể tạo lại yêu cầu hoàn cọc cho đơn này)
-                            </span>
+                          <div style={{ color: "var(--do)", marginTop: "6px" }}>
+                            <div>
+                              ❌ <strong>Admin từ chối hoàn cọc:</strong> {b.refund_reason || "Không đủ điều kiện"}.
+                            </div>
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.preventDefault();
+                                e.stopPropagation();
+                                handleReRequestRefund(b);
+                              }}
+                              style={{
+                                marginTop: "8px",
+                                padding: "6px 14px",
+                                background: "var(--do)",
+                                color: "var(--kem)",
+                                border: "none",
+                                fontFamily: "var(--mono)",
+                                fontSize: "10px",
+                                letterSpacing: "1px",
+                                textTransform: "uppercase",
+                                cursor: "pointer",
+                                fontWeight: "bold",
+                                borderRadius: "4px",
+                                display: "inline-flex",
+                                alignItems: "center",
+                                gap: "6px",
+                              }}
+                            >
+                              🔄 Yêu cầu hoàn cọc lại
+                            </button>
                           </div>
                         )}
                       </div>

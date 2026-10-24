@@ -5,6 +5,7 @@ import {
   approveOwnerRequest,
   rejectOwnerRequest,
 } from "../services/ownerRegistrationService";
+import { useDialog } from "../context/DialogContext";
 
 const STATUS_MAP = {
   PENDING: { label: "Chờ duyệt", color: "var(--dong)" },
@@ -13,6 +14,7 @@ const STATUS_MAP = {
 };
 
 export default function AdminOwnerRequestsPage() {
+  const { confirm, alert: dialogAlert } = useDialog();
   const [requests, setRequests] = useState([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState("PENDING");
@@ -59,8 +61,15 @@ export default function AdminOwnerRequestsPage() {
   };
 
   const handleApprove = async (req) => {
-    if (!window.confirm(`Duyệt yêu cầu đăng ký chủ xe của "${req.fullName}"?`))
-      return;
+    const ok = await confirm({
+      title: "Duyệt yêu cầu đăng ký",
+      subtitle: "Phê duyệt chủ xe (OWNER)",
+      message: `Xác nhận duyệt yêu cầu đăng ký chủ xe của "${req.fullName}"? Tài khoản sẽ được nâng cấp vai trò thành OWNER.`,
+      confirmText: "Xác nhận duyệt",
+      variant: "success",
+    });
+    if (!ok) return;
+
     try {
       await approveOwnerRequest(req.id);
       showMessage(
@@ -69,7 +78,11 @@ export default function AdminOwnerRequestsPage() {
       fetchRequests();
       setDetailModal(false);
     } catch (err) {
-      alert("Lỗi: " + (err.response?.data?.message || err.message));
+      dialogAlert({
+        title: "Lỗi duyệt yêu cầu",
+        message: err.response?.data?.message || err.message,
+        variant: "danger"
+      });
     }
   };
 

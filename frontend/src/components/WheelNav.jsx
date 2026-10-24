@@ -42,9 +42,6 @@ export default function WheelNav() {
     ...(isLoggedIn
       ? [{ path: "/notifications", label: "Thông báo", icon: "✉" }]
       : []),
-    ...(isLoggedIn && user?.role !== "ADMIN"
-      ? [{ path: "/disputes", label: "Tranh chấp", icon: "⚖" }]
-      : []),
     ...(isLoggedIn &&
     user?.role === "CUSTOMER" &&
     user?.verificationStatus !== "VERIFIED"
@@ -88,7 +85,7 @@ export default function WheelNav() {
       ? [{ path: "/admin/drivers", label: "Duyệt tài xế", icon: "◍" }]
       : []),
     ...(isLoggedIn && user?.role === "ADMIN"
-      ? [{ path: "/admin/disputes", label: "Tranh chấp", icon: "⚖" }]
+      ? [{ path: "/admin/reviews", label: "Đánh giá", icon: "✿" }]
       : []),
     ...(isLoggedIn && user?.role === "ADMIN"
       ? [{ path: "/admin/users", label: "Người dùng", icon: "◔" }]

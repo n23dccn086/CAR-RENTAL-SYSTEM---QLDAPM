@@ -3,16 +3,18 @@ import { useParams, Link, useNavigate } from "react-router-dom";
 import { getBookingById } from "../services/bookingService";
 import api from "../services/api";
 import { useAuth } from "../hooks/useAuth";
+import { useDialog } from "../context/DialogContext";
 
 export default function BookingDetailPage() {
   const { id } = useParams();
   const navigate = useNavigate();
   const { user } = useAuth();
+  const { prompt, alert: dialogAlert } = useDialog();
   const [booking, setBooking] = useState(null);
   const [handovers, setHandovers] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
+  const loadBookingDetails = () => {
     Promise.all([
       getBookingById(id),
       api.get(`/handovers/booking/${id}`).catch(() => ({ data: { data: [] } })),
@@ -23,7 +25,42 @@ export default function BookingDetailPage() {
       })
       .catch(console.error)
       .finally(() => setLoading(false));
+  };
+
+  useEffect(() => {
+    loadBookingDetails();
   }, [id]);
+
+  const handleReRequestRefund = async () => {
+    if (!booking) return;
+    const reason = await prompt({
+      title: `Yêu cầu hoàn cọc lại · Đơn #${booking.id}`,
+      subtitle: "Gửi khiếu nại / giải trình tới Ban Quản Trị",
+      message: `Đơn hàng #${booking.id} đã bị Admin từ chối hoàn cọc.\n` +
+        (booking.refund_reason ? `• Lý do từ chối: "${booking.refund_reason}"\n\n` : "\n") +
+        `Vui lòng nhập lý do giải trình để Admin xem xét lại việc hoàn cọc:`,
+      inputLabel: "Lý do / Giải trình khiếu nại",
+      placeholder: "VD: Tôi đã liên hệ và thống nhất với chủ xe, kính mong xem xét hoàn cọc...",
+      defaultValue: "",
+      required: true,
+      confirmText: "Gửi yêu cầu",
+      variant: "warning",
+    });
+    if (reason === null) return;
+
+    try {
+      await api.post(`/bookings/${booking.id}/re-request-refund`, {
+        reason: reason.trim(),
+      });
+      loadBookingDetails();
+    } catch (err) {
+      dialogAlert({
+        title: "Gửi yêu cầu thất bại",
+        message: err.response?.data?.message || err.message,
+        variant: "danger",
+      });
+    }
+  };
 
   const formatPrice = (p) => new Intl.NumberFormat("vi-VN").format(p || 0);
   const formatDate = (d) =>
@@ -274,12 +311,31 @@ export default function BookingDetailPage() {
               <div style={{ fontWeight: 700, marginBottom: "4px" }}>
                 ❌ Yêu cầu hoàn cọc đã bị Admin từ chối
               </div>
-              <div style={{ color: "var(--muc)" }}>
+              <div style={{ color: "var(--muc)", marginBottom: "10px" }}>
                 Lý do từ chối: <em>{booking.refund_reason || "Không đủ điều kiện hoàn cọc theo quy chế."}</em>
               </div>
-              <div style={{ marginTop: "6px", fontSize: "12px", fontFamily: "var(--mono)", color: "var(--muc-mo)" }}>
-                ⚠️ Lưu ý: Đơn hàng đã kết thúc xử lý. Quý khách không thể tạo lại yêu cầu hoàn cọc mới cho đơn hàng này.
-              </div>
+              <button
+                type="button"
+                onClick={handleReRequestRefund}
+                style={{
+                  padding: "8px 16px",
+                  background: "var(--do)",
+                  color: "var(--kem)",
+                  border: "none",
+                  fontFamily: "var(--mono)",
+                  fontSize: "11px",
+                  letterSpacing: "1px",
+                  textTransform: "uppercase",
+                  cursor: "pointer",
+                  fontWeight: "bold",
+                  borderRadius: "4px",
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: "6px",
+                }}
+              >
+                🔄 Yêu cầu hoàn cọc lại
+              </button>
             </div>
           )}
         </div>
@@ -670,52 +726,69 @@ export default function BookingDetailPage() {
               marginBottom: "20px",
             }}
           >
-            Biên bản
+            Biên bản bàn giao
           </h3>
-          <div
-            style={{
-              display: "grid",
-              gridTemplateColumns: "1fr 1fr",
-              gap: "16px",
-            }}
-          >
-            {pickupHandover && (
-              <Link
-                to={`/handover/${pickupHandover.id}`}
-                style={{
-                  padding: "16px",
-                  background: isCancelled ? "rgba(15,14,12,0.06)" : "var(--kem)",
-                  border: isCancelled ? "1px dashed var(--muc-mo)" : "1px solid var(--muc)",
-                  textDecoration: "none",
-                  color: isCancelled ? "var(--muc-mo)" : "var(--muc)",
-                  fontFamily: "var(--mono)",
-                  fontSize: "11px",
-                  letterSpacing: "1.5px",
-                  textTransform: "uppercase",
-                }}
-              >
-                📝 Biên bản giao xe ({isCancelled ? 'Vô hiệu hóa' : pickupHandover.status})
-              </Link>
-            )}
-            {returnHandover && (
-              <Link
-                to={`/handover/${returnHandover.id}`}
-                style={{
-                  padding: "16px",
-                  background: isCancelled ? "rgba(15,14,12,0.06)" : "var(--kem)",
-                  border: isCancelled ? "1px dashed var(--muc-mo)" : "1px solid var(--muc)",
-                  textDecoration: "none",
-                  color: isCancelled ? "var(--muc-mo)" : "var(--muc)",
-                  fontFamily: "var(--mono)",
-                  fontSize: "11px",
-                  letterSpacing: "1.5px",
-                  textTransform: "uppercase",
-                }}
-              >
-                📝 Biên bản nhận xe ({isCancelled ? 'Vô hiệu hóa' : returnHandover.status})
-              </Link>
-            )}
-          </div>
+          {isCancelled ? (
+            <div
+              style={{
+                padding: "16px 20px",
+                background: "rgba(139,44,44,0.08)",
+                border: "1px dashed var(--do)",
+                color: "var(--do)",
+                fontFamily: "var(--mono)",
+                fontSize: "11px",
+                letterSpacing: "1px",
+                lineHeight: 1.6,
+              }}
+            >
+              🚫 ĐƠN HÀNG ĐÃ HỦY — TẤT CẢ BIÊN BẢN GIAO/NHẬN XE ĐÃ BỊ VÔ HIỆU HÓA VÀ KHÔNG THỂ KÝ
+            </div>
+          ) : (
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: "1fr 1fr",
+                gap: "16px",
+              }}
+            >
+              {pickupHandover && (
+                <Link
+                  to={`/handover/${pickupHandover.id}`}
+                  style={{
+                    padding: "16px",
+                    background: "var(--kem)",
+                    border: "1px solid var(--muc)",
+                    textDecoration: "none",
+                    color: "var(--muc)",
+                    fontFamily: "var(--mono)",
+                    fontSize: "11px",
+                    letterSpacing: "1.5px",
+                    textTransform: "uppercase",
+                  }}
+                >
+                  📝 Biên bản giao xe ({pickupHandover.status})
+                </Link>
+              )}
+              {returnHandover && (
+                <Link
+                  to={`/handover/${returnHandover.id}`}
+                  style={{
+                    padding: "16px",
+                    background: "var(--kem)",
+                    border: "1px solid var(--muc)",
+                    textDecoration: "none",
+                    color: "var(--muc)",
+                    fontFamily: "var(--mono)",
+                    fontSize: "11px",
+                    letterSpacing: "1.5px",
+                    textTransform: "uppercase",
+                  }}
+                >
+                  📝 Biên bản nhận xe ({returnHandover.status})
+                </Link>
+              )}
+            </div>
+          )}
         </div>
       )}
 

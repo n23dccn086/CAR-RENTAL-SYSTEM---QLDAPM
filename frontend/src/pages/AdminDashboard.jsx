@@ -372,7 +372,7 @@ export default function AdminDashboard() {
       <div
         style={{
           display: "grid",
-          gridTemplateColumns: "repeat(5, 1fr)",
+          gridTemplateColumns: "repeat(4, 1fr)",
           gap: "20px",
           marginBottom: "48px",
         }}
@@ -396,11 +396,6 @@ export default function AdminDashboard() {
           label="Đăng ký chủ xe"
           count={stats?.pendingOwnerRequests || 0}
           link="/admin/owner-requests"
-        />
-        <PendingCard
-          label="Tranh chấp"
-          count={stats?.pendingDisputes || 0}
-          link="/admin/disputes"
         />
       </div>
 
