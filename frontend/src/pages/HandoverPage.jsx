@@ -165,6 +165,7 @@ export default function HandoverPage() {
   const isPickup = handover.handoverType === 'PICKUP'
   const title = isPickup ? 'Biên bản giao xe' : 'Biên bản nhận xe'
   const hasOwnerSigned = !!handover.ownerSignature
+  const hasCustomerSigned = !!handover.customerSignature
   const isCancelled =
     handover.status === 'CANCELLED' ||
     handover.bookingStatus === 'CANCELLED' ||
