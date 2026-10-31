@@ -37,6 +37,8 @@ public class AdminDashboardServiceImpl implements AdminDashboardService {
     OwnerRequestRepository ownerRequestRepository;
     DisputeRepository disputeRepository;
     ConfigHelper configHelper;
+    com.carrental.payment.repository.PaymentRepository paymentRepository;
+    com.carrental.payment.repository.RefundRepository refundRepository;
 
     @Override
     public DashboardStatsResponse getStats() {
@@ -128,13 +130,27 @@ public class AdminDashboardServiceImpl implements AdminDashboardService {
                         || b.getStatus() == BookingStatus.COMPLETED)
                 .count();
 
-        // 3. Tiền cọc đã hoàn trả: đơn CANCELLED
+        // 3. Tiền cọc đã hoàn trả: đơn CANCELLED có cọc thực tế đã thanh toán/hoàn trả
+        java.util.Set<Long> bookingIdsWithPaidDeposit = paymentRepository.findAll().stream()
+                .filter(p -> (p.getPaymentType() == null || p.getPaymentType() == com.carrental.payment.entity.PaymentType.DEPOSIT)
+                        && (p.getStatus() == com.carrental.payment.entity.PaymentStatus.SUCCESS
+                                || p.getStatus() == com.carrental.payment.entity.PaymentStatus.REFUNDED))
+                .map(com.carrental.payment.entity.Payment::getBookingId)
+                .collect(java.util.stream.Collectors.toSet());
+
+        java.util.Set<Long> bookingIdsWithRefund = refundRepository.findAll().stream()
+                .map(com.carrental.payment.entity.Refund::getBookingId)
+                .collect(java.util.stream.Collectors.toSet());
+
         long refundedDepositAmount = allBookings.stream()
-                .filter(b -> b.getStatus() == BookingStatus.CANCELLED)
+                .filter(b -> b.getStatus() == BookingStatus.CANCELLED
+                        && (bookingIdsWithPaidDeposit.contains(b.getId()) || bookingIdsWithRefund.contains(b.getId())))
                 .mapToLong(b -> b.getDepositAmount() != null ? b.getDepositAmount() : 0L)
                 .sum();
         long refundedDepositCount = allBookings.stream()
-                .filter(b -> b.getStatus() == BookingStatus.CANCELLED && b.getDepositAmount() != null && b.getDepositAmount() > 0)
+                .filter(b -> b.getStatus() == BookingStatus.CANCELLED
+                        && b.getDepositAmount() != null && b.getDepositAmount() > 0
+                        && (bookingIdsWithPaidDeposit.contains(b.getId()) || bookingIdsWithRefund.contains(b.getId())))
                 .count();
 
         return DashboardStatsResponse.builder()
@@ -185,8 +201,20 @@ public class AdminDashboardServiceImpl implements AdminDashboardService {
         java.util.Map<Long, com.carrental.user.entity.User> userMap = userRepository.findAll().stream()
                 .collect(java.util.stream.Collectors.toMap(com.carrental.user.entity.User::getId, u -> u, (a, b) -> a));
 
+        java.util.Set<Long> bookingIdsWithPaidDeposit = paymentRepository.findAll().stream()
+                .filter(p -> (p.getPaymentType() == null || p.getPaymentType() == com.carrental.payment.entity.PaymentType.DEPOSIT)
+                        && (p.getStatus() == com.carrental.payment.entity.PaymentStatus.SUCCESS
+                                || p.getStatus() == com.carrental.payment.entity.PaymentStatus.REFUNDED))
+                .map(com.carrental.payment.entity.Payment::getBookingId)
+                .collect(java.util.stream.Collectors.toSet());
+
+        java.util.Set<Long> bookingIdsWithRefund = refundRepository.findAll().stream()
+                .map(com.carrental.payment.entity.Refund::getBookingId)
+                .collect(java.util.stream.Collectors.toSet());
+
         for (Booking b : allBookings) {
             long dep = b.getDepositAmount() != null ? b.getDepositAmount() : 0L;
+            boolean hasPaidDeposit = bookingIdsWithPaidDeposit.contains(b.getId()) || bookingIdsWithRefund.contains(b.getId());
             if (b.getStatus() == BookingStatus.PAID) {
                 holdingAmount += dep;
                 holdingCount++;
@@ -200,7 +228,7 @@ public class AdminDashboardServiceImpl implements AdminDashboardService {
                 mergedCount++;
                 mergedList.add(toDepositItem(b, carMap, userMap,
                         "Chủ xe đã duyệt đơn — Tiền cọc đã chính thức sáp nhập vào dòng tiền Doanh thu sàn."));
-            } else if (b.getStatus() == BookingStatus.CANCELLED && dep > 0) {
+            } else if (b.getStatus() == BookingStatus.CANCELLED && dep > 0 && hasPaidDeposit) {
                 refundedAmount += dep;
                 refundedCount++;
                 refundedList.add(toDepositItem(b, carMap, userMap,
