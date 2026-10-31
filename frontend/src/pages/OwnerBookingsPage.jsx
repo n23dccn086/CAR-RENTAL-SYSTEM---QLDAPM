@@ -297,16 +297,21 @@ export default function OwnerBookingsPage() {
                   </div>
 
                   <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', justifyContent: 'flex-end' }}>
-                    {/* ★ MỚI: Nút DUYỆT ĐƠN khi PAID */}
+                    {/* ★ MỚI: Nút DUYỆT ĐƠN khi PAID (Hạn 4 tiếng) */}
                     {canApprove && (
-                      <button onClick={() => openApproveModal(b)} style={{
-                        padding: '10px 18px', background: 'var(--xanh-reu)',
-                        border: '1px solid var(--xanh-reu)', color: 'var(--kem)',
-                        fontFamily: 'var(--mono)', fontSize: '10px', letterSpacing: '1.5px',
-                        textTransform: 'uppercase', cursor: 'pointer', whiteSpace: 'nowrap'
-                      }}>
-                        ✓ Duyệt đơn
-                      </button>
+                      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '4px' }}>
+                        <button onClick={() => openApproveModal(b)} style={{
+                          padding: '10px 18px', background: 'var(--xanh-reu)',
+                          border: '1px solid var(--xanh-reu)', color: 'var(--kem)',
+                          fontFamily: 'var(--mono)', fontSize: '10px', letterSpacing: '1.5px',
+                          textTransform: 'uppercase', cursor: 'pointer', whiteSpace: 'nowrap'
+                        }}>
+                          ✓ Duyệt đơn
+                        </button>
+                        <span style={{ fontFamily: 'var(--mono)', fontSize: '9px', color: 'var(--dong)', letterSpacing: '0.5px' }}>
+                          ⏱️ Hạn duyệt: 4 giờ
+                        </span>
+                      </div>
                     )}
 
                     {canCreatePickup && (

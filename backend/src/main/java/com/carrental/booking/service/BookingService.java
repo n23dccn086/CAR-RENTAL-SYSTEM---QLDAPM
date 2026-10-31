@@ -48,4 +48,8 @@ public interface BookingService {
     // ===== SEARCH =====
 
     List<BookingResponse> getBookingsByStatus(BookingStatus status);
+
+    // ===== SYSTEM / CRONJOB =====
+
+    void autoCancelUnapprovedBooking(Long bookingId);
 }

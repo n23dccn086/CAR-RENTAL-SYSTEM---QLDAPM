@@ -71,6 +71,7 @@ public class BookingServiceImpl implements BookingService {
     ConfigHelper configHelper;
     DriverAssignmentService driverAssignmentService;
     DriverAssignmentRepository driverAssignmentRepository;
+    BookingDelayedQueueService delayedQueueService;
 
     // ===== CREATE =====
 
@@ -356,6 +357,8 @@ public class BookingServiceImpl implements BookingService {
         booking.setCancelledAt(LocalDateTime.now());
         Booking updated = bookingRepository.save(booking);
 
+        delayedQueueService.removeScheduledCancellation(id);
+        delayedQueueService.removeScheduledCancellation(id);
         releaseCarIfNoActiveBookings(booking.getCarId());
 
         // Hủy toàn bộ biên bản bàn giao của đơn bị hủy
@@ -510,6 +513,8 @@ public class BookingServiceImpl implements BookingService {
             booking.setOwnerNote(note);
 
         Booking updated = bookingRepository.save(booking);
+        // Hủy job tự động hủy đơn trong Redis vì chủ xe đã duyệt thành công
+        delayedQueueService.removeScheduledCancellation(id);
 
         Car car = carRepository.findById(booking.getCarId()).orElse(null);
         if (car != null && car.getStatus() != CarStatus.RENTED) {
@@ -1005,5 +1010,115 @@ public class BookingServiceImpl implements BookingService {
                 log.warn("Failed to reset driver status: {}", e.getMessage());
             }
         }
+    }
+
+    @Override
+    @Transactional
+    public void autoCancelUnapprovedBooking(Long id) {
+        log.info("[AutoCancel] Processing unapproved booking #{}", id);
+
+        Booking booking = bookingRepository.findById(id).orElse(null);
+        if (booking == null || booking.getStatus() != BookingStatus.PAID) {
+            log.warn("[AutoCancel] Booking #{} not found or not in PAID status", id);
+            return;
+        }
+
+        long refundAmount = booking.getDepositAmount() != null ? booking.getDepositAmount() : 0L;
+
+        Payment payment = paymentRepository
+                .findByBookingId(id).stream()
+                .filter(p -> (p.getPaymentType() == null || p.getPaymentType() == com.carrental.payment.entity.PaymentType.DEPOSIT)
+                        && p.getStatus() == PaymentStatus.SUCCESS)
+                .findFirst()
+                .orElseGet(() -> paymentRepository.findByBookingIdAndStatus(id, PaymentStatus.SUCCESS).orElse(null));
+
+        if (payment != null && refundAmount > 0) {
+            Refund refund = Refund.builder()
+                    .paymentId(payment.getId())
+                    .bookingId(id)
+                    .amount(refundAmount)
+                    .reason("Hệ thống tự động hủy: Chủ xe không phản hồi / duyệt đơn trong vòng 4 tiếng. Hoàn 100% tiền cọc.")
+                    .status(PaymentStatus.PENDING)
+                    .build();
+            refundRepository.save(refund);
+            log.info("[AutoCancel] Refund created for booking #{}: amount={}", id, refundAmount);
+        }
+
+        booking.setStatus(BookingStatus.CANCELLED);
+        booking.setCancelReason("Tự động hủy: Chủ xe không phản hồi / duyệt đơn trong vòng 4 tiếng. Hệ thống hoàn 100% cọc cho khách.");
+        booking.setCancelledAt(LocalDateTime.now());
+        bookingRepository.save(booking);
+        delayedQueueService.removeScheduledCancellation(id);
+
+        releaseCarIfNoActiveBookings(booking.getCarId());
+
+        // Hủy toàn bộ biên bản bàn giao nếu có
+        try {
+            List<HandoverRecord> handovers = handoverRepository.findByBookingId(id);
+            for (HandoverRecord hr : handovers) {
+                if (hr.getStatus() != HandoverStatus.CANCELLED) {
+                    hr.setStatus(HandoverStatus.CANCELLED);
+                    handoverRepository.save(hr);
+                }
+            }
+        } catch (Exception e) {
+            log.warn("[AutoCancel] Failed to cancel handovers for booking #{}: {}", id, e.getMessage());
+        }
+
+        cleanupDriverAssignmentsAndStatus(booking);
+
+        java.text.DecimalFormat df = new java.text.DecimalFormat("#,###");
+
+        // 1. Thông báo cho KHÁCH HÀNG: Đơn đã hủy và hoàn tiền cọc
+        try {
+            notificationService.createNotification(
+                    booking.getCustomerId(),
+                    NotificationType.BOOKING_REJECTED,
+                    "Đơn đặt xe đã tự động hủy và hoàn cọc",
+                    String.format(
+                            "Do chủ xe không duyệt đơn #%d trong vòng 4 tiếng, hệ thống đã tự động hủy đơn và tạo yêu cầu HOÀN 100%% TIỀN CỌC (%sđ) cho bạn.",
+                            id,
+                            df.format(refundAmount)
+                    ),
+                    id
+            );
+        } catch (Exception e) {
+            log.warn("[AutoCancel] Failed to notify customer: {}", e.getMessage());
+        }
+
+        // 2. Thông báo cho CHỦ XE: Đơn đã hủy do quá hạn duyệt
+        try {
+            notificationService.createNotification(
+                    booking.getOwnerId(),
+                    NotificationType.BOOKING_CANCELLED,
+                    "Đơn đặt xe đã bị tự động hủy do quá hạn duyệt",
+                    String.format(
+                            "Đơn #%d đã tự động hủy và hoàn cọc lại cho khách hàng do bạn không phản hồi / duyệt đơn trong vòng 4 tiếng.",
+                            id
+                    ),
+                    id
+            );
+        } catch (Exception e) {
+            log.warn("[AutoCancel] Failed to notify owner: {}", e.getMessage());
+        }
+
+        // 3. Thông báo cho ADMIN: Cần xử lý hoàn tiền
+        try {
+            List<User> admins = userRepository.findByRole(Role.ADMIN);
+            for (User admin : admins) {
+                notificationService.createNotification(
+                        admin.getId(),
+                        NotificationType.REFUND_REQUESTED,
+                        "Yêu cầu hoàn tiền tự động do quá hạn duyệt",
+                        String.format("Đơn #%d quá hạn 4h chủ xe không duyệt đã tự động hủy. Cần hoàn %sđ cho khách. Vui lòng duyệt.",
+                                id, df.format(refundAmount)),
+                        id
+                );
+            }
+        } catch (Exception e) {
+            log.warn("[AutoCancel] Failed to notify admins: {}", e.getMessage());
+        }
+
+        log.info("[AutoCancel] Successfully auto-cancelled unapproved booking #{}", id);
     }
 }
