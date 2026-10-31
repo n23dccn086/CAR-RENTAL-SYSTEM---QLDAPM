@@ -551,10 +551,20 @@ export default function OwnerBookingsPage() {
                 fontFamily: 'var(--serif-2)', fontStyle: 'italic',
                 fontSize: '15px', lineHeight: 1.6
               }}>
-                Khi bạn hủy đơn này, hệ thống sẽ <strong>hoàn 100% tiền cọc</strong> lại cho khách
-                ({new Intl.NumberFormat('vi-VN').format(cancellingBooking.depositAmount || 0)}đ).
-                <br /><br />
-                Hãy nhập lý do hủy và lời xin lỗi để gửi đến khách hàng.
+                {cancellingBooking.status === 'PENDING' ? (
+                  <>
+                    Khách hàng <strong>chưa thanh toán cọc</strong> cho đơn này. Khi bạn hủy, đơn sẽ đóng ngay và không phát sinh hoàn cọc.
+                    <br /><br />
+                    Hãy nhập lý do từ chối / hủy đơn.
+                  </>
+                ) : (
+                  <>
+                    Khi bạn hủy đơn này, hệ thống sẽ <strong>hoàn 100% tiền cọc</strong> lại cho khách
+                    ({new Intl.NumberFormat('vi-VN').format(cancellingBooking.depositAmount || 0)}đ).
+                    <br /><br />
+                    Hãy nhập lý do hủy và lời xin lỗi để gửi đến khách hàng.
+                  </>
+                )}
               </div>
             </div>
 
@@ -563,14 +573,14 @@ export default function OwnerBookingsPage() {
               letterSpacing: '3px', textTransform: 'uppercase',
               color: 'var(--muc-mo)', marginBottom: '8px'
             }}>
-              Lý do hủy + Lời xin lỗi *
+              {cancellingBooking.status === 'PENDING' ? 'Lý do từ chối / hủy *' : 'Lý do hủy + Lời xin lỗi *'}
             </label>
             <textarea
               value={cancelReason}
               onChange={(e) => setCancelReason(e.target.value)}
               rows={5}
               maxLength={500}
-              placeholder="VD: Xin lỗi quý khách, xe của tôi gặp sự cố đột xuất..."
+              placeholder={cancellingBooking.status === 'PENDING' ? "VD: Khách quá hạn thanh toán cọc, xe bận đột xuất..." : "VD: Xin lỗi quý khách, xe của tôi gặp sự cố đột xuất..."}
               style={{
                 width: '100%', padding: '14px', background: 'var(--kem-dam)',
                 border: '1px solid rgba(15,14,12,0.2)',
@@ -600,7 +610,11 @@ export default function OwnerBookingsPage() {
                 textTransform: 'uppercase',
                 cursor: cancelSubmitting ? 'wait' : 'pointer'
               }}>
-                {cancelSubmitting ? 'Đang xử lý...' : 'Xác nhận hủy + Hoàn 100%'}
+                {cancelSubmitting
+                  ? 'Đang xử lý...'
+                  : cancellingBooking.status === 'PENDING'
+                  ? 'Xác nhận hủy đơn'
+                  : 'Xác nhận hủy + Hoàn 100%'}
               </button>
             </div>
           </div>

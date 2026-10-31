@@ -138,7 +138,14 @@ export default function BookingDetailPage() {
     returnHandover.status === "PENDING" &&
     !returnHandover.customerSignature;
 
+  const isOwner = user?.role === 'OWNER' || (booking && user?.id === booking.ownerId);
+  const isAdmin = user?.role === 'ADMIN';
+  const isCustomer = (user?.role === 'CUSTOMER' || (booking && user?.id === booking.customerId)) && !isOwner && !isAdmin;
+
+  const canPayDeposit = isCustomer && booking.status === "PENDING";
+
   const canPayFinal =
+    isCustomer &&
     booking.status === "RETURNED" &&
     (booking.remainingAmount > 0 || booking.totalExtraFees > 0);
 
@@ -679,31 +686,68 @@ export default function BookingDetailPage() {
           style={{
             display: "flex",
             justifyContent: "space-between",
-            alignItems: "baseline",
+            alignItems: "flex-end",
           }}
         >
-          <span
-            style={{
-              fontFamily: "var(--mono)",
-              fontSize: "11px",
-              letterSpacing: "2px",
-              textTransform: "uppercase",
-            }}
-          >
-            Còn lại phải trả
-          </span>
+          <div>
+            <span
+              style={{
+                fontFamily: "var(--mono)",
+                fontSize: "11px",
+                letterSpacing: "2px",
+                textTransform: "uppercase",
+                color: booking.status === "CANCELLED" ? "var(--muc-mo)" : booking.status === "PENDING" ? "var(--do)" : "inherit",
+              }}
+            >
+              {booking.status === "PENDING"
+                ? "Cần thanh toán cọc (Đợt 1)"
+                : booking.status === "CANCELLED"
+                ? "Còn lại phải trả"
+                : booking.status === "COMPLETED"
+                ? "Còn lại phải trả"
+                : "Còn lại phải trả (khi trả xe)"}
+            </span>
+            <div
+              style={{
+                fontFamily: "var(--serif-2)",
+                fontSize: "12px",
+                color: "var(--muc-mo)",
+                marginTop: "4px",
+                fontStyle: "italic",
+              }}
+            >
+              {booking.status === "CANCELLED" && (
+                "Đơn đã bị hủy — Không phát sinh số tiền còn lại phải trả"
+              )}
+              {booking.status === "PENDING" && (
+                `Chưa đóng cọc · Còn lại ${formatPrice((booking.totalPrice || 0) - (booking.depositAmount || 0))}đ thanh toán khi nhận / hoàn tất trả xe`
+              )}
+              {(booking.status === "PAID" || booking.status === "APPROVED" || booking.status === "RENTED") && (
+                `Đã thanh toán trước ${booking.depositPercent || 30}% cọc (${formatPrice(booking.depositAmount)}đ)`
+              )}
+              {booking.status === "RETURNED" && (
+                "Khoản tiền thuê còn lại và phụ phí phát sinh sau khi hoàn tất trả xe"
+              )}
+              {booking.status === "COMPLETED" && (
+                "Đã hoàn tất thanh toán toàn bộ chi phí hợp đồng"
+              )}
+            </div>
+          </div>
           <span
             style={{
               fontFamily: "var(--serif)",
               fontSize: "28px",
               fontWeight: 900,
-              color: "var(--do)",
+              color: booking.status === "CANCELLED" || booking.status === "COMPLETED" ? "var(--muc-mo)" : "var(--do)",
             }}
           >
-            {formatPrice(
-              (booking.totalPrice || 0) - (booking.depositAmount || 0),
-            )}
-            đ
+            {booking.status === "CANCELLED" || booking.status === "COMPLETED"
+              ? "0đ"
+              : booking.status === "PENDING"
+              ? `${formatPrice(booking.depositAmount)}đ`
+              : booking.status === "RETURNED"
+              ? `${formatPrice((booking.remainingAmount != null ? booking.remainingAmount : ((booking.totalPrice || 0) - (booking.depositAmount || 0))) + (booking.totalExtraFees || 0))}đ`
+              : `${formatPrice((booking.totalPrice || 0) - (booking.depositAmount || 0) + (booking.totalExtraFees || 0))}đ`}
           </span>
         </div>
       </div>
@@ -834,8 +878,8 @@ export default function BookingDetailPage() {
           </Link>
         )}
 
-        {/* ★ MỚI: NÚT THANH TOÁN CỌC — CHỈ KHI PENDING */}
-        {booking.status === "PENDING" && (
+        {/* NÚT THANH TOÁN CỌC — CHỈ DÀNH CHO KHÁCH HÀNG (CUSTOMER) */}
+        {canPayDeposit && (
           <Link
             to={`/payment/${booking.id}`}
             style={{
@@ -852,6 +896,25 @@ export default function BookingDetailPage() {
             💳 Thanh toán cọc ({formatPrice(booking.depositAmount)}đ)
           </Link>
         )}
+
+        {/* THÔNG BÁO CHO CHỦ XE KHI ĐƠN ĐANG CHỜ KHÁCH CỌC */}
+        {isOwner && booking.status === "PENDING" && (
+          <div
+            style={{
+              padding: "14px 24px",
+              background: "rgba(184, 134, 11, 0.08)",
+              border: "1px dashed var(--dong)",
+              fontFamily: "var(--mono)",
+              fontSize: "12px",
+              letterSpacing: "1px",
+              color: "var(--dong)",
+              textTransform: "uppercase",
+            }}
+          >
+            ⏳ Đang chờ khách hàng thanh toán cọc ({formatPrice(booking.depositAmount)}đ)
+          </div>
+        )}
+
         {canPayFinal && (
           <Link
             to={`/payment-final/${booking.id}`}
@@ -870,7 +933,7 @@ export default function BookingDetailPage() {
           </Link>
         )}
 
-        {booking.status === "COMPLETED" && !booking.reviewed && (
+        {booking.status === "COMPLETED" && !booking.reviewed && isCustomer && (
           <Link
             to={`/review/${booking.id}`}
             style={{

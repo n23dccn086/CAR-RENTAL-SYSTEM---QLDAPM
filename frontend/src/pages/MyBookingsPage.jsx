@@ -132,14 +132,21 @@ export default function MyBookingsPage() {
         minute: "2-digit",
       });
 
-    const reason = await prompt({
-      title: `Hủy chuyến đi #${booking.id}`,
-      subtitle: "Chính sách hoàn cọc",
-      message: `📅 Ngày nhận xe: ${fmtDate(booking.startDate)} · ${timeInfo}\n\n` +
+    const isPending = booking.status === "PENDING";
+    const promptMessage = isPending
+      ? `📅 Ngày nhận xe: ${fmtDate(booking.startDate)} · ${timeInfo}\n\n` +
+        `• Quy chế: Đơn chưa thanh toán tiền cọc\n` +
+        `• Đơn hàng sẽ kết thúc ngay và không phát sinh bất kỳ khoản phí nào.`
+      : `📅 Ngày nhận xe: ${fmtDate(booking.startDate)} · ${timeInfo}\n\n` +
         `• Quy chế áp dụng: ${ruleReason}\n` +
         `• Tiền cọc đã thanh toán: ${fmt(deposit)}đ\n` +
         `• Dự kiến hoàn: ${refundPercent}% (${fmt(refundAmount)}đ)\n` +
-        `• Phí giữ xe/mất cọc: ${100 - refundPercent}% (${fmt(lostAmount)}đ)`,
+        `• Phí giữ xe/mất cọc: ${100 - refundPercent}% (${fmt(lostAmount)}đ)`;
+
+    const reason = await prompt({
+      title: `Hủy chuyến đi #${booking.id}`,
+      subtitle: isPending ? "Xác nhận hủy đơn" : "Chính sách hoàn cọc",
+      message: promptMessage,
       inputLabel: "Lý do hủy đơn",
       placeholder: "Nhập lý do hủy chuyến (không bắt buộc)...",
       defaultValue: "Khách hủy",
@@ -154,7 +161,9 @@ export default function MyBookingsPage() {
         `/bookings/${booking.id}/cancel?reason=${encodeURIComponent(reason || "Khách hủy")}`,
       );
       setMessage(
-        `Đã hủy đơn #${booking.id}. Yêu cầu hoàn cọc ${fmt(refundAmount)}đ đã gửi tới Admin.`,
+        isPending
+          ? `Đã hủy đơn #${booking.id}.`
+          : `Đã hủy đơn #${booking.id}. Yêu cầu hoàn cọc ${fmt(refundAmount)}đ đã gửi tới Admin.`,
       );
       fetchBookings();
       setTimeout(() => setMessage(""), 5000);
