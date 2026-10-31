@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { Link } from "react-router-dom";
 import api from "../services/api";
+import { useNotificationStore } from "../stores/notificationStore";
 import { useAuthStore } from "../stores/authStore";
 
 // ============================================================
@@ -177,7 +178,9 @@ export default function NotificationsPage() {
   const fetchUnreadCount = async () => {
     try {
       const res = await api.get("/notifications/unread-count");
-      setUnreadCount(res.data.data || 0);
+      const count = typeof res.data?.data === "number" ? res.data.data : (res.data || 0);
+      setUnreadCount(count);
+      useNotificationStore.getState().setUnreadCount(count);
     } catch (err) {}
   };
 
@@ -232,6 +235,7 @@ export default function NotificationsPage() {
   const handleMarkAsRead = async (id) => {
     try {
       await api.put(`/notifications/${id}/read`);
+      useNotificationStore.getState().decrementUnread();
       fetchNotifications();
       fetchUnreadCount();
     } catch (err) {
@@ -243,6 +247,7 @@ export default function NotificationsPage() {
     if (!window.confirm("Đánh dấu tất cả đã đọc?")) return;
     try {
       await api.put("/notifications/read-all");
+      useNotificationStore.getState().clearUnread();
       setMessage("Đã đánh dấu tất cả đã đọc");
       fetchNotifications();
       fetchUnreadCount();

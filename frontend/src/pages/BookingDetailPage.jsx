@@ -348,6 +348,56 @@ export default function BookingDetailPage() {
         </div>
       )}
 
+      {/* ★ Banner thông báo trạng thái ĐÃ CỌC — Chờ chủ xe duyệt trong 4 tiếng */}
+      {booking.status === "PAID" && (
+        <div
+          style={{
+            background: "rgba(184, 134, 11, 0.08)",
+            border: "2px solid var(--dong)",
+            borderLeft: "6px solid var(--dong)",
+            padding: "20px 24px",
+            marginBottom: "32px",
+          }}
+        >
+          <div
+            style={{
+              fontFamily: "var(--serif)",
+              fontSize: "18px",
+              fontWeight: 700,
+              color: "var(--dong)",
+              marginBottom: "8px",
+              display: "flex",
+              alignItems: "center",
+              gap: "8px",
+            }}
+          >
+            ⏱️ Đã thanh toán cọc — Chờ chủ xe xác nhận (Thời hạn: 4 tiếng)
+          </div>
+          <div
+            style={{
+              fontFamily: "var(--serif-2)",
+              fontSize: "15px",
+              color: "var(--muc)",
+              lineHeight: 1.6,
+            }}
+          >
+            {isOwner ? (
+              <>
+                Khách hàng đã thanh toán tiền cọc <strong>{formatPrice(booking.depositAmount)}đ</strong>.
+                Vui lòng xác nhận duyệt đơn trong vòng <strong>4 tiếng</strong> kể từ lúc khách cọc.
+                Nếu quá 4 tiếng không duyệt, hệ thống sẽ tự động hủy đơn và hoàn 100% tiền cọc lại cho khách hàng.
+              </>
+            ) : (
+              <>
+                Bạn đã thanh toán cọc thành công số tiền <strong>{formatPrice(booking.depositAmount)}đ</strong>.
+                Chủ xe có tối đa <strong>4 tiếng</strong> để duyệt đơn.
+                Nếu quá 4 tiếng chủ xe không duyệt, hệ thống sẽ tự động hủy đơn và tạo yêu cầu hoàn 100% tiền cọc cho bạn.
+              </>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* ★ Banner khi tất cả tài xế đều bận hoặc không thể nhận chuyến */}
       {!isCancelled && booking.rentalMode === "WITH_DRIVER" && (booking.driver_assignment_status === "NO_DRIVER_AVAILABLE" || (!booking.driverId && !booking.driver)) && (
         <div

@@ -43,6 +43,7 @@ public class PaymentServiceImpl implements PaymentService {
     MomoGateway momoGateway;
     NotificationService notificationService;
     com.carrental.car.repository.CarRepository carRepository;
+    com.carrental.booking.service.BookingDelayedQueueService delayedQueueService;
 
     // ===== CREATE =====
 
@@ -174,7 +175,9 @@ public class PaymentServiceImpl implements PaymentService {
                         c.setStatus(com.carrental.car.entity.CarStatus.RENTED);
                         carRepository.save(c);
                     });
-                    log.info("Booking updated to PAID: id={}, car {} -> RENTED", booking.getId(), booking.getCarId());
+                    // Đưa job hủy tự động sau 4 tiếng vào Redis Delayed Queue (lưu trên disk)
+                    delayedQueueService.scheduleCancellation(booking.getId(), LocalDateTime.now().plusHours(4));
+                    log.info("Booking updated to PAID: id={}, car {} -> RENTED, scheduled in Redis", booking.getId(), booking.getCarId());
                 } else if (payment.getPaymentType() == PaymentType.REMAINING
                         && booking.getStatus() == BookingStatus.RETURNED) {
                     booking.setStatus(BookingStatus.COMPLETED);
@@ -235,7 +238,9 @@ public class PaymentServiceImpl implements PaymentService {
                     c.setStatus(com.carrental.car.entity.CarStatus.RENTED);
                     carRepository.save(c);
                 });
-                log.info("Booking {} updated to PAID, car {} -> RENTED", booking.getId(), booking.getCarId());
+                // Đưa job hủy tự động sau 4 tiếng vào Redis Delayed Queue (lưu trên disk)
+                delayedQueueService.scheduleCancellation(booking.getId(), LocalDateTime.now().plusHours(4));
+                log.info("Booking {} updated to PAID, car {} -> RENTED, scheduled in Redis", booking.getId(), booking.getCarId());
 
                 // Thông báo cho Owner: Đơn mới
                 try {

@@ -1,14 +1,25 @@
 import { useState, useEffect, useRef } from "react";
 import { Link, useNavigate, useLocation } from "react-router-dom";
 import { useAuth } from "../hooks/useAuth";
+import { useNotificationStore } from "../stores/notificationStore";
 
 export default function WheelNav() {
   const navigate = useNavigate();
   const location = useLocation();
   const { user, isLoggedIn, logout } = useAuth();
+  const unreadCount = useNotificationStore((state) => state.unreadCount);
+  const fetchUnreadCount = useNotificationStore((state) => state.fetchUnreadCount);
   const [open, setOpen] = useState(false);
   const [hover, setHover] = useState(false);
   const wrapRef = useRef(null);
+
+  useEffect(() => {
+    if (isLoggedIn) {
+      fetchUnreadCount();
+      const interval = setInterval(fetchUnreadCount, 30000); // Polling mỗi 30s
+      return () => clearInterval(interval);
+    }
+  }, [isLoggedIn]);
 
   useEffect(() => {
     const handleClick = (e) => {
@@ -288,7 +299,7 @@ export default function WheelNav() {
           />
         )}
 
-        {isLoggedIn && (
+        {isLoggedIn && unreadCount > 0 && (
           <div
             style={{
               position: "absolute",
@@ -396,6 +407,7 @@ export default function WheelNav() {
           >
             {navItems.map((item, i) => {
               const active = location.pathname === item.path;
+              const isNotif = item.path === "/notifications";
               return (
                 <Link
                   key={item.path}
@@ -403,7 +415,7 @@ export default function WheelNav() {
                   style={{
                     display: "flex",
                     alignItems: "center",
-                    gap: "14px",
+                    justifyContent: "space-between",
                     padding: "12px 20px",
                     fontFamily: "var(--serif-2)",
                     fontSize: "16px",
@@ -411,6 +423,7 @@ export default function WheelNav() {
                     background: active ? "var(--kem-dam)" : "transparent",
                     transition: "all 0.3s",
                     animation: `wheelItemIn 0.4s ease-out ${i * 0.06}s both`,
+                    textDecoration: "none",
                   }}
                   onMouseEnter={(e) => {
                     e.currentTarget.style.background = "var(--kem-dam)";
@@ -422,17 +435,38 @@ export default function WheelNav() {
                     e.currentTarget.style.paddingLeft = "20px";
                   }}
                 >
-                  <span
-                    style={{
-                      fontFamily: "var(--serif)",
-                      fontSize: "18px",
-                      color: "var(--dong)",
-                      width: "20px",
-                    }}
-                  >
-                    {item.icon}
-                  </span>
-                  <span>{item.label}</span>
+                  <div style={{ display: "flex", alignItems: "center", gap: "14px" }}>
+                    <span
+                      style={{
+                        fontFamily: "var(--serif)",
+                        fontSize: "18px",
+                        color: "var(--dong)",
+                        width: "20px",
+                        textAlign: "center",
+                      }}
+                    >
+                      {item.icon}
+                    </span>
+                    <span>{item.label}</span>
+                  </div>
+
+                  {isNotif && unreadCount > 0 && (
+                    <span
+                      style={{
+                        background: "var(--do)",
+                        color: "#fff",
+                        fontFamily: "var(--mono)",
+                        fontSize: "11px",
+                        fontWeight: 700,
+                        padding: "2px 8px",
+                        borderRadius: "10px",
+                        lineHeight: 1.2,
+                        boxShadow: "0 2px 6px rgba(139,44,44,0.35)",
+                      }}
+                    >
+                      {unreadCount > 99 ? "99+" : unreadCount}
+                    </span>
+                  )}
                 </Link>
               );
             })}
