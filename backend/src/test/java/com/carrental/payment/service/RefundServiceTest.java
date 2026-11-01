@@ -13,6 +13,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.util.Optional;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.Mockito.when;
 
@@ -34,21 +35,18 @@ public class RefundServiceTest {
     @InjectMocks
     private RefundServiceImpl refundService;
 
+    // ===== TEST 1: Chặn duyệt lại Refund đã xử lý =====
     @Test
     @DisplayName("TC19 - Test Admin không thể duyệt lại một Refund đã được xử lý")
     public void testApproveAlreadyProcessedRefund() {
-        // 1. Giả lập một Refund đã được duyệt thành công (SUCCESS)
         Refund mockRefund = new Refund();
         mockRefund.setId(1L);
-        mockRefund.setStatus(PaymentStatus.SUCCESS); // Đã xử lý rồi
+        mockRefund.setStatus(PaymentStatus.SUCCESS);
 
-        // Giả lập DB tìm thấy Refund này
         when(refundRepository.findById(1L)).thenReturn(Optional.of(mockRefund));
 
-        // 2. Thực thi và Kiểm tra
-        // Kỳ vọng: Hệ thống phải báo lỗi "Refund đã xử lý"
         assertThrows(BadRequestException.class, () -> {
-            refundService.approveRefund(1L, 999L); // Admin ID 999 cố duyệt lại
+            refundService.approveRefund(1L, 999L);
         }, "Duyệt lại Refund đã SUCCESS phải ném ra BadRequestException");
     }
 }

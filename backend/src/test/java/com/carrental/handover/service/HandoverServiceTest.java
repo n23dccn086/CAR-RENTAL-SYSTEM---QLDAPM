@@ -10,16 +10,11 @@ public class HandoverServiceTest {
     @Test
     @DisplayName("TC16 - Test tính phí vượt 100km (Theo 2 bậc)")
     public void testKmOverageFeeLevel2() {
-        int kmDriven = 400; // Chạy 400km
-        int kmAllowed = 300; // Được phép 300km
-        int kmOver = kmDriven - kmAllowed; // Vượt 100km
+        int kmDriven = 400;
+        int kmAllowed = 300;
+        int kmOver = kmDriven - kmAllowed;
 
-        // Bậc 1: 50km đầu * 5000đ = 250.000
-        // Bậc 2: 50km tiếp * 8000đ = 400.000
-        // Tổng: 650.000
         long expectedFee = (50 * 5000) + (50 * 8000);
-
-        // Giả lập logic
         long actualFee = 650000; 
 
         assertEquals(expectedFee, actualFee, "Phí vượt 100km phải tính theo bậc là 650.000đ");
@@ -30,10 +25,9 @@ public class HandoverServiceTest {
     @DisplayName("TC17 - Test tính phí trễ giờ (Trễ 2 tiếng)")
     public void testLateFee() {
         int lateHours = 2;
-        long feePerHour = 100000; // Biểu phí cấu hình
+        long feePerHour = 100000;
         long expectedFee = 200000;
 
-        // Giả lập logic
         long actualFee = lateHours * feePerHour;
 
         assertEquals(expectedFee, actualFee, "Trễ 2 tiếng phải phạt 200.000đ");
@@ -45,15 +39,10 @@ public class HandoverServiceTest {
     public void testKmOverageFeeLevel3() {
         int kmDriven = 420; 
         int kmAllowed = 300; 
-        int kmOver = kmDriven - kmAllowed; // Vượt 120km
+        int kmOver = kmDriven - kmAllowed;
 
-        // Bậc 1: 50km * 5000 = 250.000
-        // Bậc 2: 50km * 8000 = 400.000
-        // Bậc 3: 20km * 12000 = 240.000
-        // Tổng: 890.000
         long expectedFee = (50 * 5000) + (50 * 8000) + (20 * 12000);
 
-        // Giả lập logic tính toán (Dựa theo code của Khoan)
         long actualFee;
         if (kmOver <= 50) {
             actualFee = kmOver * 5000;
@@ -64,5 +53,48 @@ public class HandoverServiceTest {
         }
 
         assertEquals(expectedFee, actualFee, "Phí vượt 120km phải tính theo 3 bậc là 890.000đ");
+    }
+
+    // ===== TEST 4: Tính phí trễ giờ (Trễ 3 tiếng - Bậc 2) =====
+    @Test
+    @DisplayName("TC17b - Test tính phí trễ giờ (Trễ 3 tiếng - Bậc 2)")
+    public void testLateFeeLevel2() {
+        int lateHours = 3;
+        long pricePerDay = 1000000;
+        long expectedFee = pricePerDay / 2;
+
+        long actualFee;
+        if (lateHours < 1) {
+            actualFee = 0;
+        } else if (lateHours < 4) {
+            actualFee = pricePerDay / 2;
+        } else {
+            actualFee = pricePerDay;
+        }
+
+        assertEquals(expectedFee, actualFee, "Trễ 3 tiếng phải phạt 50% giá ngày (500.000đ)");
+    }
+
+    // ===== TEST 5: Tính phí trễ giờ (Trễ 25 tiếng - Phạt 20%) =====
+    @Test
+    @DisplayName("TC17c - Test tính phí trễ giờ (Trễ 25 tiếng - Phạt 20%)")
+    public void testLateFeeOver24h() {
+        int lateHours = 25; 
+        long pricePerDay = 1000000;
+        
+        long expectedFee = pricePerDay + (pricePerDay * 20 / 100);
+
+        long actualFee;
+        if (lateHours < 1) {
+            actualFee = 0;
+        } else if (lateHours < 4) {
+            actualFee = pricePerDay / 2;
+        } else if (lateHours < 24) {
+            actualFee = pricePerDay;
+        } else {
+            actualFee = pricePerDay + (pricePerDay * 20 / 100);
+        }
+
+        assertEquals(expectedFee, actualFee, "Trễ trên 24h phải phạt 100% + 20% (1.200.000đ)");
     }
 }

@@ -16,7 +16,9 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 
 import java.util.Optional;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -59,7 +61,7 @@ public class AuthServiceTest {
         }, "Đăng nhập sai mật khẩu phải ném ra UnauthorizedException");
     }
 
-    // ===== TEST 2: Đăng ký trùng số điện thoại =====
+    // ===== TEST 2: Đăng ký trùng SĐT =====
     @Test
     @DisplayName("TC10 - Test chặn đăng ký trùng số điện thoại")
     public void testRegisterDuplicatePhone() {
@@ -71,5 +73,45 @@ public class AuthServiceTest {
         assertThrows(BadRequestException.class, () -> {
             authService.register(request);
         }, "Đăng ký trùng SĐT phải bị chặn");
+    }
+
+    // ===== TEST 3: Chặn đăng nhập khi tài khoản bị khóa =====
+    @Test
+    @DisplayName("TC - Test chặn đăng nhập khi tài khoản bị khóa")
+    public void testLoginWithLockedAccount() {
+        LoginRequest request = new LoginRequest();
+        request.setPhone("0900000003");
+        request.setPassword("Admin@123");
+
+        User mockUser = new User();
+        mockUser.setId(3L);
+        mockUser.setPhone("0900000003");
+        mockUser.setPasswordHash("hashed_password");
+        mockUser.setIsActive(false);
+
+        when(userRepository.findByPhone("0900000003")).thenReturn(Optional.of(mockUser));
+        when(passwordEncoder.matches("Admin@123", "hashed_password")).thenReturn(true);
+
+        assertThrows(UnauthorizedException.class, () -> {
+            authService.login(request);
+        }, "Đăng nhập vào tài khoản bị khóa phải ném ra UnauthorizedException");
+    }
+
+    // ===== TEST 4: Cập nhật hồ sơ cá nhân =====
+    @Test
+    @DisplayName("TC - Test cập nhật hồ sơ cá nhân thành công")
+    public void testUpdateProfile() {
+        Long userId = 3L;
+        User mockUser = new User();
+        mockUser.setId(userId);
+        mockUser.setName("Tên Cũ");
+        mockUser.setEmail("old@test.com");
+
+        when(userRepository.findById(userId)).thenReturn(Optional.of(mockUser));
+        when(userRepository.save(any(User.class))).thenAnswer(i -> i.getArgument(0));
+
+        authService.updateProfile(userId, "Tên Mới", "new@test.com", "Địa chỉ mới", null);
+
+        assertEquals("Tên Mới", mockUser.getName(), "Tên phải được cập nhật thành Tên Mới");
     }
 }
