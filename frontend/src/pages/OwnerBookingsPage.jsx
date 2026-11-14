@@ -226,8 +226,9 @@ export default function OwnerBookingsPage() {
               const returnHandover = bookingHandovers.RETURN
 
               const canApprove = b.status === 'PAID'
-              const canCreatePickup = b.status === 'APPROVED' && !pickupHandover
-              const canCreateReturn = b.status === 'RENTED' && !returnHandover
+              const isNoDriver = b.rentalMode === 'WITH_DRIVER' && ((b.driver_assignment_status || b.driverAssignmentStatus) === 'NO_DRIVER_AVAILABLE' || (!b.driverId && !b.driver))
+              const canCreatePickup = b.status === 'APPROVED' && !pickupHandover && !isNoDriver
+              const canCreateReturn = b.status === 'RENTED' && !returnHandover && !isNoDriver
               const canCancel = ['PENDING', 'PAID', 'APPROVED'].includes(b.status)
 
               return (
@@ -312,6 +313,22 @@ export default function OwnerBookingsPage() {
                           ⏱️ Hạn duyệt: 4 giờ
                         </span>
                       </div>
+                    )}
+
+                    {isNoDriver && (
+                      <span style={{
+                        padding: '8px 14px',
+                        background: 'rgba(139,44,44,0.08)',
+                        border: '1px dashed var(--do)',
+                        color: 'var(--do)',
+                        fontFamily: 'var(--mono)',
+                        fontSize: '10px',
+                        letterSpacing: '1px',
+                        textTransform: 'uppercase',
+                        fontWeight: 'bold',
+                      }}>
+                        ⚠️ Chưa có tài xế nhận chuyến
+                      </span>
                     )}
 
                     {canCreatePickup && (

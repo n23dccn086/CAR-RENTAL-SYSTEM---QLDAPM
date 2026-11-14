@@ -299,6 +299,10 @@ public class BookingServiceImpl implements BookingService {
             throw new UnauthorizedException(ErrorCode.UNAUTHORIZED);
         }
 
+        // Không được bỏ qua kiểm tra trạng thái kể cả khi không có tài xế:
+        // nếu bỏ qua, đơn đã CANCELLED/COMPLETED có thể bị hủy lại và sinh thêm refund 100% cọc.
+        boolean isNoDriver = isNoDriverAvailable(booking);
+
         if (booking.getStatus() != BookingStatus.PENDING
                 && booking.getStatus() != BookingStatus.PAID
                 && booking.getStatus() != BookingStatus.APPROVED) {
@@ -308,7 +312,7 @@ public class BookingServiceImpl implements BookingService {
         }
 
         long refundAmount = calculateRefundAmount(booking);
-        long depositPaid = booking.getDepositAmount();
+        long depositPaid = booking.getDepositAmount() != null ? booking.getDepositAmount() : 0L;
 
         long hoursUntilStart = Duration.between(
                 LocalDateTime.now(),
@@ -316,7 +320,11 @@ public class BookingServiceImpl implements BookingService {
 
         int refundPercent = 0;
         String refundPolicy = "Không hoàn cọc";
-        if (booking.getStatus() != BookingStatus.PENDING && depositPaid > 0) {
+        if (isNoDriver && booking.getStatus() != BookingStatus.PENDING && depositPaid > 0) {
+            refundPercent = 100;
+            refundAmount = depositPaid;
+            refundPolicy = "Hủy do tất cả tài xế đều bận - Hoàn 100% tiền cọc";
+        } else if (booking.getStatus() != BookingStatus.PENDING && depositPaid > 0) {
             if (hoursUntilStart >= 24) {
                 refundPercent = configHelper.getRefundBefore24hPercent().intValue();
                 refundPolicy = String.format("Hủy trước 24h - hoàn %d%%", refundPercent);
@@ -357,7 +365,6 @@ public class BookingServiceImpl implements BookingService {
         booking.setCancelledAt(LocalDateTime.now());
         Booking updated = bookingRepository.save(booking);
 
-        delayedQueueService.removeScheduledCancellation(id);
         delayedQueueService.removeScheduledCancellation(id);
         releaseCarIfNoActiveBookings(booking.getCarId());
 
@@ -828,14 +835,26 @@ public class BookingServiceImpl implements BookingService {
 
     // ===== HELPER =====
 
+    /**
+     * Đơn thuê kèm tài xế nhưng hiện không có tài xế (chưa / không điều phối được) → hoàn 100% cọc khi hủy.
+     * Lưu ý: driverId == null cũng đúng với đơn WITH_DRIVER chưa điều phối lần nào.
+     */
+    private boolean isNoDriverAvailable(Booking booking) {
+        return booking.getRentalMode() == RentalMode.WITH_DRIVER && booking.getDriverId() == null;
+    }
+
     private long calculateRefundAmount(Booking booking) {
         if (booking.getStatus() == BookingStatus.PENDING) {
             return 0;
         }
 
-        long deposit = booking.getDepositAmount();
+        long deposit = booking.getDepositAmount() != null ? booking.getDepositAmount() : 0L;
         if (deposit <= 0)
             return 0;
+
+        if (isNoDriverAvailable(booking)) {
+            return deposit; // Hoàn 100% nếu đã điều phối nhưng không có tài xế nhận chuyến
+        }
 
         long hoursUntilStart = Duration.between(
                 LocalDateTime.now(),
@@ -925,7 +944,7 @@ public class BookingServiceImpl implements BookingService {
                         response.setLateFee(lateFeeVal);
                         response.setKmOverageFee(kmOverageFeeVal);
                         response.setExtraFees(extraFeeVal);
-                        response.setTotalExtraFees(lateFeeVal + extraFees.longValue() + kmOverageFeeVal);
+                        response.setTotalExtraFees(lateFeeVal + extraFeeVal + kmOverageFeeVal);
                         response.setLateMinutes(handover.getLateMinutes());
                         response.setExtraFeesNote(handover.getExtraFeesNote());
 

@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { getBookingById, createPayment } from "../services/bookingService";
 import api from "../services/api";
+import PaymentSuccessModal from "../components/PaymentSuccessModal";
 
 export default function PaymentPage() {
   const { bookingId } = useParams();
@@ -9,6 +10,7 @@ export default function PaymentPage() {
   const [booking, setBooking] = useState(null);
   const [method, setMethod] = useState("MOMO");
   const [loading, setLoading] = useState(false);
+  const [successData, setSuccessData] = useState(null);
 
   useEffect(() => {
     getBookingById(bookingId)
@@ -43,8 +45,13 @@ export default function PaymentPage() {
         await api.post(`/payments/${paymentId}/mock-success?method=${method}`);
       }
 
-      alert("Thanh toán thành công!");
-      navigate("/my-bookings");
+      setSuccessData({
+        bookingId: parseInt(bookingId),
+        amount: booking?.depositAmount,
+        method: method,
+        type: "DEPOSIT",
+        carName: booking?.carName,
+      });
     } catch (err) {
       alert(
         "Thanh toán thất bại: " + (err.response?.data?.message || err.message),
@@ -213,6 +220,13 @@ export default function PaymentPage() {
             : `Thanh toán ${formatPrice(booking?.depositAmount)}đ`}
         </span>
       </button>
+
+      <PaymentSuccessModal
+        isOpen={!!successData}
+        data={successData}
+        onClose={() => navigate("/my-bookings")}
+        onGoToDetail={() => navigate(`/bookings/${bookingId}`)}
+      />
     </div>
   );
 }

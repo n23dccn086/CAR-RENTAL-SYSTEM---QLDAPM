@@ -190,6 +190,46 @@ public class ReviewServiceImpl implements ReviewService {
         }
     }
 
+    // ===== CUSTOMER TRẢ LỜI LẠI PHẢN HỒI CỦA CHỦ XE =====
+
+    @Override
+    @Transactional
+    public ReviewResponse customerReplyToReview(Long reviewId, Long customerId, ReviewReplyRequest request) {
+        log.info("Customer {} replying to owner reply on review {}", customerId, reviewId);
+
+        Review review = reviewRepository.findById(reviewId)
+                .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.REVIEW_NOT_FOUND));
+
+        if (!review.getCustomerId().equals(customerId)) {
+            throw new UnauthorizedException(ErrorCode.PERMISSION_DENIED);
+        }
+
+        if (review.getOwnerReply() == null || review.getOwnerReply().isBlank()) {
+            throw new BadRequestException(ErrorCode.VALIDATION_ERROR,
+                    "Chủ xe chưa phản hồi đánh giá này nên chưa thể trả lời");
+        }
+
+        String reply = request.getReply().trim();
+        review.setCustomerReply(reply);
+        review.setCustomerRepliedAt(LocalDateTime.now());
+        Review saved = reviewRepository.save(review);
+
+        // Notify owner
+        try {
+            notificationService.createNotification(
+                    review.getOwnerId(),
+                    NotificationType.REVIEW_REPLY,
+                    "Khách đã trả lời phản hồi của bạn",
+                    String.format("Khách trả lời (đơn #%d): \"%s\"", review.getBookingId(), reply),
+                    review.getId()
+            );
+        } catch (Exception e) {
+            log.warn("Failed to notify owner of customer reply: {}", e.getMessage());
+        }
+
+        return buildResponse(saved);
+    }
+
     // ===== READ LIST (Legacy / Frontend) =====
 
     @Override
@@ -277,6 +317,8 @@ public class ReviewServiceImpl implements ReviewService {
         response.setOwnerReply(review.getOwnerReply());
         response.setDriverRating(review.getDriverRating());
         response.setRepliedAt(review.getRepliedAt());
+        response.setCustomerReply(review.getCustomerReply());
+        response.setCustomerRepliedAt(review.getCustomerRepliedAt());
 
         return response;
     }

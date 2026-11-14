@@ -429,6 +429,26 @@ export default function AdminReviewsPage() {
                     "{r.ownerReply || r.owner_reply}"
                   </div>
                 )}
+
+                {/* Customer reply to owner */}
+                {(r.ownerReply || r.owner_reply) && (r.customerReply || r.customer_reply) && (
+                  <div style={{
+                    marginTop: '6px',
+                    marginLeft: '20px',
+                    padding: '10px 16px',
+                    background: 'rgba(15,14,12,0.04)',
+                    borderLeft: '3px solid var(--dong)',
+                    fontFamily: 'var(--serif-2)',
+                    fontSize: '14px',
+                    color: 'var(--muc)',
+                    fontStyle: 'italic'
+                  }}>
+                    <div style={{ fontFamily: 'var(--mono)', fontSize: '10px', letterSpacing: '1px', textTransform: 'uppercase', marginBottom: '4px', fontStyle: 'normal', fontWeight: 700 }}>
+                      Khách trả lời {r.customerRepliedAt || r.customer_replied_at ? `(${formatDate(r.customerRepliedAt || r.customer_replied_at)})` : ''}:
+                    </div>
+                    "{r.customerReply || r.customer_reply}"
+                  </div>
+                )}
               </div>
             )
           })}

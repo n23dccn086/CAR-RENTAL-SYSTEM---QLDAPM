@@ -410,6 +410,26 @@ export default function CarDetailPage() {
                       "{r.ownerReply || r.owner_reply}"
                     </div>
                   )}
+
+                  {/* Khách trả lời lại chủ xe */}
+                  {(r.ownerReply || r.owner_reply) && (r.customerReply || r.customer_reply) && (
+                    <div style={{
+                      marginTop: '8px',
+                      marginLeft: '24px',
+                      padding: '12px 18px',
+                      background: 'rgba(15,14,12,0.04)',
+                      borderLeft: '3px solid var(--dong)',
+                      fontFamily: 'var(--serif-2)',
+                      fontSize: '14px',
+                      color: 'var(--muc)',
+                      fontStyle: 'italic'
+                    }}>
+                      <div style={{ fontFamily: 'var(--mono)', fontSize: '10px', letterSpacing: '1px', textTransform: 'uppercase', marginBottom: '6px', fontStyle: 'normal', fontWeight: 700 }}>
+                        Khách trả lời {r.customerRepliedAt || r.customer_replied_at ? `(${formatDate(r.customerRepliedAt || r.customer_replied_at)})` : ''}:
+                      </div>
+                      "{r.customerReply || r.customer_reply}"
+                    </div>
+                  )}
                 </div>
               )
             })}

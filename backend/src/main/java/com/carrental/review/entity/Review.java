@@ -62,6 +62,12 @@ public class Review {
     @Column(name = "replied_at")
     LocalDateTime repliedAt;
 
+    @Column(name = "customer_reply", columnDefinition = "TEXT")
+    String customerReply;
+
+    @Column(name = "customer_replied_at")
+    LocalDateTime customerRepliedAt;
+
     @Column(name = "is_anonymous")
     @Builder.Default
     Boolean isAnonymous = false;

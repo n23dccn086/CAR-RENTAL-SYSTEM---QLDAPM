@@ -163,6 +163,16 @@ function App() {
             }
           />
 
+          {/* Mở đánh giá theo reviewId (link từ thông báo "Chủ xe đã phản hồi đánh giá") */}
+          <Route
+            path="/my-reviews/:reviewId"
+            element={
+              <ProtectedRoute allowedRoles={["CUSTOMER", "ADMIN"]}>
+                <ReviewPage />
+              </ProtectedRoute>
+            }
+          />
+
           <Route
             path="/bookings/:id"
             element={

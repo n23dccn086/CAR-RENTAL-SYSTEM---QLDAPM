@@ -1556,6 +1556,39 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiResponseVoid'
 
+  /reviews/{id}/customer-reply:
+    post:
+      tags: [8. Reviews]
+      summary: Khách trả lời lại phản hồi của chủ xe
+      description: Chỉ khách viết đánh giá được gọi, và chỉ sau khi chủ xe đã phản hồi. Gọi lại sẽ cập nhật câu trả lời. Gửi thông báo REVIEW_REPLY cho chủ xe.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer, example: 50 }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReviewReplyRequest'
+      responses:
+        '200':
+          description: Đã gửi trả lời (trả về đánh giá với customer_reply, customer_replied_at)
+        '400':
+          description: Chủ xe chưa phản hồi / nội dung rỗng
+        '403':
+          description: Không phải khách của đánh giá này
+
+  /handovers/fee-config:
+    get:
+      tags: [6. Handover]
+      summary: Cấu hình phí vượt km / trả muộn (cho mọi người dùng đã đăng nhập)
+      description: Trả các giá trị default_km_per_day, max_km_overage_per_day, max_total_km_overage, km_overage_bracket_1_limit/price, km_overage_bracket_2_limit/price, km_overage_bracket_3_price, late_fee_per_hour mà backend đang dùng để tính phí.
+      responses:
+        '200':
+          description: Map key → value (string)
+
   /reviews/cars/{carId}:
     get:
       tags: [8. Reviews]

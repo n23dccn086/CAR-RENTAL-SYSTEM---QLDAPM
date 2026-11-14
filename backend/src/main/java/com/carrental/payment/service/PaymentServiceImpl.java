@@ -73,12 +73,22 @@ public class PaymentServiceImpl implements PaymentService {
             }
         }
 
+        // ★ Không tin số tiền client gửi lên: tính lại từ booking.
+        //   - DEPOSIT   = depositAmount
+        //   - REMAINING = remainingAmount (đã gồm phí trễ / vượt km / phát sinh, cộng vào lúc ký biên bản trả xe)
+        Long expectedAmount = resolveExpectedAmount(booking, request.getPaymentType());
+        if (expectedAmount != null && !expectedAmount.equals(request.getAmount())) {
+            log.warn("Payment amount mismatch for booking {} ({}): client={}, server={} → dùng giá trị server",
+                    booking.getId(), request.getPaymentType(), request.getAmount(), expectedAmount);
+        }
+        Long amount = expectedAmount != null ? expectedAmount : request.getAmount();
+
         String transactionId = "TXN_" + UUID.randomUUID().toString().substring(0, 8).toUpperCase();
 
         Payment payment = Payment.builder()
                 .bookingId(request.getBookingId())
                 .customerId(customerId)
-                .amount(request.getAmount())
+                .amount(amount)
                 .paymentMethod(request.getPaymentMethod())
                 .paymentType(request.getPaymentType())
                 .transactionId(transactionId)
@@ -181,6 +191,7 @@ public class PaymentServiceImpl implements PaymentService {
                 } else if (payment.getPaymentType() == PaymentType.REMAINING
                         && booking.getStatus() == BookingStatus.RETURNED) {
                     booking.setStatus(BookingStatus.COMPLETED);
+                    booking.setRemainingAmount(0L);
                     bookingRepository.save(booking);
                     boolean hasOtherActive = bookingRepository.existsByCarIdAndStatusIn(
                             booking.getCarId(),
@@ -259,6 +270,7 @@ public class PaymentServiceImpl implements PaymentService {
             else if (payment.getPaymentType() == PaymentType.REMAINING
                     && booking.getStatus() == BookingStatus.RETURNED) {
                 booking.setStatus(BookingStatus.COMPLETED);
+                booking.setRemainingAmount(0L);
                 bookingRepository.save(booking);
                 boolean hasOtherActive = bookingRepository.existsByCarIdAndStatusIn(
                         booking.getCarId(),
@@ -333,6 +345,24 @@ public class PaymentServiceImpl implements PaymentService {
     }
 
     // ===== HELPER =====
+
+    /**
+     * Số tiền đúng theo booking cho từng loại thanh toán; null nếu không xác định được (giữ giá trị client).
+     */
+    private Long resolveExpectedAmount(Booking booking, PaymentType type) {
+        if (type == PaymentType.DEPOSIT) {
+            return booking.getDepositAmount();
+        }
+        if (type == PaymentType.REMAINING) {
+            if (booking.getRemainingAmount() != null) {
+                return Math.max(0L, booking.getRemainingAmount());
+            }
+            long total = booking.getTotalPrice() != null ? booking.getTotalPrice() : 0L;
+            long deposit = booking.getDepositAmount() != null ? booking.getDepositAmount() : 0L;
+            return Math.max(0L, total - deposit);
+        }
+        return null;
+    }
 
     private PaymentResponse buildResponse(Payment payment) {
         PaymentResponse response = paymentMapper.toResponse(payment);

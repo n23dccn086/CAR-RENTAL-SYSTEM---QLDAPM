@@ -59,6 +59,18 @@ public class ReviewController {
         return ApiResponse.success("Đã phản hồi", null);
     }
 
+    // ===== KHÁCH TRẢ LỜI LẠI PHẢN HỒI CỦA CHỦ XE =====
+
+    @PostMapping("/{id}/customer-reply")
+    public ApiResponse<ReviewResponse> customerReplyToReview(
+            @PathVariable Long id,
+            @RequestAttribute("userId") Long userId,
+            @Valid @RequestBody ReviewReplyRequest request) {
+        log.info("REST: Customer reply to review id: {}", id);
+        return ApiResponse.success("Đã gửi trả lời",
+                reviewService.customerReplyToReview(id, userId, request));
+    }
+
     // ===== LEGACY / FRONTEND ENDPOINTS =====
 
     @GetMapping("/my")

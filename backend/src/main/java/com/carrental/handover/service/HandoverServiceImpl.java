@@ -83,6 +83,11 @@ public class HandoverServiceImpl implements HandoverService {
                     "Chỉ chủ xe hoặc quản trị viên mới có thể tạo biên bản");
         }
 
+        if (booking.getRentalMode() == RentalMode.WITH_DRIVER && booking.getDriverId() == null) {
+            throw new BadRequestException(ErrorCode.VALIDATION_ERROR,
+                    "Không thể tạo biên bản bàn giao: Đơn thuê có tài xế chưa được phân công tài xế nhận chuyến.");
+        }
+
         String type = request.getHandoverType();
         if ("PICKUP".equalsIgnoreCase(type)) {
             if (booking.getStatus() != BookingStatus.APPROVED) {
@@ -274,6 +279,11 @@ public class HandoverServiceImpl implements HandoverService {
         if (booking.getStatus() == BookingStatus.CANCELLED) {
             throw new BadRequestException(ErrorCode.VALIDATION_ERROR,
                     "Đơn hàng này đã bị hủy. Biên bản bàn giao không còn hiệu lực để ký.");
+        }
+
+        if (booking.getRentalMode() == RentalMode.WITH_DRIVER && booking.getDriverId() == null) {
+            throw new BadRequestException(ErrorCode.VALIDATION_ERROR,
+                    "Không thể ký biên bản bàn giao: Đơn thuê có tài xế chưa có tài xế nhận chuyến.");
         }
 
         if (record.getStatus() == HandoverStatus.CANCELLED) {
@@ -468,9 +478,6 @@ public class HandoverServiceImpl implements HandoverService {
         }
 
         int kmDriven = returnKm - pickupKm;
-        if (kmDriven == 0) {
-            return new KmOverageResult(0, 0, 0, BigDecimal.ZERO);
-        }
 
         int rentalDays = calculateRentalDays(booking);
         int kmPerDay = configHelper.getDefaultKmPerDay();
