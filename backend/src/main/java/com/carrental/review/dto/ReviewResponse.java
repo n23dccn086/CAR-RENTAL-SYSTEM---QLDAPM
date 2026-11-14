@@ -34,6 +34,8 @@ public class ReviewResponse {
     List<String> images;
     String ownerReply;
     LocalDateTime repliedAt;
+    String customerReply;
+    LocalDateTime customerRepliedAt;
     Boolean isAnonymous;
 
     LocalDateTime createdAt;
@@ -95,6 +97,14 @@ public class ReviewResponse {
 
     public LocalDateTime getReplied_at() {
         return repliedAt;
+    }
+
+    public String getCustomer_reply() {
+        return customerReply;
+    }
+
+    public LocalDateTime getCustomer_replied_at() {
+        return customerRepliedAt;
     }
 
     public Boolean getIs_anonymous() {

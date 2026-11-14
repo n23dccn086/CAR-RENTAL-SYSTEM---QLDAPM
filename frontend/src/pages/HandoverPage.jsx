@@ -73,6 +73,12 @@ export default function HandoverPage() {
 
   // ===== KÝ =====
   const handleSign = async (role) => {
+    const isNoDriver = booking?.rentalMode === "WITH_DRIVER" && !booking?.driverId;
+    if (isNoDriver) {
+      setSignError('Đơn hàng thuê có tài xế nhưng chưa được phân công tài xế nhận chuyến. Không thể thực hiện ký biên bản bàn giao xe.')
+      return
+    }
+
     if (isCancelled) {
       setSignError('Đơn hàng này đã bị hủy. Biên bản bàn giao đã bị vô hiệu hóa hoàn toàn.')
       return
@@ -984,6 +990,25 @@ export default function HandoverPage() {
 
       {/* ===== SIGN FORM ===== */}
       {!isCompleted && !isCancelled && (
+        (booking?.rentalMode === "WITH_DRIVER" && !booking?.driverId) ? (
+          <div
+            style={{
+              padding: '28px',
+              background: 'rgba(139,44,44,0.08)',
+              border: '2px solid var(--do)',
+              color: 'var(--do)',
+              fontFamily: 'var(--mono)',
+              fontSize: '12px',
+              letterSpacing: '1px',
+              lineHeight: 1.6,
+              textTransform: 'uppercase',
+              textAlign: 'center',
+              marginBottom: '32px',
+            }}
+          >
+            ⚠️ BIÊN BẢN BỊ KHÓA: Đơn hàng thuê xe có tài xế nhưng chưa có tài xế nhận chuyến. Không thể thực hiện ký biên bản bàn giao xe.
+          </div>
+        ) : (
         <div
           style={{
             padding: '32px',
@@ -1101,6 +1126,7 @@ export default function HandoverPage() {
             )}
           </div>
         </div>
+        )
       )}
 
       {isCancelled && (

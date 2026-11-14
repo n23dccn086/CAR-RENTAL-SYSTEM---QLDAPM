@@ -65,28 +65,10 @@ export default function HandoverFormModal({
   useEffect(() => {
     if (!open || isPickup) return
 
-    const keys = [
-      'default_km_per_day',
-      'max_km_overage_per_day',
-      'max_total_km_overage',
-      'km_overage_bracket_1_limit',
-      'km_overage_bracket_1_price',
-      'km_overage_bracket_2_limit',
-      'km_overage_bracket_2_price',
-      'km_overage_bracket_3_price',
-      'late_fee_per_hour',
-    ]
-    Promise.all(
-      keys.map(k =>
-        api.get(`/admin/config/${k}`)
-          .then(r => r.data.data?.configValue)
-          .catch(() => null)
-      )
-    ).then(values => {
-      const cfg = {}
-      keys.forEach((k, i) => { cfg[k] = values[i] })
-      setConfig(cfg)
-    })
+    // /admin/config/* chỉ ADMIN gọi được (owner bị 403) → dùng endpoint công khai cho người đăng nhập
+    api.get('/handovers/fee-config')
+      .then(r => setConfig(r.data.data || {}))
+      .catch(() => setConfig({}))
 
     if (booking?.id) {
       api.get(`/handovers/booking/${booking.id}`)
@@ -166,11 +148,12 @@ export default function HandoverFormModal({
         const pricePerDay = Number(booking.pricePerDay || (booking.totalPrice ? Math.round(booking.totalPrice / totalDurationDays) : 1000000))
         const feePerHour = parseInt(config?.late_fee_per_hour) || 100000
 
-        if (lateMinutes < 120) {
+        // Mốc phải khớp HandoverServiceImpl.calculateLateFee: <60p, <240p, <1440p
+        if (lateMinutes < 60) {
           lateFee = feePerHour
-        } else if (lateMinutes < 360) {
+        } else if (lateMinutes < 240) {
           lateFee = Math.round(pricePerDay / 2)
-        } else if (lateMinutes < 720) {
+        } else if (lateMinutes < 1440) {
           lateFee = pricePerDay
         } else {
           lateFee = Math.round(pricePerDay * 1.2)
@@ -783,27 +766,9 @@ function KmOveragePreview({ booking, returnKm, config: parentConfig, pickupKm: p
   // Load config từ admin nếu chưa có từ props
   useEffect(() => {
     if (parentConfig) return
-    const keys = [
-      'default_km_per_day',
-      'max_km_overage_per_day',
-      'max_total_km_overage',
-      'km_overage_bracket_1_limit',
-      'km_overage_bracket_1_price',
-      'km_overage_bracket_2_limit',
-      'km_overage_bracket_2_price',
-      'km_overage_bracket_3_price',
-    ]
-    Promise.all(
-      keys.map(k =>
-        api.get(`/admin/config/${k}`)
-          .then(r => r.data.data?.configValue)
-          .catch(() => null)
-      )
-    ).then(values => {
-      const cfg = {}
-      keys.forEach((k, i) => { cfg[k] = values[i] })
-      setConfig(cfg)
-    })
+    api.get('/handovers/fee-config')
+      .then(r => setConfig(r.data.data || {}))
+      .catch(() => setConfig({}))
   }, [parentConfig])
 
   // Load km PICKUP của booking nếu chưa có từ props

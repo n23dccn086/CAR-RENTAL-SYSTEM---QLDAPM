@@ -20,6 +20,8 @@ public interface ReviewService {
 
     void replyToReview(Long reviewId, Long ownerId, ReviewReplyRequest request);
 
+    ReviewResponse customerReplyToReview(Long reviewId, Long customerId, ReviewReplyRequest request);
+
     List<ReviewResponse> getMyReviews(Long customerId);
 
     List<ReviewResponse> getReviewsByCar(Long carId);

@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import api from '../services/api'
 import { getBookingById } from '../services/bookingService'
+import PaymentSuccessModal from '../components/PaymentSuccessModal'
 
 export default function PaymentFinalPage() {
   const { bookingId } = useParams()
@@ -10,6 +11,7 @@ export default function PaymentFinalPage() {
   const [method, setMethod] = useState('MOMO')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+  const [successData, setSuccessData] = useState(null)
 
   useEffect(() => {
     getBookingById(bookingId).then(res => setBooking(res.data)).catch(console.error)
@@ -28,9 +30,7 @@ export default function PaymentFinalPage() {
     setLoading(true)
     setError('')
     try {
-      const remaining = (booking.totalPrice || 0) - (booking.depositAmount || 0)
-
-      // Tạo payment với type = REMAINING
+      // Tạo payment với type = REMAINING (backend tự tính lại số tiền từ remainingAmount)
       const res = await api.post('/payments', {
         bookingId: parseInt(bookingId),
         paymentType: 'REMAINING',
@@ -43,8 +43,13 @@ export default function PaymentFinalPage() {
         await api.post(`/payments/${paymentId}/mock-success?method=${method}`)
       }
 
-      alert('Thanh toán thành công!')
-      navigate('/my-bookings')
+      setSuccessData({
+        bookingId: parseInt(bookingId),
+        amount: remaining,
+        method: method,
+        type: "REMAINING",
+        carName: booking?.carName,
+      })
     } catch (err) {
       setError(err.response?.data?.message || 'Thanh toán thất bại')
     } finally {
@@ -54,7 +59,13 @@ export default function PaymentFinalPage() {
 
   if (!booking) return <div style={{ padding: '120px', textAlign: 'center' }}>Đang tải...</div>
 
-  const remaining = (booking.totalPrice || 0) - (booking.depositAmount || 0)
+  // Trang này chỉ dùng khi đơn RETURNED: lúc ký biên bản trả xe, backend đã cộng phí trễ / vượt km / phát sinh
+  // vào totalPrice và remainingAmount → số cần trả = remainingAmount (KHÔNG cộng totalExtraFees lần nữa).
+  const totalExtraFees = booking.totalExtraFees || 0
+  const baseRental = Math.max(0, (booking.totalPrice || 0) - totalExtraFees)
+  const remaining = booking.remainingAmount != null
+    ? booking.remainingAmount
+    : Math.max(0, (booking.totalPrice || 0) - (booking.depositAmount || 0))
 
   return (
     <div style={{ maxWidth: '800px', margin: '0 auto', padding: '60px 48px' }}>
@@ -76,7 +87,7 @@ export default function PaymentFinalPage() {
 
         <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '12px', fontFamily: 'var(--serif-2)', fontSize: '16px' }}>
           <span>Tổng tiền thuê</span>
-          <span style={{ fontFamily: 'var(--mono)' }}>{formatPrice(booking.totalPrice)}đ</span>
+          <span style={{ fontFamily: 'var(--mono)' }}>{formatPrice(baseRental)}đ</span>
         </div>
         <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '12px', fontFamily: 'var(--serif-2)', fontSize: '16px' }}>
           <span>Đã cọc</span>
@@ -124,6 +135,13 @@ export default function PaymentFinalPage() {
       >
         <span>{loading ? 'Đang xử lý...' : `Thanh toán ${formatPrice(remaining)}đ`}</span>
       </button>
+
+      <PaymentSuccessModal
+        isOpen={!!successData}
+        data={successData}
+        onClose={() => navigate("/my-bookings")}
+        onGoToDetail={() => navigate(`/bookings/${bookingId}`)}
+      />
     </div>
   )
 }

@@ -209,6 +209,16 @@ export default function OwnerReviewsPage() {
                     <div style={{ fontFamily: 'var(--serif-2)', fontStyle: 'italic', fontSize: '15px', color: 'var(--muc)' }}>
                       "{r.ownerReply || r.owner_reply}"
                     </div>
+                    {(r.customerReply || r.customer_reply) && (
+                      <div style={{ marginTop: '12px', marginLeft: '16px', padding: '10px 14px', background: 'var(--kem)', borderLeft: '3px solid var(--dong)' }}>
+                        <div style={{ fontFamily: 'var(--mono)', fontSize: '10px', letterSpacing: '1px', textTransform: 'uppercase', color: 'var(--muc-mo)', marginBottom: '4px' }}>
+                          Khách trả lời{(r.customerRepliedAt || r.customer_replied_at) ? ` · ${formatDate(r.customerRepliedAt || r.customer_replied_at)}` : ''}:
+                        </div>
+                        <div style={{ fontFamily: 'var(--serif-2)', fontStyle: 'italic', fontSize: '15px', color: 'var(--muc)', whiteSpace: 'pre-wrap' }}>
+                          "{r.customerReply || r.customer_reply}"
+                        </div>
+                      </div>
+                    )}
                   </div>
                 ) : (
                   <div style={{ marginLeft: '52px', marginTop: '14px' }}>

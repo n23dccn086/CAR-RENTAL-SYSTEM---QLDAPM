@@ -27,6 +27,28 @@ public class HandoverController {
 
     HandoverService handoverService;
     FileStorageService fileStorageService;
+    com.carrental.admin.service.ConfigHelper configHelper;
+
+    /**
+     * Cấu hình tính phí vượt km / trả muộn cho màn hình tạo biên bản.
+     * /admin/config chỉ ADMIN gọi được → owner/khách bị 403 và frontend rơi về giá trị mặc định
+     * cứng, lệch với số tiền backend thực tính. Endpoint này trả đúng giá trị backend đang dùng.
+     * GET /api/v1/handovers/fee-config
+     */
+    @GetMapping("/fee-config")
+    public ApiResponse<Map<String, String>> getFeeConfig() {
+        Map<String, String> cfg = new java.util.LinkedHashMap<>();
+        cfg.put("default_km_per_day", String.valueOf(configHelper.getDefaultKmPerDay()));
+        cfg.put("max_km_overage_per_day", String.valueOf(configHelper.getMaxKmOveragePerDay()));
+        cfg.put("max_total_km_overage", String.valueOf(configHelper.getMaxTotalKmOverage()));
+        cfg.put("km_overage_bracket_1_limit", String.valueOf(configHelper.getKmOverageBracket1Limit()));
+        cfg.put("km_overage_bracket_1_price", configHelper.getKmOverageBracket1Price().toPlainString());
+        cfg.put("km_overage_bracket_2_limit", String.valueOf(configHelper.getKmOverageBracket2Limit()));
+        cfg.put("km_overage_bracket_2_price", configHelper.getKmOverageBracket2Price().toPlainString());
+        cfg.put("km_overage_bracket_3_price", configHelper.getKmOverageBracket3Price().toPlainString());
+        cfg.put("late_fee_per_hour", configHelper.getLateFeePerHour().toPlainString());
+        return ApiResponse.success(cfg);
+    }
 
     /**
      * Contract 6.1: POST /handovers/pickup (multipart/form-data)

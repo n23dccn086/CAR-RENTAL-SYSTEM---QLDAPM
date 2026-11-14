@@ -720,6 +720,28 @@ export default function NotificationsPage() {
                         👁 Xem chi tiết đơn #{n.relatedEntityId} →
                       </Link>
                     )}
+
+                    {/* ★ Đánh giá: owner → trang đánh giá của chủ xe; khách → mở đánh giá để trả lời chủ xe */}
+                    {n.relatedEntityId && (n.type === "REVIEW_NEW" || n.type === "REVIEW_REPLY") && (role === "OWNER" || role === "CUSTOMER") && (
+                      <Link
+                        to={role === "OWNER" ? "/owner/reviews" : `/my-reviews/${n.relatedEntityId}`}
+                        style={{
+                          display: "inline-block",
+                          marginTop: "10px",
+                          padding: "6px 14px",
+                          background: "var(--tim)",
+                          color: "var(--kem)",
+                          textDecoration: "none",
+                          fontFamily: "var(--mono)",
+                          fontSize: "10px",
+                          letterSpacing: "1.5px",
+                          textTransform: "uppercase",
+                          fontWeight: "bold",
+                        }}
+                      >
+                        {role === "OWNER" ? "💬 Xem đánh giá →" : "↩ Xem & trả lời chủ xe →"}
+                      </Link>
+                    )}
                   </div>
 
                   {/* Actions */}
