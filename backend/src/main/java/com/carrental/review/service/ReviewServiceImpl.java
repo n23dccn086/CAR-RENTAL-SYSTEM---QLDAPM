@@ -13,6 +13,9 @@ import com.carrental.notification.entity.NotificationType;
 import com.carrental.notification.service.NotificationService;
 import com.carrental.review.dto.*;
 import com.carrental.review.entity.Review;
+import com.carrental.review.entity.ReviewReply;
+import com.carrental.review.entity.ReviewReplyAuthorRole;
+import com.carrental.review.repository.ReviewReplyRepository;
 import com.carrental.review.repository.ReviewRepository;
 import com.carrental.user.entity.User;
 import com.carrental.user.repository.UserRepository;
@@ -29,6 +32,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -45,6 +49,7 @@ public class ReviewServiceImpl implements ReviewService {
     CarRepository carRepository;
     ReviewMapper reviewMapper;
     NotificationService notificationService;
+    ReviewReplyRepository reviewReplyRepository;
 
     // ===== CREATE =====
 
@@ -158,76 +163,193 @@ public class ReviewServiceImpl implements ReviewService {
         return result;
     }
 
-    // ===== OWNER REPLY (Contract 8.3) =====
+    // ===== PHẢN HỒI ĐÁNH GIÁ =====
+    // Endpoint cũ (Contract 8.3: /reply, /customer-reply) vẫn giữ để không phá API contract,
+    // dùng chung các helper bên dưới với luồng hội thoại nhiều lượt (/replies).
 
     @Override
     @Transactional
     public void replyToReview(Long reviewId, Long ownerId, ReviewReplyRequest request) {
         log.info("Owner {} replying to review {}", ownerId, reviewId);
 
-        Review review = reviewRepository.findById(reviewId)
-                .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.REVIEW_NOT_FOUND));
-
-        if (!review.getOwnerId().equals(ownerId)) {
+        Review review = findReview(reviewId);
+        if (resolveAuthorRole(review, ownerId) != ReviewReplyAuthorRole.OWNER) {
             throw new UnauthorizedException(ErrorCode.PERMISSION_DENIED);
         }
 
-        review.setOwnerReply(request.getReply().trim());
+        String reply = request.getReply().trim();
+        review.setOwnerReply(reply);
         review.setRepliedAt(LocalDateTime.now());
         reviewRepository.save(review);
 
-        // Notify customer
-        try {
-            notificationService.createNotification(
-                    review.getCustomerId(),
-                    NotificationType.REVIEW_REPLY,
-                    "Chủ xe đã phản hồi đánh giá",
-                    String.format("Chủ xe phản hồi: \"%s\"", request.getReply().trim()),
-                    review.getId()
-            );
-        } catch (Exception e) {
-            log.warn("Failed to notify customer of review reply: {}", e.getMessage());
-        }
+        notifyCounterpart(review, ReviewReplyAuthorRole.OWNER, reply);
     }
-
-    // ===== CUSTOMER TRẢ LỜI LẠI PHẢN HỒI CỦA CHỦ XE =====
 
     @Override
     @Transactional
     public ReviewResponse customerReplyToReview(Long reviewId, Long customerId, ReviewReplyRequest request) {
         log.info("Customer {} replying to owner reply on review {}", customerId, reviewId);
 
-        Review review = reviewRepository.findById(reviewId)
-                .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.REVIEW_NOT_FOUND));
-
-        if (!review.getCustomerId().equals(customerId)) {
+        Review review = findReview(reviewId);
+        if (resolveAuthorRole(review, customerId) != ReviewReplyAuthorRole.CUSTOMER) {
             throw new UnauthorizedException(ErrorCode.PERMISSION_DENIED);
         }
-
-        if (review.getOwnerReply() == null || review.getOwnerReply().isBlank()) {
-            throw new BadRequestException(ErrorCode.VALIDATION_ERROR,
-                    "Chủ xe chưa phản hồi đánh giá này nên chưa thể trả lời");
-        }
+        requireOwnerReplied(review);
 
         String reply = request.getReply().trim();
         review.setCustomerReply(reply);
         review.setCustomerRepliedAt(LocalDateTime.now());
         Review saved = reviewRepository.save(review);
 
-        // Notify owner
-        try {
-            notificationService.createNotification(
-                    review.getOwnerId(),
-                    NotificationType.REVIEW_REPLY,
-                    "Khách đã trả lời phản hồi của bạn",
-                    String.format("Khách trả lời (đơn #%d): \"%s\"", review.getBookingId(), reply),
-                    review.getId()
-            );
-        } catch (Exception e) {
-            log.warn("Failed to notify owner of customer reply: {}", e.getMessage());
+        notifyCounterpart(review, ReviewReplyAuthorRole.CUSTOMER, reply);
+        return buildResponse(saved);
+    }
+
+    // ===== LUỒNG HỘI THOẠI NHIỀU LƯỢT =====
+
+    @Override
+    public List<ReviewReplyResponse> getReplies(Long reviewId) {
+        Review review = findReview(reviewId);
+        return buildThread(review, resolveCustomerName(review), resolveOwnerName(review));
+    }
+
+    @Override
+    @Transactional
+    public List<ReviewReplyResponse> addReply(Long reviewId, Long userId, ReviewThreadReplyRequest request) {
+        Review review = findReview(reviewId);
+
+        ReviewReplyAuthorRole role = resolveAuthorRole(review, userId);
+        if (role == null) {
+            throw new UnauthorizedException(ErrorCode.PERMISSION_DENIED);
+        }
+        if (role == ReviewReplyAuthorRole.CUSTOMER) {
+            requireOwnerReplied(review);
         }
 
-        return buildResponse(saved);
+        String content = request.getContent().trim();
+        log.info("{} {} adds thread reply to review {}", role, userId, reviewId);
+        reviewReplyRepository.save(ReviewReply.builder()
+                .reviewId(reviewId)
+                .authorId(userId)
+                .authorRole(role)
+                .content(content)
+                .build());
+
+        notifyCounterpart(review, role, content);
+        return buildThread(review, resolveCustomerName(review), resolveOwnerName(review));
+    }
+
+    // ===== HELPER DÙNG CHUNG CHO PHẢN HỒI =====
+
+    private Review findReview(Long reviewId) {
+        return reviewRepository.findById(reviewId)
+                .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.REVIEW_NOT_FOUND));
+    }
+
+    /** CUSTOMER nếu là người viết đánh giá, OWNER nếu là chủ xe, null nếu không liên quan. */
+    private ReviewReplyAuthorRole resolveAuthorRole(Review review, Long userId) {
+        if (userId == null) return null;
+        if (userId.equals(review.getCustomerId())) return ReviewReplyAuthorRole.CUSTOMER;
+        if (userId.equals(review.getOwnerId())) return ReviewReplyAuthorRole.OWNER;
+        return null;
+    }
+
+    /** Khách chỉ được nhắn khi chủ xe đã phản hồi ít nhất một lần (cột cũ hoặc trong luồng). */
+    private void requireOwnerReplied(Review review) {
+        boolean ownerHasReplied = (review.getOwnerReply() != null && !review.getOwnerReply().isBlank())
+                || reviewReplyRepository.existsByReviewIdAndAuthorRole(review.getId(), ReviewReplyAuthorRole.OWNER);
+        if (!ownerHasReplied) {
+            throw new BadRequestException(ErrorCode.VALIDATION_ERROR,
+                    "Chủ xe chưa phản hồi đánh giá này nên chưa thể trả lời");
+        }
+    }
+
+    /** Thông báo cho bên còn lại; lỗi thông báo không làm hỏng việc lưu phản hồi. */
+    private void notifyCounterpart(Review review, ReviewReplyAuthorRole author, String content) {
+        try {
+            if (author == ReviewReplyAuthorRole.OWNER) {
+                notificationService.createNotification(
+                        review.getCustomerId(),
+                        NotificationType.REVIEW_REPLY,
+                        "Chủ xe đã phản hồi đánh giá",
+                        String.format("Chủ xe phản hồi: \"%s\"", content),
+                        review.getId());
+            } else {
+                notificationService.createNotification(
+                        review.getOwnerId(),
+                        NotificationType.REVIEW_REPLY,
+                        "Khách đã trả lời phản hồi của bạn",
+                        String.format("Khách trả lời (đơn #%d): \"%s\"", review.getBookingId(), content),
+                        review.getId());
+            }
+        } catch (Exception e) {
+            log.warn("Failed to notify review reply (review {}): {}", review.getId(), e.getMessage());
+        }
+    }
+
+    /**
+     * Gộp owner_reply / customer_reply cũ (nếu có) với các tin trong review_replies,
+     * sắp xếp theo thời gian tăng dần.
+     */
+    private List<ReviewReplyResponse> buildThread(Review review, String customerName, String ownerName) {
+        List<ReviewReplyResponse> thread = new ArrayList<>();
+
+        if (review.getOwnerReply() != null && !review.getOwnerReply().isBlank()) {
+            thread.add(ReviewReplyResponse.builder()
+                    .reviewId(review.getId())
+                    .authorId(review.getOwnerId())
+                    .authorRole(ReviewReplyAuthorRole.OWNER.name())
+                    .authorName(ownerName)
+                    .content(review.getOwnerReply())
+                    .legacy(true)
+                    .createdAt(review.getRepliedAt())
+                    .build());
+        }
+        if (review.getCustomerReply() != null && !review.getCustomerReply().isBlank()) {
+            thread.add(ReviewReplyResponse.builder()
+                    .reviewId(review.getId())
+                    .authorId(review.getCustomerId())
+                    .authorRole(ReviewReplyAuthorRole.CUSTOMER.name())
+                    .authorName(customerName)
+                    .content(review.getCustomerReply())
+                    .legacy(true)
+                    .createdAt(review.getCustomerRepliedAt())
+                    .build());
+        }
+
+        List<ReviewReply> replies = reviewReplyRepository.findByReviewIdOrderByCreatedAtAscIdAsc(review.getId());
+        if (replies != null) {
+            for (ReviewReply r : replies) {
+                boolean isOwner = r.getAuthorRole() == ReviewReplyAuthorRole.OWNER;
+                thread.add(ReviewReplyResponse.builder()
+                        .id(r.getId())
+                        .reviewId(r.getReviewId())
+                        .authorId(r.getAuthorId())
+                        .authorRole(r.getAuthorRole().name())
+                        .authorName(isOwner ? ownerName : customerName)
+                        .content(r.getContent())
+                        .legacy(false)
+                        .createdAt(r.getCreatedAt())
+                        .updatedAt(r.getUpdatedAt())
+                        .build());
+            }
+        }
+
+        // Sắp xếp ổn định theo thời gian; tin thiếu timestamp giữ vị trí đầu (dữ liệu cũ)
+        thread.sort(Comparator.comparing(ReviewReplyResponse::getCreatedAt,
+                Comparator.nullsFirst(Comparator.naturalOrder())));
+        return thread;
+    }
+
+    private String resolveCustomerName(Review review) {
+        if (Boolean.TRUE.equals(review.getIsAnonymous())) return "Khách ẩn danh";
+        if (review.getCustomerId() == null) return null;
+        return userRepository.findById(review.getCustomerId()).map(User::getName).orElse(null);
+    }
+
+    private String resolveOwnerName(Review review) {
+        if (review.getOwnerId() == null) return null;
+        return userRepository.findById(review.getOwnerId()).map(User::getName).orElse(null);
     }
 
     // ===== READ LIST (Legacy / Frontend) =====
@@ -265,8 +387,7 @@ public class ReviewServiceImpl implements ReviewService {
     public void deleteReview(Long reviewId, Long userId) {
         log.info("Delete review id: {} by user: {}", reviewId, userId);
 
-        Review review = reviewRepository.findById(reviewId)
-                .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.REVIEW_NOT_FOUND));
+        Review review = findReview(reviewId);
 
         if (!review.getCustomerId().equals(userId)) {
             User user = userRepository.findById(userId).orElse(null);
@@ -319,6 +440,7 @@ public class ReviewServiceImpl implements ReviewService {
         response.setRepliedAt(review.getRepliedAt());
         response.setCustomerReply(review.getCustomerReply());
         response.setCustomerRepliedAt(review.getCustomerRepliedAt());
+        response.setReplies(buildThread(review, response.getCustomerName(), response.getOwnerName()));
 
         return response;
     }

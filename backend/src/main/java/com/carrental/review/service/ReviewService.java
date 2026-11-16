@@ -1,6 +1,8 @@
 package com.carrental.review.service;
 
 import com.carrental.review.dto.ReviewReplyRequest;
+import com.carrental.review.dto.ReviewReplyResponse;
+import com.carrental.review.dto.ReviewThreadReplyRequest;
 import com.carrental.review.dto.ReviewRequest;
 import com.carrental.review.dto.ReviewResponse;
 
@@ -21,6 +23,12 @@ public interface ReviewService {
     void replyToReview(Long reviewId, Long ownerId, ReviewReplyRequest request);
 
     ReviewResponse customerReplyToReview(Long reviewId, Long customerId, ReviewReplyRequest request);
+
+    // ===== LUỒNG HỘI THOẠI (nhiều lượt khách <-> chủ xe) =====
+
+    List<ReviewReplyResponse> getReplies(Long reviewId);
+
+    List<ReviewReplyResponse> addReply(Long reviewId, Long userId, ReviewThreadReplyRequest request);
 
     List<ReviewResponse> getMyReviews(Long customerId);
 

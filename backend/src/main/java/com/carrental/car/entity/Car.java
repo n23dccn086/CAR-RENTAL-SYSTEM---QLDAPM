@@ -144,4 +144,19 @@ public class Car {
     @JoinColumn(name = "car_id", referencedColumnName = "id", insertable = false, updatable = false)
     @Builder.Default
     List<CarDocument> documents = new ArrayList<>();
+
+    /**
+     * Đơn giá 1 ngày dùng tính phí trả xe trễ hạn: giá cuối tuần nếu ngày nhận xe là T7/CN
+     * (và xe có cấu hình giá cuối tuần), ngược lại là giá thường. Null nếu xe chưa có giá.
+     * Dùng chung cho HandoverService (tính phí thật) và BookingResponse.pricePerDay (frontend xem trước).
+     */
+    public Long dailyRateFor(LocalDateTime startDate) {
+        if (startDate != null && priceWeekend != null && priceWeekend > 0) {
+            int dow = startDate.getDayOfWeek().getValue();
+            if (dow == 6 || dow == 7) {
+                return priceWeekend;
+            }
+        }
+        return pricePerDay;
+    }
 }

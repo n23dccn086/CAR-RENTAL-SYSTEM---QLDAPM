@@ -81,6 +81,9 @@ public class BookingResponse {
     // ===== Chi tiết phí =====
     BookingDetailResponse details;
 
+    // Đơn giá 1 ngày dùng tính phí trễ hạn (Car.dailyRateFor) — frontend dùng để xem trước phí trễ trên biên bản
+    Long pricePerDay;
+
     // ===== Phí phát sinh (từ handover RETURN) =====
     Long lateFee;
     Long kmOverageFee;

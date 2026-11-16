@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
 import { getCarById } from '../services/carService'
 import api from '../services/api'
+import ReviewThread from '../components/ReviewThread'
 
 export default function CarDetailPage() {
   const { id } = useParams()
@@ -392,42 +393,10 @@ export default function CarDetailPage() {
                     </div>
                   )}
 
-                  {/* Chủ xe phản hồi */}
-                  {(r.ownerReply || r.owner_reply) && (
-                    <div style={{
-                      marginTop: '8px',
-                      padding: '16px 20px',
-                      background: 'rgba(74,93,63,0.06)',
-                      borderLeft: '3px solid var(--xanh-reu)',
-                      fontFamily: 'var(--serif-2)',
-                      fontSize: '14px',
-                      color: 'var(--xanh-reu)',
-                      fontStyle: 'italic'
-                    }}>
-                      <div style={{ fontFamily: 'var(--mono)', fontSize: '10px', letterSpacing: '1px', textTransform: 'uppercase', marginBottom: '6px', fontStyle: 'normal', fontWeight: 700 }}>
-                        Chủ xe phản hồi {r.repliedAt || r.replied_at ? `(${formatDate(r.repliedAt || r.replied_at)})` : ''}:
-                      </div>
-                      "{r.ownerReply || r.owner_reply}"
-                    </div>
-                  )}
-
-                  {/* Khách trả lời lại chủ xe */}
-                  {(r.ownerReply || r.owner_reply) && (r.customerReply || r.customer_reply) && (
-                    <div style={{
-                      marginTop: '8px',
-                      marginLeft: '24px',
-                      padding: '12px 18px',
-                      background: 'rgba(15,14,12,0.04)',
-                      borderLeft: '3px solid var(--dong)',
-                      fontFamily: 'var(--serif-2)',
-                      fontSize: '14px',
-                      color: 'var(--muc)',
-                      fontStyle: 'italic'
-                    }}>
-                      <div style={{ fontFamily: 'var(--mono)', fontSize: '10px', letterSpacing: '1px', textTransform: 'uppercase', marginBottom: '6px', fontStyle: 'normal', fontWeight: 700 }}>
-                        Khách trả lời {r.customerRepliedAt || r.customer_replied_at ? `(${formatDate(r.customerRepliedAt || r.customer_replied_at)})` : ''}:
-                      </div>
-                      "{r.customerReply || r.customer_reply}"
+                  {/* Hội thoại khách <-> chủ xe (chỉ xem) */}
+                  {r.replies?.length > 0 && (
+                    <div style={{ marginTop: '8px' }}>
+                      <ReviewThread review={r} background="rgba(15,14,12,0.04)" />
                     </div>
                   )}
                 </div>

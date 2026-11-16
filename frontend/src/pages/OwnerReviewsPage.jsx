@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import api from '../services/api'
 import { useAuth } from '../hooks/useAuth'
+import ReviewThread from '../components/ReviewThread'
 
 export default function OwnerReviewsPage() {
   const { user } = useAuth()
@@ -12,28 +13,6 @@ export default function OwnerReviewsPage() {
   // ===== PHÂN TRANG =====
   const [currentPage, setCurrentPage] = useState(1)
   const ITEMS_PER_PAGE = 10
-
-  // ===== PHẢN HỒI ĐÁNH GIÁ =====
-  const [replyingId, setReplyingId] = useState(null)
-  const [replyText, setReplyText] = useState('')
-  const [replySubmitting, setReplySubmitting] = useState(false)
-  const [replyError, setReplyError] = useState('')
-
-  const handleReplySubmit = async (reviewId) => {
-    if (!replyText.trim()) return
-    setReplySubmitting(true)
-    setReplyError('')
-    try {
-      await api.post(`/reviews/${reviewId}/reply`, { reply: replyText.trim() })
-      setReviews(prev => prev.map(r => r.id === reviewId ? { ...r, ownerReply: replyText.trim(), owner_reply: replyText.trim() } : r))
-      setReplyingId(null)
-      setReplyText('')
-    } catch (err) {
-      setReplyError(err.response?.data?.message || 'Gửi phản hồi thất bại')
-    } finally {
-      setReplySubmitting(false)
-    }
-  }
 
   useEffect(() => {
     fetchReviews()
@@ -201,63 +180,17 @@ export default function OwnerReviewsPage() {
                   </div>
                 )}
 
-                {(r.ownerReply || r.owner_reply) ? (
-                  <div style={{ marginLeft: '52px', marginTop: '14px', padding: '12px 16px', background: 'var(--kem-dam)', borderLeft: '3px solid var(--muc)' }}>
-                    <div style={{ fontFamily: 'var(--mono)', fontSize: '10px', letterSpacing: '1px', textTransform: 'uppercase', color: 'var(--muc-mo)', marginBottom: '4px' }}>
-                      Phản hồi của bạn:
-                    </div>
-                    <div style={{ fontFamily: 'var(--serif-2)', fontStyle: 'italic', fontSize: '15px', color: 'var(--muc)' }}>
-                      "{r.ownerReply || r.owner_reply}"
-                    </div>
-                    {(r.customerReply || r.customer_reply) && (
-                      <div style={{ marginTop: '12px', marginLeft: '16px', padding: '10px 14px', background: 'var(--kem)', borderLeft: '3px solid var(--dong)' }}>
-                        <div style={{ fontFamily: 'var(--mono)', fontSize: '10px', letterSpacing: '1px', textTransform: 'uppercase', color: 'var(--muc-mo)', marginBottom: '4px' }}>
-                          Khách trả lời{(r.customerRepliedAt || r.customer_replied_at) ? ` · ${formatDate(r.customerRepliedAt || r.customer_replied_at)}` : ''}:
-                        </div>
-                        <div style={{ fontFamily: 'var(--serif-2)', fontStyle: 'italic', fontSize: '15px', color: 'var(--muc)', whiteSpace: 'pre-wrap' }}>
-                          "{r.customerReply || r.customer_reply}"
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                ) : (
-                  <div style={{ marginLeft: '52px', marginTop: '14px' }}>
-                    {replyingId === r.id ? (
-                      <div style={{ background: 'var(--kem-dam)', padding: '16px', border: '1px solid rgba(15,14,12,0.2)' }}>
-                        <textarea
-                          rows={3}
-                          value={replyText}
-                          onChange={e => setReplyText(e.target.value)}
-                          placeholder="Viết phản hồi cho khách hàng..."
-                          style={{ width: '100%', padding: '10px', fontFamily: 'var(--serif-2)', fontSize: '14px', border: '1px solid rgba(15,14,12,0.2)', background: 'var(--kem)', outline: 'none', resize: 'vertical' }}
-                        />
-                        {replyError && <div style={{ color: 'var(--do)', fontFamily: 'var(--mono)', fontSize: '11px', marginTop: '6px' }}>{replyError}</div>}
-                        <div style={{ display: 'flex', gap: '10px', marginTop: '10px' }}>
-                          <button
-                            onClick={() => handleReplySubmit(r.id)}
-                            disabled={replySubmitting || !replyText.trim()}
-                            style={{ padding: '6px 16px', background: 'var(--muc)', color: 'var(--kem)', border: 'none', fontFamily: 'var(--mono)', fontSize: '11px', letterSpacing: '1px', textTransform: 'uppercase', cursor: 'pointer' }}
-                          >
-                            {replySubmitting ? 'Đang gửi...' : 'Gửi phản hồi'}
-                          </button>
-                          <button
-                            onClick={() => { setReplyingId(null); setReplyText(''); setReplyError(''); }}
-                            style={{ padding: '6px 14px', background: 'transparent', border: '1px solid rgba(15,14,12,0.3)', fontFamily: 'var(--mono)', fontSize: '11px', letterSpacing: '1px', textTransform: 'uppercase', cursor: 'pointer' }}
-                          >
-                            Hủy
-                          </button>
-                        </div>
-                      </div>
-                    ) : (
-                      <button
-                        onClick={() => { setReplyingId(r.id); setReplyText(''); setReplyError(''); }}
-                        style={{ padding: '4px 12px', background: 'transparent', border: '1px dashed var(--muc-mo)', color: 'var(--muc)', fontFamily: 'var(--mono)', fontSize: '10px', letterSpacing: '1px', textTransform: 'uppercase', cursor: 'pointer' }}
-                      >
-                        + Phản hồi đánh giá
-                      </button>
-                    )}
-                  </div>
-                )}
+                {/* HỘI THOẠI KHÁCH <-> CHỦ XE (nhiều lượt) */}
+                <div style={{ marginLeft: '52px', marginTop: '14px' }}>
+                  <ReviewThread
+                    review={r}
+                    viewerRole="OWNER"
+                    background="var(--kem-dam)"
+                    inputBackground="var(--kem)"
+                    collapsibleCompose
+                    onRepliesChange={(replies) => setReviews(prev => prev.map(x => x.id === r.id ? { ...x, replies } : x))}
+                  />
+                </div>
               </div>
             ))}
           </div>

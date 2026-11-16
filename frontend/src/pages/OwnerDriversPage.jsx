@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
 import api from "../services/api";
 import { useDialog } from "../context/DialogContext";
@@ -53,6 +53,7 @@ export default function OwnerDriversPage() {
     avatarUrl: "",
   });
   const [formLoading, setFormLoading] = useState(false);
+  const [avatarUploading, setAvatarUploading] = useState(false);
   const [formError, setFormError] = useState("");
   const [message, setMessage] = useState("");
 
@@ -254,6 +255,8 @@ export default function OwnerDriversPage() {
     e.preventDefault();
     setFormError("");
 
+    if (avatarUploading)
+      return setFormError("Ảnh đại diện đang tải lên, vui lòng chờ");
     if (!form.name?.trim()) return setFormError("Tên không được để trống");
     if (!/^[0-9]{10,11}$/.test(form.phone))
       return setFormError("SĐT phải 10-11 chữ số");
@@ -986,12 +989,12 @@ export default function OwnerDriversPage() {
               </div>
 
               <div style={{ marginTop: "16px" }}>
-                <Field
-                  label="URL Avatar"
-                  name="avatarUrl"
+                <AvatarUpload
                   value={form.avatarUrl}
-                  onChange={(e) =>
-                    setForm({ ...form, avatarUrl: e.target.value })
+                  uploading={avatarUploading}
+                  setUploading={setAvatarUploading}
+                  onChange={(url) =>
+                    setForm((prev) => ({ ...prev, avatarUrl: url }))
                   }
                 />
               </div>
@@ -1017,7 +1020,7 @@ export default function OwnerDriversPage() {
                 </button>
                 <button
                   type="submit"
-                  disabled={formLoading}
+                  disabled={formLoading || avatarUploading}
                   style={{
                     flex: 2,
                     padding: "16px",
@@ -1331,6 +1334,174 @@ function Field({ label, name, type = "text", value, onChange }) {
         onChange={onChange}
         style={inputStyle}
       />
+    </div>
+  );
+}
+
+const AVATAR_ACCEPT = ["image/jpeg", "image/png", "image/webp", "image/gif"];
+const AVATAR_MAX_SIZE = 5 * 1024 * 1024;
+
+function AvatarUpload({ value, onChange, uploading, setUploading }) {
+  const inputRef = useRef(null);
+  const [error, setError] = useState("");
+  const [localPreview, setLocalPreview] = useState("");
+
+  useEffect(() => {
+    return () => {
+      if (localPreview) URL.revokeObjectURL(localPreview);
+    };
+  }, [localPreview]);
+
+  const handleFile = async (e) => {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+    setError("");
+
+    if (!AVATAR_ACCEPT.includes(file.type)) {
+      setError("Chỉ chấp nhận ảnh JPG, PNG, WEBP hoặc GIF");
+      return;
+    }
+    if (file.size > AVATAR_MAX_SIZE) {
+      setError("Ảnh tối đa 5MB");
+      return;
+    }
+
+    setLocalPreview(URL.createObjectURL(file));
+    setUploading(true);
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+      const res = await api.post("/owner/drivers/upload-avatar", formData, {
+        headers: { "Content-Type": "multipart/form-data" },
+      });
+      const url = res.data?.data;
+      if (!url) throw new Error("Không nhận được URL ảnh");
+      onChange(url);
+    } catch (err) {
+      setError(err.response?.data?.message || err.message || "Upload thất bại");
+      setLocalPreview("");
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const handleRemove = () => {
+    setLocalPreview("");
+    setError("");
+    onChange("");
+  };
+
+  const preview = localPreview || value;
+
+  return (
+    <div>
+      <label style={labelStyle}>Ảnh đại diện</label>
+      <div style={{ display: "flex", alignItems: "center", gap: "16px" }}>
+        <div
+          style={{
+            width: "80px",
+            height: "80px",
+            flexShrink: 0,
+            borderRadius: "50%",
+            overflow: "hidden",
+            background: "var(--kem-dam)",
+            border: "1px solid rgba(15,14,12,0.2)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            position: "relative",
+          }}
+        >
+          {preview ? (
+            <img
+              src={preview}
+              alt="Avatar"
+              style={{
+                width: "100%",
+                height: "100%",
+                objectFit: "cover",
+                opacity: uploading ? 0.5 : 1,
+              }}
+            />
+          ) : (
+            <span
+              style={{
+                fontFamily: "var(--mono)",
+                fontSize: "9px",
+                letterSpacing: "1px",
+                color: "var(--muc-mo)",
+                textTransform: "uppercase",
+              }}
+            >
+              Chưa có
+            </span>
+          )}
+        </div>
+
+        <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+          <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
+            <button
+              type="button"
+              disabled={uploading}
+              onClick={() => inputRef.current?.click()}
+              style={{
+                padding: "8px 14px",
+                background: "transparent",
+                border: "1px solid var(--muc)",
+                color: "var(--muc)",
+                fontFamily: "var(--mono)",
+                fontSize: "10px",
+                letterSpacing: "2px",
+                textTransform: "uppercase",
+                cursor: uploading ? "wait" : "pointer",
+              }}
+            >
+              {uploading
+                ? "Đang tải lên..."
+                : preview
+                  ? "Đổi ảnh"
+                  : "Chọn ảnh"}
+            </button>
+            {preview && !uploading && (
+              <button
+                type="button"
+                onClick={handleRemove}
+                style={{
+                  padding: "8px 14px",
+                  background: "transparent",
+                  border: "1px solid var(--do)",
+                  color: "var(--do)",
+                  fontFamily: "var(--mono)",
+                  fontSize: "10px",
+                  letterSpacing: "2px",
+                  textTransform: "uppercase",
+                  cursor: "pointer",
+                }}
+              >
+                Xóa ảnh
+              </button>
+            )}
+          </div>
+          <span
+            style={{
+              fontFamily: "var(--serif-2)",
+              fontStyle: "italic",
+              fontSize: "13px",
+              color: error ? "var(--do)" : "var(--muc-mo)",
+            }}
+          >
+            {error || "JPG, PNG, WEBP hoặc GIF — tối đa 5MB"}
+          </span>
+        </div>
+        <input
+          ref={inputRef}
+          type="file"
+          accept={AVATAR_ACCEPT.join(",")}
+          onChange={handleFile}
+          style={{ display: "none" }}
+        />
+      </div>
     </div>
   );
 }

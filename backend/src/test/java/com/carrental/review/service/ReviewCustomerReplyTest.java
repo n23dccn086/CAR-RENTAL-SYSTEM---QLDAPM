@@ -37,6 +37,7 @@ class ReviewCustomerReplyTest {
     @Mock com.carrental.car.repository.CarRepository carRepository;
     @Mock ReviewMapper reviewMapper;
     @Mock NotificationService notificationService;
+    @Mock com.carrental.review.repository.ReviewReplyRepository reviewReplyRepository;
 
     @InjectMocks ReviewServiceImpl reviewService;
 
