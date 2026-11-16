@@ -1,5 +1,7 @@
 package com.carrental.common.service;
 
+import com.carrental.common.constant.ErrorCode;
+import com.carrental.common.exception.BadRequestException;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
@@ -10,6 +12,7 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.StandardCopyOption;
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
 
 @Service
@@ -39,7 +42,7 @@ public class FileStorageService {
             throw new IOException("File rỗng");
         }
 
-        String contentType = file.getContentType();
+        String contentType = file.getContentType() != null ? file.getContentType().toLowerCase() : null;
         String originalName = file.getOriginalFilename();
         String ext = getExtension(originalName);
 
@@ -66,6 +69,31 @@ public class FileStorageService {
 
         log.info("Stored file: {}", targetPath);
         return "/files/" + subDir + "/" + filename;   // ← ĐỔI: /uploads/ → /files/
+    }
+
+    private static final long MAX_IMAGE_SIZE = 5L * 1024 * 1024;
+    private static final Set<String> IMAGE_TYPES = Set.of("image/jpeg", "image/png", "image/webp", "image/gif");
+    private static final Set<String> IMAGE_EXTS = Set.of(".jpg", ".jpeg", ".png", ".webp", ".gif");
+
+    /**
+     * Lưu file CHỈ khi là ảnh JPG/PNG/WEBP/GIF ≤ 5MB.
+     * Kiểm tra cả Content-Type lẫn đuôi file (Content-Type do client gửi, có thể giả mạo).
+     * Ném BadRequestException (400) với thông báo tiếng Việt.
+     */
+    public String storeImage(MultipartFile file, String subDir) throws IOException {
+        if (file == null || file.isEmpty()) {
+            throw new BadRequestException(ErrorCode.VALIDATION_ERROR, "Vui lòng chọn ảnh");
+        }
+        String contentType = file.getContentType() != null ? file.getContentType().toLowerCase() : null;
+        String ext = getExtension(file.getOriginalFilename());
+        if (contentType == null || !IMAGE_TYPES.contains(contentType)
+                || !IMAGE_EXTS.contains(ext)) {
+            throw new BadRequestException(ErrorCode.VALIDATION_ERROR, "Chỉ chấp nhận ảnh JPG, PNG, WEBP hoặc GIF");
+        }
+        if (file.getSize() > MAX_IMAGE_SIZE) {
+            throw new BadRequestException(ErrorCode.VALIDATION_ERROR, "Ảnh tối đa 5MB");
+        }
+        return storeFile(file, subDir);
     }
 
     public void deleteFile(String fileUrl) {

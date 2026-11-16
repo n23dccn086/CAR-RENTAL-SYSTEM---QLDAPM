@@ -39,7 +39,6 @@ import java.security.MessageDigest;
 import java.time.Duration;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
-import java.time.ZoneOffset;
 import java.util.List;
 
 @Service
@@ -133,7 +132,7 @@ public class HandoverServiceImpl implements HandoverService {
         if ("RETURN".equalsIgnoreCase(type)) {
             actualReturnTime = request.getActualReturnTime() != null
                     ? request.getActualReturnTime()
-                    : LocalDateTime.now();
+                    : LocalDateTime.now(VN_ZONE);
             LateFeeResult result = calculateLateFee(booking, actualReturnTime);
             lateFee = result.fee;
             lateMinutes = result.minutesLate;
@@ -141,23 +140,12 @@ public class HandoverServiceImpl implements HandoverService {
             log.info("Late fee calculated for booking {}: {} minutes → {}đ",
                     booking.getId(), lateMinutes, lateFee);
 
-            if (booking.getRentalMode() == null || booking.getRentalMode() == RentalMode.SELF_DRIVE) {
-                HandoverRecord pickupRecord = handoverRepository
-                        .findByBookingIdAndHandoverType(booking.getId(), "PICKUP")
-                        .orElse(null);
-
-                if (pickupRecord != null && pickupRecord.getKmReading() != null) {
-                    KmOverageResult kmResult = calculateKmOverage(
-                            booking, pickupRecord.getKmReading(), request.getKmReading());
-
-                    kmDriven = kmResult.kmDriven;
-                    kmAllowed = kmResult.kmAllowed;
-                    kmOverage = kmResult.kmOverage;
-                    kmOverageFee = kmResult.fee;
-
-                    log.info("Km overage for booking {}: driven={}, allowed={}, over={}, fee={}đ",
-                            booking.getId(), kmDriven, kmAllowed, kmOverage, kmOverageFee);
-                }
+            KmOverageResult kmResult = calculateReturnKmOverage(booking, request.getKmReading());
+            if (kmResult != null) {
+                kmDriven = kmResult.kmDriven;
+                kmAllowed = kmResult.kmAllowed;
+                kmOverage = kmResult.kmOverage;
+                kmOverageFee = kmResult.fee;
             }
         }
 
@@ -436,10 +424,9 @@ public class HandoverServiceImpl implements HandoverService {
             return new LateFeeResult(BigDecimal.ZERO, 0);
         }
 
-        LocalDateTime endDateVN = booking.getEndDate()
-                .atZone(ZoneOffset.UTC)
-                .withZoneSameInstant(VN_ZONE)
-                .toLocalDateTime();
+        // endDate và actualReturnTime đều là giờ địa phương VN (datetime-local từ frontend, lưu nguyên dạng LocalDateTime)
+        // → so sánh trực tiếp, KHÔNG quy đổi UTC→VN (trước đây cộng nhầm 7h làm phí trễ thấp hơn biên bản dự kiến).
+        LocalDateTime endDateVN = booking.getEndDate();
 
         long minutesLate = Duration.between(endDateVN, actualReturnTime).toMinutes();
         if (minutesLate <= 0) {
@@ -466,6 +453,24 @@ public class HandoverServiceImpl implements HandoverService {
 
         long fee = pricePerDay + (pricePerDay * 20 / 100);
         return new LateFeeResult(BigDecimal.valueOf(fee), minutes);
+    }
+
+    /**
+     * Phí vượt km cho biên bản trả xe, dựa trên ODO ở biên bản giao xe.
+     * Áp dụng cho mọi hình thức thuê (tự lái / có tài xế) — khớp bảng dự kiến trên form biên bản.
+     * Trả về null nếu chưa có biên bản giao xe hoặc biên bản đó không ghi ODO.
+     */
+    private KmOverageResult calculateReturnKmOverage(Booking booking, int returnKm) {
+        HandoverRecord pickupRecord = handoverRepository
+                .findByBookingIdAndHandoverType(booking.getId(), "PICKUP")
+                .orElse(null);
+        if (pickupRecord == null || pickupRecord.getKmReading() == null) {
+            return null;
+        }
+        KmOverageResult result = calculateKmOverage(booking, pickupRecord.getKmReading(), returnKm);
+        log.info("Km overage for booking {}: driven={}, allowed={}, over={}, fee={}đ",
+                booking.getId(), result.kmDriven, result.kmAllowed, result.kmOverage, result.fee);
+        return result;
     }
 
     private KmOverageResult calculateKmOverage(
@@ -532,15 +537,8 @@ public class HandoverServiceImpl implements HandoverService {
 
     private long getPricePerDay(Booking booking) {
         Car car = carRepository.findById(booking.getCarId()).orElse(null);
-        if (car == null) return 1_000_000L;
-        if (booking.getStartDate() != null && car.getPriceWeekend() != null
-                && car.getPriceWeekend() > 0) {
-            int dow = booking.getStartDate().getDayOfWeek().getValue();
-            if (dow == 6 || dow == 7) {
-                return car.getPriceWeekend();
-            }
-        }
-        return car.getPricePerDay() != null ? car.getPricePerDay() : 1_000_000L;
+        Long rate = car != null ? car.dailyRateFor(booking.getStartDate()) : null;
+        return rate != null ? rate : 1_000_000L;
     }
 
     // ===== HELPER =====
@@ -917,7 +915,7 @@ public class HandoverServiceImpl implements HandoverService {
 
         LocalDateTime actualReturnTime = request.getActualReturnTime() != null
                 ? request.getActualReturnTime()
-                : LocalDateTime.now();
+                : LocalDateTime.now(VN_ZONE);
 
         LateFeeResult lateResult = calculateLateFee(booking, actualReturnTime);
         BigDecimal lateFee = lateResult.fee;
@@ -928,20 +926,12 @@ public class HandoverServiceImpl implements HandoverService {
         int kmOverage = 0;
         BigDecimal kmOverageFee = BigDecimal.ZERO;
 
-        if (booking.getRentalMode() == null || booking.getRentalMode() == RentalMode.SELF_DRIVE) {
-            HandoverRecord pickupRecord = handoverRepository
-                    .findByBookingIdAndHandoverType(booking.getId(), "PICKUP")
-                    .orElse(null);
-
-            if (pickupRecord != null && pickupRecord.getKmReading() != null) {
-                KmOverageResult kmResult = calculateKmOverage(
-                        booking, pickupRecord.getKmReading(), request.getKmReading());
-
-                kmDriven = kmResult.kmDriven;
-                kmAllowed = kmResult.kmAllowed;
-                kmOverage = kmResult.kmOverage;
-                kmOverageFee = kmResult.fee;
-            }
+        KmOverageResult kmResult = calculateReturnKmOverage(booking, request.getKmReading());
+        if (kmResult != null) {
+            kmDriven = kmResult.kmDriven;
+            kmAllowed = kmResult.kmAllowed;
+            kmOverage = kmResult.kmOverage;
+            kmOverageFee = kmResult.fee;
         }
 
         BigDecimal extraFees = request.getExtraFees() != null ? request.getExtraFees() : BigDecimal.ZERO;

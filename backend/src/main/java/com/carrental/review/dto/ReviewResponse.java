@@ -38,6 +38,9 @@ public class ReviewResponse {
     LocalDateTime customerRepliedAt;
     Boolean isAnonymous;
 
+    // Luồng hội thoại khách <-> chủ xe (gồm cả owner_reply/customer_reply cũ), theo thứ tự thời gian
+    List<ReviewReplyResponse> replies;
+
     LocalDateTime createdAt;
     LocalDateTime updatedAt;
 

@@ -13,7 +13,14 @@ export const BOOKING_STATUS = {
   CANCELLED: { label: 'Đã hủy',         color: '#8b2c2c' },
 }
 
-export const CAR_TYPES = ['SEDAN', 'SUV', 'MPV', 'HATCHBACK', 'PICKUP']
+// Khớp BookingServiceImpl.cancelBooking: chỉ hủy được ở các trạng thái này
+export const CANCELLABLE_STATUSES = ['PENDING', 'PAID', 'APPROVED']
+export const canCancelBooking = (b) => !!b && CANCELLABLE_STATUSES.includes(b.status)
+
+// Khớp BookingServiceImpl.isNoDriverAvailable — điều kiện duy nhất để được hoàn 100% cọc khi hủy
+export const isNoDriverBooking = (b) => !!b && b.rentalMode === 'WITH_DRIVER' && !b.driverId
+
+export const CAR_TYPES =['SEDAN', 'SUV', 'MPV', 'HATCHBACK', 'PICKUP']
 
 export const TRANSMISSIONS = ['AUTOMATIC', 'MANUAL']
 

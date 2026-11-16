@@ -2,6 +2,8 @@ package com.carrental.review.controller;
 
 import com.carrental.common.dto.ApiResponse;
 import com.carrental.review.dto.ReviewReplyRequest;
+import com.carrental.review.dto.ReviewReplyResponse;
+import com.carrental.review.dto.ReviewThreadReplyRequest;
 import com.carrental.review.dto.ReviewRequest;
 import com.carrental.review.dto.ReviewResponse;
 import com.carrental.review.service.ReviewService;
@@ -69,6 +71,24 @@ public class ReviewController {
         log.info("REST: Customer reply to review id: {}", id);
         return ApiResponse.success("Đã gửi trả lời",
                 reviewService.customerReplyToReview(id, userId, request));
+    }
+
+    // ===== LUỒNG HỘI THOẠI KHÁCH <-> CHỦ XE (nhiều lượt) =====
+
+    @GetMapping("/{id}/replies")
+    public ApiResponse<List<ReviewReplyResponse>> getReplies(@PathVariable Long id) {
+        return ApiResponse.success(reviewService.getReplies(id));
+    }
+
+    @PostMapping("/{id}/replies")
+    @ResponseStatus(HttpStatus.CREATED)
+    public ApiResponse<List<ReviewReplyResponse>> addReply(
+            @PathVariable Long id,
+            @RequestAttribute("userId") Long userId,
+            @Valid @RequestBody ReviewThreadReplyRequest request) {
+        log.info("REST: Add thread reply to review id: {}", id);
+        return ApiResponse.success("Đã gửi phản hồi",
+                reviewService.addReply(id, userId, request));
     }
 
     // ===== LEGACY / FRONTEND ENDPOINTS =====

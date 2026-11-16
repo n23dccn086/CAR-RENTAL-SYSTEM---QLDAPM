@@ -4,12 +4,13 @@ import { getBookingById } from "../services/bookingService";
 import api from "../services/api";
 import { useAuth } from "../hooks/useAuth";
 import { useDialog } from "../context/DialogContext";
+import { canCancelBooking, isNoDriverBooking } from "../utils/constants";
 
 export default function BookingDetailPage() {
   const { id } = useParams();
   const navigate = useNavigate();
   const { user } = useAuth();
-  const { prompt, alert: dialogAlert } = useDialog();
+  const { prompt, confirm, alert: dialogAlert } = useDialog();
   const [booking, setBooking] = useState(null);
   const [handovers, setHandovers] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -31,75 +32,61 @@ export default function BookingDetailPage() {
     loadBookingDetails();
   }, [id]);
 
-  const handleSelectOtherCar = async () => {
-    if (!booking) return;
-    const deposit = booking.depositAmount || 0;
-
-    const confirmed = await prompt({
-      title: "Đổi sang cỗ xe khác",
-      subtitle: "Hủy chuyến cũ & hoàn 100% tiền cọc",
-      message:
-        `🚗 Quý khách đang chọn đổi sang cỗ xe khác do không có tài xế nhận chuyến.\n\n` +
-        `• Đơn hàng #${booking.id} hiện tại sẽ được HỦY.\n` +
-        `• Hệ thống tự động gửi yêu cầu HOÀN TRẢ 100% CỌC (${formatPrice(deposit)}đ) cho quý khách.\n` +
-        `• Sau đó hệ thống sẽ đưa quý khách tới Bộ sưu tập xe để chọn cỗ xe mới.\n\n` +
-        `Quý khách có xác nhận tiếp tục?`,
-      inputLabel: "Ghi chú đổi xe",
-      defaultValue: "Không có tài xế nhận chuyến - Đổi sang cỗ xe khác",
-      confirmText: "Hủy xe cũ & chọn xe mới",
-      variant: "danger",
-    });
-
-    if (confirmed === null) return;
-
-    try {
-      setLoading(true);
-      const reason = confirmed || "Không có tài xế nhận chuyến - Khách đổi cỗ xe khác";
-      await api.put(`/bookings/${booking.id}/cancel?reason=${encodeURIComponent(reason)}`);
-      dialogAlert({
-        title: "Đã hủy đơn cũ",
-        message: `Đơn hàng #${booking.id} đã được hủy và yêu cầu hoàn 100% cọc (${formatPrice(deposit)}đ) đã được gửi tới Admin. Đang đưa bạn đến danh sách xe...`,
-        variant: "info",
-      });
-      setTimeout(() => {
-        navigate("/cars");
-      }, 1000);
-    } catch (err) {
-      dialogAlert({
-        title: "Thao tác thất bại",
-        message: err.response?.data?.message || err.message,
-        variant: "danger",
-      });
-      setLoading(false);
-    }
-  };
-
   const handleCancelBooking = async () => {
     if (!booking) return;
-    const isNoDriver = booking.rentalMode === "WITH_DRIVER" && !booking.driverId;
+    const isNoDriver = isNoDriverBooking(booking);
     const deposit = booking.depositAmount || 0;
+    const fullRefund = isNoDriver && booking.status !== "PENDING" && deposit > 0;
 
-    let confirmMsg = `Bạn có chắc chắn muốn hủy đơn hàng #${booking.id}?`;
-    if (isNoDriver && deposit > 0) {
-      confirmMsg = `⚠️ Tất cả tài xế của chủ xe đều bận hoặc không thể nhận chuyến.\n\n` +
+    let title = `Hủy đơn #${booking.id}`;
+    let subtitle = "Xác nhận hủy chuyến";
+    let message = `Bạn có chắc chắn muốn hủy đơn hàng #${booking.id}?\n\nTiền cọc sẽ được hoàn theo chính sách hủy chuyến của sàn (tùy thời điểm hủy so với giờ nhận xe).`;
+    let details = null;
+    if (fullRefund) {
+      subtitle = "Không có tài xế nhận chuyến · Hoàn 100% cọc";
+      message =
+        `⚠️ Tất cả tài xế của chủ xe đều bận hoặc không thể nhận chuyến.\n\n` +
         `• Đơn hàng #${booking.id} sẽ được hủy ngay lập tức.\n` +
-        `• Bạn sẽ được HOÀN 100% TIỀN CỌC (${formatPrice(deposit)}đ).\n\n` +
-        `Xác nhận hủy chuyến và yêu cầu hoàn 100% cọc?`;
+        `• Bạn sẽ được HOÀN 100% TIỀN CỌC (${formatPrice(deposit)}đ).`;
+      details =
+        "📌 Lưu ý: Yêu cầu hoàn cọc sẽ được gửi tới Ban Quản Trị để duyệt. " +
+        "Bạn có thể theo dõi trạng thái hoàn tiền ngay trên trang chi tiết đơn này. " +
+        "Sau khi hủy, đơn không thể khôi phục — nếu vẫn muốn thuê, vui lòng đặt lại xe khác trong Bộ sưu tập.";
     } else if (booking.status === "PENDING") {
-      confirmMsg = `Đơn #${booking.id} chưa thanh toán cọc. Đơn sẽ được hủy trực tiếp và không phát sinh phí.`;
+      message = `Đơn #${booking.id} chưa thanh toán cọc. Đơn sẽ được hủy trực tiếp và không phát sinh phí.`;
     }
 
-    if (!window.confirm(confirmMsg)) return;
+    const ok = await confirm({
+      title,
+      subtitle,
+      message,
+      details,
+      confirmText: fullRefund ? "Hủy đơn & hoàn 100% cọc" : "Xác nhận hủy",
+      cancelText: "Quay lại",
+      variant: "danger",
+    });
+    if (!ok) return;
 
     try {
       setLoading(true);
       const reason = isNoDriver ? "Không có tài xế nhận chuyến" : "Khách hủy đơn";
       await api.put(`/bookings/${booking.id}/cancel?reason=${encodeURIComponent(reason)}`);
-      alert(`Đã hủy đơn #${booking.id} thành công!${isNoDriver && deposit > 0 ? ` Yêu cầu hoàn cọc ${formatPrice(deposit)}đ (100%) đã được gửi tới Admin.` : ''}`);
       const res = await api.get(`/bookings/${booking.id}`);
       setBooking(res.data.data || res.data);
+      dialogAlert({
+        title: "Đã hủy đơn thành công",
+        subtitle: `Đơn #${booking.id}`,
+        message: fullRefund
+          ? `Đơn #${booking.id} đã được hủy.\n\nYêu cầu hoàn 100% cọc (${formatPrice(deposit)}đ) đã được gửi tới Admin. Bạn sẽ nhận được thông báo khi tiền cọc được hoàn.`
+          : `Đơn #${booking.id} đã được hủy.`,
+        variant: "success",
+      });
     } catch (err) {
-      alert("Hủy đơn thất bại: " + (err.response?.data?.message || err.message));
+      dialogAlert({
+        title: "Hủy đơn thất bại",
+        message: err.response?.data?.message || err.message,
+        variant: "danger",
+      });
     } finally {
       setLoading(false);
     }
@@ -199,7 +186,7 @@ export default function BookingDetailPage() {
   const returnHandover = handovers.find((h) => h.handoverType === "RETURN");
 
   const isCancelled = booking.status === "CANCELLED";
-  const isNoDriver = booking.rentalMode === "WITH_DRIVER" && !booking.driverId;
+  const isNoDriver = isNoDriverBooking(booking);
 
   const needsSignPickup =
     !isCancelled &&
@@ -218,6 +205,10 @@ export default function BookingDetailPage() {
   const isOwner = user?.role === 'OWNER' || (booking && user?.id === booking.ownerId);
   const isAdmin = user?.role === 'ADMIN';
   const isCustomer = (user?.role === 'CUSTOMER' || (booking && user?.id === booking.customerId)) && !isOwner && !isAdmin;
+
+  const canCancelStatus = canCancelBooking(booking);
+  // Cùng điều kiện backend dùng để hoàn 100% cọc → banner không hứa hoàn 100% sai
+  const showNoDriverBanner = canCancelStatus && isNoDriver;
 
   const canPayDeposit = isCustomer && booking.status === "PENDING";
 
@@ -475,8 +466,8 @@ export default function BookingDetailPage() {
         </div>
       )}
 
-      {/* ★ Banner khi tất cả tài xế đều bận hoặc không thể nhận chuyến */}
-      {!isCancelled && booking.rentalMode === "WITH_DRIVER" && (booking.driver_assignment_status === "NO_DRIVER_AVAILABLE" || (!booking.driverId && !booking.driver)) && (
+      {/* ★ Banner khi tất cả tài xế đều bận hoặc không thể nhận chuyến (chỉ khi đơn còn hủy được) */}
+      {showNoDriverBanner && (
         <div
           style={{
             background: "rgba(139,44,44,0.08)",
@@ -490,7 +481,7 @@ export default function BookingDetailPage() {
             flexWrap: "wrap",
           }}
         >
-          <div style={{ flex: 1 }}>
+          <div style={{ flex: 1, minWidth: "240px" }}>
             <div
               style={{
                 fontFamily: "var(--serif)",
@@ -510,32 +501,24 @@ export default function BookingDetailPage() {
                 lineHeight: 1.6,
               }}
             >
-              Hệ thống đã tự động tìm kiếm tài xế nhưng toàn bộ tài xế của chủ xe đều đang bận lịch hoặc từ chối đơn. Quý khách vui lòng <strong>lựa chọn cỗ xe khác</strong> hoặc hủy đơn để nhận lại tiền cọc.
+              {isCustomer ? (
+                <>
+                  Hệ thống đã tự động tìm kiếm tài xế nhưng toàn bộ tài xế của chủ xe đều đang bận lịch hoặc từ chối đơn.
+                  Quý khách có thể <strong>hủy đơn để được hoàn 100% tiền cọc</strong>
+                  {booking.status !== "PENDING" && booking.depositAmount > 0 && <> ({formatPrice(booking.depositAmount)}đ)</>}.
+                </>
+              ) : (
+                <>
+                  Hiện chưa có tài xế nào nhận chuyến cho đơn này. Khách hàng có thể hủy đơn và sẽ được
+                  <strong> hoàn 100% tiền cọc</strong>. Vui lòng sắp xếp tài xế nếu có thể để giữ đơn.
+                </>
+              )}
             </div>
           </div>
-          <div style={{ display: "flex", gap: "10px", flexWrap: "wrap", alignItems: "center" }}>
+          {isCustomer && (
             <button
               type="button"
               onClick={handleCancelBooking}
-              style={{
-                padding: "14px 24px",
-                background: "transparent",
-                border: "1px solid var(--do)",
-                color: "var(--do)",
-                fontFamily: "var(--mono)",
-                fontSize: "11px",
-                letterSpacing: "2px",
-                textTransform: "uppercase",
-                fontWeight: "bold",
-                cursor: "pointer",
-                whiteSpace: "nowrap",
-              }}
-            >
-              🛑 Hủy đơn & hoàn 100% cọc
-            </button>
-            <button
-              type="button"
-              onClick={handleSelectOtherCar}
               style={{
                 padding: "14px 28px",
                 background: "var(--do)",
@@ -550,9 +533,9 @@ export default function BookingDetailPage() {
                 whiteSpace: "nowrap",
               }}
             >
-              🚗 Chọn cỗ xe khác →
+              🛑 Hủy đơn & hoàn 100% cọc
             </button>
-          </div>
+          )}
         </div>
       )}
 
@@ -1119,12 +1102,7 @@ export default function BookingDetailPage() {
         )}
 
         {/* NÚT HỦY ĐƠN DÀNH CHO KHÁCH HÀNG */}
-        {isCustomer && !isCancelled && booking.status !== "COMPLETED" && (
-          booking.status === "PENDING" ||
-          booking.status === "PAID" ||
-          booking.status === "APPROVED" ||
-          (booking.rentalMode === "WITH_DRIVER" && !booking.driverId)
-        ) && (
+        {isCustomer && canCancelStatus && !showNoDriverBanner && (
           <button
             type="button"
             onClick={handleCancelBooking}

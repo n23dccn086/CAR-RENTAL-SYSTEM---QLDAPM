@@ -14,7 +14,7 @@ info:
 
 servers:
   - url: http://localhost:8080/api/v1
-    description: Local Spring Boot API Server (Base Context Path: /api/v1)
+    description: "Local Spring Boot API Server (Base Context Path: /api/v1)"
 
 tags:
   - name: 1. Authentication
@@ -747,28 +747,6 @@ paths:
               schema:
                 $ref: '#/components/schemas/CarDetailApiResponse'
 
-  /owner/cars/import:
-    post:
-      tags: [3. Cars]
-      summary: Chủ xe import danh sách xe hàng loạt bằng file Excel (.xlsx)
-      requestBody:
-        required: true
-        content:
-          multipart/form-data:
-            schema:
-              type: object
-              properties:
-                file:
-                  type: string
-                  format: binary
-      responses:
-        '200':
-          description: Import hoàn tất
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiResponseVoid'
-
   # ==========================================================
   # MODULE 4: BOOKINGS (7 endpoints)
   # ==========================================================
@@ -1485,6 +1463,28 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiResponseVoid'
 
+  /owner/drivers/upload-avatar:
+    post:
+      tags: [7. Drivers]
+      summary: Chủ xe upload ảnh đại diện tài xế (trả về URL gán vào avatar_url khi tạo / sửa tài xế)
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file:
+                  type: string
+                  format: binary
+                  description: Ảnh JPG / PNG / WEBP / GIF, tối đa 5MB (kiểm tra cả Content-Type lẫn đuôi file)
+      responses:
+        '200':
+          description: Upload thành công — data là URL ảnh, ví dụ /files/drivers/avatars/5/uuid.jpg
+        '400':
+          description: Không phải ảnh hợp lệ / quá 5MB / file rỗng
+
   # ==========================================================
   # MODULE 8: REVIEWS (3 endpoints)
   # ==========================================================
@@ -1579,6 +1579,47 @@ paths:
           description: Chủ xe chưa phản hồi / nội dung rỗng
         '403':
           description: Không phải khách của đánh giá này
+
+  /reviews/{id}/replies:
+    get:
+      tags: [8. Reviews]
+      summary: Lấy luồng hội thoại khách <-> chủ xe dưới đánh giá
+      description: Gồm owner_reply / customer_reply cũ (legacy = true) và các tin trong review_replies, sắp theo thời gian tăng dần. Mỗi ReviewResponse cũng có sẵn trường replies.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer, example: 50 }
+      responses:
+        '200':
+          description: Danh sách tin (id, review_id, author_id, author_role OWNER|CUSTOMER, author_name, content, legacy, created_at)
+        '404':
+          description: Không tìm thấy đánh giá
+    post:
+      tags: [8. Reviews]
+      summary: Gửi một tin vào luồng hội thoại (khách hoặc chủ xe, không giới hạn số lượt)
+      description: Chỉ khách viết đánh giá hoặc chủ xe được gọi. Khách chỉ gửi được sau khi chủ xe đã phản hồi ít nhất một lần. Gửi thông báo REVIEW_REPLY cho bên còn lại. Trả về toàn bộ luồng mới.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer, example: 50 }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [content]
+              properties:
+                content: { type: string, maxLength: 1000, example: "Cảm ơn bạn, lần sau mình sẽ kiểm tra kỹ hơn!" }
+      responses:
+        '201':
+          description: Đã gửi — trả về luồng hội thoại đầy đủ
+        '400':
+          description: Nội dung rỗng / quá 1000 ký tự / khách gửi khi chủ xe chưa phản hồi
+        '403':
+          description: Không phải khách hoặc chủ xe của đánh giá này
 
   /handovers/fee-config:
     get:

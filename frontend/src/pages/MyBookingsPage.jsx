@@ -3,6 +3,7 @@ import { Link, useNavigate } from "react-router-dom";
 import { getMyBookings } from "../services/bookingService";
 import api from "../services/api";
 import { useDialog } from "../context/DialogContext";
+import { canCancelBooking, isNoDriverBooking } from "../utils/constants";
 
 export default function MyBookingsPage() {
   const { prompt, alert: dialogAlert } = useDialog();
@@ -93,7 +94,7 @@ export default function MyBookingsPage() {
       return `${m} phút`;
     };
 
-    const isNoDriver = booking.rentalMode === "WITH_DRIVER" && !booking.driverId;
+    const isNoDriver = isNoDriverBooking(booking);
     if (booking.status === "PENDING") {
       refundPercent = 0;
       refundAmount = 0;
@@ -182,51 +183,6 @@ export default function MyBookingsPage() {
     }
   };
 
-  const handleSelectOtherCar = async (booking) => {
-    const deposit = booking.depositAmount || 0;
-    const fmt = (n) => new Intl.NumberFormat("vi-VN").format(n);
-
-    const confirmed = await prompt({
-      title: "Đổi sang cỗ xe khác",
-      subtitle: "Hủy chuyến cũ & hoàn 100% tiền cọc",
-      message:
-        `🚗 Quý khách đang chọn đổi sang cỗ xe khác do không có tài xế nhận chuyến.\n\n` +
-        `• Đơn hàng #${booking.id} hiện tại sẽ được HỦY.\n` +
-        `• Hệ thống tự động gửi yêu cầu HOÀN TRẢ 100% CỌC (${fmt(deposit)}đ) cho quý khách.\n` +
-        `• Sau đó hệ thống sẽ đưa quý khách tới Bộ sưu tập xe để chọn cỗ xe mới.\n\n` +
-        `Quý khách có xác nhận tiếp tục?`,
-      inputLabel: "Ghi chú đổi xe",
-      defaultValue: "Không có tài xế nhận chuyến - Đổi sang cỗ xe khác",
-      confirmText: "Hủy xe cũ & chọn xe mới",
-      variant: "danger",
-    });
-
-    if (confirmed === null) return;
-
-    try {
-      await api.put(
-        `/bookings/${booking.id}/cancel?reason=${encodeURIComponent(confirmed || "Không có tài xế nhận chuyến - Khách đổi cỗ xe khác")}`,
-      );
-      setMessage(`Đã hủy đơn #${booking.id} và gửi yêu cầu hoàn 100% cọc (${fmt(deposit)}đ). Đang chuyển bạn đến danh mục xe...`);
-      fetchBookings();
-      setTimeout(() => {
-        navigate("/cars");
-      }, 1000);
-    } catch (err) {
-      dialogAlert({
-        title: "Thao tác thất bại",
-        message: err.response?.data?.message || err.message,
-        variant: "danger",
-      });
-    }
-  };
-
-  const canCancel = (b) => {
-    if (!b) return false;
-    const status = typeof b === "string" ? b : b.status;
-    // Khớp backend cancelBooking: chỉ hủy được khi PENDING / PAID / APPROVED (kể cả đơn không có tài xế)
-    return ["PENDING", "PAID", "APPROVED"].includes(status);
-  };
 
   const handleReRequestRefund = async (booking) => {
     const reason = await prompt({
@@ -423,7 +379,7 @@ export default function MyBookingsPage() {
 
               const isCancelled = b.status === "CANCELLED";
 
-              const isNoDriver = b.rentalMode === "WITH_DRIVER" && !b.driverId;
+              const isNoDriver = isNoDriverBooking(b);
 
               const needsSignPickup =
                 !isCancelled &&
@@ -577,7 +533,7 @@ export default function MyBookingsPage() {
                     )}
 
                     {/* ★ Cảnh báo tài xế bận / không thể nhận chuyến */}
-                    {!isCancelled && b.rentalMode === "WITH_DRIVER" && (b.driver_assignment_status === "NO_DRIVER_AVAILABLE" || !b.driverId) && (
+                    {canCancelBooking(b) && isNoDriver && (
                       <div
                         style={{
                           marginTop: "8px",
@@ -596,7 +552,7 @@ export default function MyBookingsPage() {
                             ⚠️ Tất cả tài xế của chủ xe đều bận
                           </div>
                           <div style={{ fontSize: "12px", color: "var(--muc)", marginTop: "2px" }}>
-                            Quý khách vui lòng chọn cỗ xe khác hoặc hủy đơn để nhận lại tiền cọc.
+                            Quý khách có thể hủy đơn để được hoàn 100% tiền cọc.
                           </div>
                         </div>
                         <div style={{ display: "flex", gap: "8px", flexWrap: "wrap", alignItems: "center" }}>
@@ -622,29 +578,6 @@ export default function MyBookingsPage() {
                             }}
                           >
                             🛑 Hủy đơn & nhận lại cọc
-                          </button>
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              e.preventDefault();
-                              e.stopPropagation();
-                              handleSelectOtherCar(b);
-                            }}
-                            style={{
-                              padding: "6px 12px",
-                              background: "var(--do)",
-                              color: "var(--kem)",
-                              border: "none",
-                              fontSize: "11px",
-                              fontFamily: "var(--mono)",
-                              textTransform: "uppercase",
-                              letterSpacing: "1px",
-                              cursor: "pointer",
-                              fontWeight: 700,
-                              whiteSpace: "nowrap",
-                            }}
-                          >
-                            🚗 Chọn xe khác
                           </button>
                         </div>
                       </div>
@@ -1040,7 +973,7 @@ export default function MyBookingsPage() {
                     )}
 
                     {/* Hủy đơn / Đánh giá */}
-                    {canCancel(b) ? (
+                    {canCancelBooking(b) ? (
                       <button
                         onClick={() => handleCancel(b)}
                         style={{

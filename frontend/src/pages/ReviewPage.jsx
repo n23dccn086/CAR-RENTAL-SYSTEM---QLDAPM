@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
 import api from '../services/api'
+import ReviewThread from '../components/ReviewThread'
 
 export default function ReviewPage() {
   // Route /review/:bookingId (tạo/xem đánh giá) hoặc /my-reviews/:reviewId (link từ thông báo)
@@ -13,35 +14,6 @@ export default function ReviewPage() {
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState('')
   const [existingReview, setExistingReview] = useState(null)
-
-  // ===== TRẢ LỜI PHẢN HỒI CỦA CHỦ XE =====
-  const [replyOpen, setReplyOpen] = useState(false)
-  const [replyText, setReplyText] = useState('')
-  const [replySubmitting, setReplySubmitting] = useState(false)
-  const [replyError, setReplyError] = useState('')
-
-  const handleCustomerReply = async () => {
-    const text = replyText.trim()
-    if (!text || !existingReview) return
-    if (text.length > 1000) return setReplyError('Trả lời không quá 1000 ký tự')
-    setReplySubmitting(true)
-    setReplyError('')
-    try {
-      const res = await api.post(`/reviews/${existingReview.id}/customer-reply`, { reply: text })
-      const updated = res.data.data
-      setExistingReview(prev => ({
-        ...prev,
-        customerReply: updated?.customerReply ?? text,
-        customerRepliedAt: updated?.customerRepliedAt ?? new Date().toISOString(),
-      }))
-      setReplyOpen(false)
-      setReplyText('')
-    } catch (err) {
-      setReplyError(err.response?.data?.message || 'Gửi trả lời thất bại')
-    } finally {
-      setReplySubmitting(false)
-    }
-  }
 
   const [form, setForm] = useState({
     carRating: 5,
@@ -120,9 +92,6 @@ export default function ReviewPage() {
 
   const formatPrice = (p) => new Intl.NumberFormat('vi-VN').format(p || 0)
   const formatDate = (d) => d ? new Date(d).toLocaleDateString('vi-VN') : '—'
-  const formatDateTime = (d) => d ? new Date(d).toLocaleString('vi-VN', {
-    day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit'
-  }) : ''
 
   // ===== LOADING =====
   if (loading) {
@@ -173,72 +142,14 @@ export default function ReviewPage() {
             <span style={{ marginLeft: '24px' }}>Chủ xe: {'★'.repeat(existingReview.ownerRating)}{'☆'.repeat(5 - existingReview.ownerRating)}</span>
           </div>
 
-          {/* PHẢN HỒI CỦA CHỦ XE */}
-          {existingReview.ownerReply && (
-            <div style={{ marginTop: '24px', padding: '14px 18px', background: 'var(--kem)', borderLeft: '3px solid var(--muc)' }}>
-              <div style={replyLabelStyle}>
-                Phản hồi của chủ xe{existingReview.repliedAt ? ` · ${formatDateTime(existingReview.repliedAt)}` : ''}
-              </div>
-              <div style={{ fontFamily: 'var(--serif-2)', fontStyle: 'italic', fontSize: '16px', color: 'var(--muc)', whiteSpace: 'pre-wrap' }}>
-                "{existingReview.ownerReply}"
-              </div>
-            </div>
-          )}
-
-          {/* TRẢ LỜI CỦA KHÁCH */}
-          {existingReview.ownerReply && existingReview.customerReply && !replyOpen && (
-            <div style={{ marginTop: '12px', marginLeft: '24px', padding: '14px 18px', background: 'var(--kem)', borderLeft: '3px solid var(--dong)' }}>
-              <div style={replyLabelStyle}>
-                Trả lời của bạn{existingReview.customerRepliedAt ? ` · ${formatDateTime(existingReview.customerRepliedAt)}` : ''}
-              </div>
-              <div style={{ fontFamily: 'var(--serif-2)', fontStyle: 'italic', fontSize: '16px', color: 'var(--muc)', whiteSpace: 'pre-wrap' }}>
-                "{existingReview.customerReply}"
-              </div>
-            </div>
-          )}
-
-          {existingReview.ownerReply && (
-            <div style={{ marginTop: '14px', marginLeft: '24px' }}>
-              {replyOpen ? (
-                <div style={{ background: 'var(--kem)', padding: '16px', border: '1px solid rgba(15,14,12,0.2)' }}>
-                  <textarea
-                    rows={3}
-                    maxLength={1000}
-                    value={replyText}
-                    onChange={e => setReplyText(e.target.value)}
-                    placeholder="Trả lời chủ xe..."
-                    style={{ width: '100%', padding: '10px', fontFamily: 'var(--serif-2)', fontSize: '14px', border: '1px solid rgba(15,14,12,0.2)', background: 'var(--kem-dam)', outline: 'none', resize: 'vertical', boxSizing: 'border-box' }}
-                  />
-                  {replyError && <div style={{ color: 'var(--do)', fontFamily: 'var(--mono)', fontSize: '11px', marginTop: '6px' }}>{replyError}</div>}
-                  <div style={{ display: 'flex', gap: '10px', marginTop: '10px' }}>
-                    <button
-                      type="button"
-                      onClick={handleCustomerReply}
-                      disabled={replySubmitting || !replyText.trim()}
-                      style={{ padding: '6px 16px', background: 'var(--muc)', color: 'var(--kem)', border: 'none', fontFamily: 'var(--mono)', fontSize: '11px', letterSpacing: '1px', textTransform: 'uppercase', cursor: replySubmitting ? 'wait' : 'pointer', opacity: !replyText.trim() ? 0.5 : 1 }}
-                    >
-                      {replySubmitting ? 'Đang gửi...' : 'Gửi trả lời'}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => { setReplyOpen(false); setReplyText(''); setReplyError('') }}
-                      style={{ padding: '6px 14px', background: 'transparent', border: '1px solid rgba(15,14,12,0.3)', fontFamily: 'var(--mono)', fontSize: '11px', letterSpacing: '1px', textTransform: 'uppercase', cursor: 'pointer' }}
-                    >
-                      Hủy
-                    </button>
-                  </div>
-                </div>
-              ) : (
-                <button
-                  type="button"
-                  onClick={() => { setReplyOpen(true); setReplyText(existingReview.customerReply || ''); setReplyError('') }}
-                  style={{ padding: '4px 12px', background: 'transparent', border: '1px dashed var(--muc-mo)', color: 'var(--muc)', fontFamily: 'var(--mono)', fontSize: '10px', letterSpacing: '1px', textTransform: 'uppercase', cursor: 'pointer' }}
-                >
-                  {existingReview.customerReply ? '✎ Sửa trả lời' : '↩ Trả lời chủ xe'}
-                </button>
-              )}
-            </div>
-          )}
+          {/* HỘI THOẠI KHÁCH <-> CHỦ XE (nhiều lượt) */}
+          <div style={{ marginTop: '24px' }}>
+            <ReviewThread
+              review={existingReview}
+              viewerRole="CUSTOMER"
+              onRepliesChange={(replies) => setExistingReview(prev => ({ ...prev, replies }))}
+            />
+          </div>
         </div>
 
         <Link
@@ -438,15 +349,6 @@ function StarRating({ value, onChange }) {
       </span>
     </div>
   )
-}
-
-const replyLabelStyle = {
-  fontFamily: 'var(--mono)',
-  fontSize: '10px',
-  letterSpacing: '1px',
-  textTransform: 'uppercase',
-  color: 'var(--muc-mo)',
-  marginBottom: '4px'
 }
 
 const labelStyle = {

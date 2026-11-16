@@ -2,6 +2,7 @@ package com.carrental.driver.controller;
 
 import com.carrental.car.service.ExcelImportService;
 import com.carrental.common.dto.ApiResponse;
+import com.carrental.common.service.FileStorageService;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
@@ -10,8 +11,10 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.io.IOException;
+
 /**
- * Controller cho Owner import tài xế từ Excel.
+ * Controller cho Owner import tài xế từ Excel và upload avatar tài xế.
  * Base path: /api/v1/owner/drivers
  */
 @RestController
@@ -23,6 +26,7 @@ import org.springframework.web.multipart.MultipartFile;
 public class OwnerDriverController {
 
     ExcelImportService excelImportService;
+    FileStorageService fileStorageService;
 
     /**
      * Import Excel tài xế.
@@ -41,5 +45,20 @@ public class OwnerDriverController {
                 result.successCount(), result.skipCount());
 
         return ApiResponse.success(message, result);
+    }
+
+    /**
+     * Upload ảnh avatar tài xế (trước khi tạo/sửa tài xế).
+     * POST /api/v1/owner/drivers/upload-avatar
+     * Trả về URL ảnh — FE gán vào trường avatarUrl của tài xế.
+     */
+    @PostMapping("/upload-avatar")
+    public ApiResponse<String> uploadAvatar(
+            @RequestAttribute("userId") Long ownerId,
+            @RequestParam("file") MultipartFile file) throws IOException {
+
+        log.info("REST: Owner {} uploading driver avatar", ownerId);
+        String url = fileStorageService.storeImage(file, "drivers/avatars/" + ownerId);
+        return ApiResponse.success("Upload ảnh thành công", url);
     }
 }

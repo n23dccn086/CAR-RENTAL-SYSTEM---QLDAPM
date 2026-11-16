@@ -61,7 +61,11 @@ export default function PaymentFinalPage() {
 
   // Trang này chỉ dùng khi đơn RETURNED: lúc ký biên bản trả xe, backend đã cộng phí trễ / vượt km / phát sinh
   // vào totalPrice và remainingAmount → số cần trả = remainingAmount (KHÔNG cộng totalExtraFees lần nữa).
-  const totalExtraFees = booking.totalExtraFees || 0
+  // Các khoản phí lấy từ biên bản trả xe — backend đã gắn sẵn vào booking (BookingServiceImpl.buildResponse)
+  const lateFee = Number(booking.lateFee || 0)
+  const kmOverageFee = Number(booking.kmOverageFee || 0)
+  const otherFee = Number(booking.extraFees || 0)
+  const totalExtraFees = Number(booking.totalExtraFees || 0)
   const baseRental = Math.max(0, (booking.totalPrice || 0) - totalExtraFees)
   const remaining = booking.remainingAmount != null
     ? booking.remainingAmount
@@ -93,10 +97,35 @@ export default function PaymentFinalPage() {
           <span>Đã cọc</span>
           <span style={{ fontFamily: 'var(--mono)' }}>-{formatPrice(booking.depositAmount)}đ</span>
         </div>
-        {booking.totalExtraFees > 0 && (
-          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '12px', fontFamily: 'var(--serif-2)', fontSize: '16px', color: 'var(--do)' }}>
-            <span>Phí phát sinh</span>
-            <span style={{ fontFamily: 'var(--mono)' }}>+{formatPrice(booking.totalExtraFees)}đ</span>
+        {totalExtraFees > 0 && (
+          <div style={{ marginBottom: '12px', fontFamily: 'var(--serif-2)', fontSize: '16px', color: 'var(--do)' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px' }}>
+              <span>Phí phát sinh (theo biên bản trả xe)</span>
+              <span style={{ fontFamily: 'var(--mono)' }}>+{formatPrice(totalExtraFees)}đ</span>
+            </div>
+            <div style={{ paddingLeft: '16px', fontSize: '14px', color: 'var(--muc-mo)' }}>
+              {lateFee > 0 && (
+                <FeeLine
+                  label={`• Phí trả xe trễ hạn${booking.lateMinutes ? ` (${Math.floor(booking.lateMinutes / 60)}h${booking.lateMinutes % 60}p)` : ''}`}
+                  value={lateFee}
+                  fmt={formatPrice}
+                />
+              )}
+              {kmOverageFee > 0 && (
+                <FeeLine
+                  label={`• Phí vượt giới hạn km${booking.kmOverage ? ` (vượt ${Number(booking.kmOverage).toLocaleString('vi-VN')} km)` : ''}`}
+                  value={kmOverageFee}
+                  fmt={formatPrice}
+                />
+              )}
+              {otherFee > 0 && (
+                <FeeLine
+                  label={`• Phí phát sinh khác${booking.extraFeesNote ? ` (${booking.extraFeesNote})` : ''}`}
+                  value={otherFee}
+                  fmt={formatPrice}
+                />
+              )}
+            </div>
           </div>
         )}
 
@@ -142,6 +171,14 @@ export default function PaymentFinalPage() {
         onClose={() => navigate("/my-bookings")}
         onGoToDetail={() => navigate(`/bookings/${bookingId}`)}
       />
+    </div>
+  )
+}
+function FeeLine({ label, value, fmt }) {
+  return (
+    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
+      <span>{label}</span>
+      <span style={{ fontFamily: 'var(--mono)' }}>+{fmt(value)}đ</span>
     </div>
   )
 }

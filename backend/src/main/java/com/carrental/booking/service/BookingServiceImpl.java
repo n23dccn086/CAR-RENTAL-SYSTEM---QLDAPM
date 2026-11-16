@@ -901,6 +901,7 @@ public class BookingServiceImpl implements BookingService {
         if (car != null) {
             response.setCarName(car.getBrand() + " " + car.getModel());
             response.setCarPlate(car.getPlate());
+            response.setPricePerDay(car.dailyRateFor(booking.getStartDate()));
             if (car.getImages() != null && !car.getImages().isEmpty()) {
                 response.setCarThumbnail(car.getImages().get(0).getImageUrl());
             }
