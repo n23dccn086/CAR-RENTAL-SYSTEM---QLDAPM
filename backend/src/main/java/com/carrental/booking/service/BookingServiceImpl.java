@@ -50,6 +50,7 @@ import java.math.RoundingMode;
 import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Locale;
 
 @Service
 @RequiredArgsConstructor
@@ -72,6 +73,9 @@ public class BookingServiceImpl implements BookingService {
     DriverAssignmentService driverAssignmentService;
     DriverAssignmentRepository driverAssignmentRepository;
     BookingDelayedQueueService delayedQueueService;
+
+    /** Định dạng tiền cố định kiểu Việt Nam (600.000đ), không phụ thuộc locale mặc định của JVM. */
+    static final Locale VN_LOCALE = Locale.forLanguageTag("vi-VN");
 
     // ===== CREATE =====
 
@@ -313,6 +317,8 @@ public class BookingServiceImpl implements BookingService {
 
         long refundAmount = calculateRefundAmount(booking);
         long depositPaid = booking.getDepositAmount() != null ? booking.getDepositAmount() : 0L;
+        // Lưu lại trước khi đổi sang CANCELLED: PENDING = khách chưa thanh toán cọc
+        boolean depositWasPaid = booking.getStatus() != BookingStatus.PENDING;
 
         long hoursUntilStart = Duration.between(
                 LocalDateTime.now(),
@@ -342,6 +348,9 @@ public class BookingServiceImpl implements BookingService {
 
         log.info("Refund calculation: deposit={}, refund={}", depositPaid, refundAmount);
 
+        // Chỉ khi thực sự tạo bản ghi Refund thì mới báo admin duyệt hoàn tiền
+        // (khách hủy khi chưa cọc → không có gì để hoàn).
+        boolean refundCreated = false;
         if (refundAmount > 0) {
             Payment payment = paymentRepository
                     .findByBookingIdAndStatus(id, PaymentStatus.SUCCESS)
@@ -356,6 +365,7 @@ public class BookingServiceImpl implements BookingService {
                         .status(PaymentStatus.PENDING)
                         .build();
                 refundRepository.save(refund);
+                refundCreated = true;
                 log.info("Refund created: amount={} for booking {}", refundAmount, id);
             }
         }
@@ -390,28 +400,17 @@ public class BookingServiceImpl implements BookingService {
                     booking.getOwnerId(),
                     NotificationType.BOOKING_CANCELLED,
                     "Đơn bị hủy",
-                    String.format("Đơn #%d đã bị khách hủy. Hoàn cọc: %dđ. Lý do: %s",
-                            id, refundAmount, reason),
+                    String.format("Đơn #%d đã bị khách hủy. %s Lý do: %s",
+                            id, customerCancelRefundNote(depositWasPaid, refundCreated, refundAmount), reason),
                     id);
         } catch (Exception e) {
             log.warn("Failed to notify owner: {}", e.getMessage());
         }
 
-        // ★ Thông báo cho tất cả Admin (cần duyệt hoàn tiền)
-        try {
-            List<User> admins = userRepository.findByRole(Role.ADMIN);
-            for (User admin : admins) {
-                notificationService.createNotification(
-                        admin.getId(),
-                        NotificationType.REFUND_REQUESTED,
-                        "Yêu cầu hoàn tiền mới",
-                        String.format("Đơn #%d bị khách hủy. Cần hoàn %dđ cho khách. Vui lòng duyệt.",
-                                id, refundAmount),
-                        id);
-            }
-        } catch (Exception e) {
-            log.warn("Failed to notify admins: {}", e.getMessage());
-        }
+        // ★ Thông báo cho tất cả Admin (cần duyệt hoàn tiền) — chỉ khi có khoản cần hoàn
+        notifyAdminsAboutRefund(id, refundAmount, refundCreated,
+                "Yêu cầu hoàn tiền mới",
+                String.format(VN_LOCALE, "Đơn #%d bị khách hủy. Cần hoàn %,dđ cho khách. Vui lòng duyệt.", id, refundAmount));
 
         log.info("Booking cancelled: id={}, refundAmount={}", id, refundAmount);
         BookingResponse resp = buildResponse(updated, null);
@@ -489,7 +488,7 @@ public class BookingServiceImpl implements BookingService {
                         admin.getId(),
                         NotificationType.REFUND_REQUESTED,
                         "Yêu cầu hoàn tiền lại (Khiếu nại)",
-                        String.format("Khách gửi lại yêu cầu hoàn cọc đơn #%d (%,dđ). Lý do: %s",
+                        String.format(VN_LOCALE, "Khách gửi lại yêu cầu hoàn cọc đơn #%d (%,dđ). Lý do: %s",
                                 id, refundAmount, (reason != null ? reason : "Không có lý do")),
                         id);
             }
@@ -574,10 +573,12 @@ public class BookingServiceImpl implements BookingService {
         }
 
         long refundAmount = 0;
+        boolean refundCreated = false;
+        // Lưu lại trước khi đổi sang CANCELLED: PENDING = khách chưa thanh toán cọc
+        boolean depositWasPaid = booking.getStatus() != BookingStatus.PENDING;
 
-        if (booking.getStatus() == BookingStatus.PAID
-                || booking.getStatus() == BookingStatus.APPROVED) {
-            refundAmount = booking.getDepositAmount();
+        if (depositWasPaid) {
+            refundAmount = booking.getDepositAmount() != null ? booking.getDepositAmount() : 0L;
 
             Payment payment = paymentRepository
                     .findByBookingIdAndStatus(id, PaymentStatus.SUCCESS)
@@ -592,6 +593,7 @@ public class BookingServiceImpl implements BookingService {
                         .status(PaymentStatus.PENDING)
                         .build();
                 refundRepository.save(refund);
+                refundCreated = true;
                 log.info("Refund created for owner cancel: amount={}", refundAmount);
             }
         }
@@ -622,34 +624,24 @@ public class BookingServiceImpl implements BookingService {
 
         // ★ Thông báo cho Customer
         try {
+            String refundNote = ownerRejectRefundNote(depositWasPaid, refundCreated, refundAmount);
             notificationService.createNotification(
                     booking.getCustomerId(),
                     NotificationType.BOOKING_REJECTED,
                     "Chủ xe đã hủy đơn của bạn",
                     String.format(
-                            "Đơn #%d đã bị chủ xe hủy. Bạn sẽ được HOÀN 100%% cọc (%dđ). "
+                            "Đơn #%d đã bị chủ xe hủy. %s"
                                     + "Lý do từ chủ xe: %s. Chúng tôi xin lỗi vì sự bất tiện này.",
-                            id, refundAmount, reason),
+                            id, refundNote, reason),
                     id);
         } catch (Exception e) {
             log.warn("Failed to notify customer: {}", e.getMessage());
         }
 
-        // ★ Thông báo cho tất cả Admin
-        try {
-            List<User> admins = userRepository.findByRole(Role.ADMIN);
-            for (User admin : admins) {
-                notificationService.createNotification(
-                        admin.getId(),
-                        NotificationType.REFUND_REQUESTED,
-                        "Yêu cầu hoàn tiền mới",
-                        String.format("Đơn #%d bị chủ xe hủy. Cần hoàn %dđ cho khách. Vui lòng duyệt.",
-                                id, refundAmount),
-                        id);
-            }
-        } catch (Exception e) {
-            log.warn("Failed to notify admins: {}", e.getMessage());
-        }
+        // ★ Thông báo cho tất cả Admin — chỉ khi có khoản cần hoàn (đơn chưa cọc thì bỏ qua)
+        notifyAdminsAboutRefund(id, refundAmount, refundCreated,
+                "Yêu cầu hoàn tiền mới",
+                String.format(VN_LOCALE, "Đơn #%d bị chủ xe hủy. Cần hoàn %,dđ cho khách. Vui lòng duyệt.", id, refundAmount));
 
         BookingResponse resp = buildResponse(updated, null);
         resp.setRefundRequired(refundAmount > 0);
@@ -1032,6 +1024,59 @@ public class BookingServiceImpl implements BookingService {
         }
     }
 
+    /**
+     * Báo admin về khoản hoàn tiền của đơn bị hủy.
+     * - refundAmount <= 0 (chưa cọc / chính sách không hoàn): không báo gì.
+     * - Đã tạo Refund PENDING: REFUND_REQUESTED (khớp với danh sách Hoàn tiền của admin).
+     * - Cần hoàn nhưng không tìm được giao dịch cọc SUCCESS nên không tạo được Refund:
+     *   báo SYSTEM để admin xử lý thủ công, không dùng REFUND_REQUESTED vì danh sách Hoàn tiền sẽ trống.
+     */
+    private void notifyAdminsAboutRefund(Long bookingId, long refundAmount, boolean refundCreated,
+                                         String requestTitle, String requestMessage) {
+        if (refundAmount <= 0) {
+            return;
+        }
+        NotificationType type = refundCreated ? NotificationType.REFUND_REQUESTED : NotificationType.SYSTEM;
+        String title = refundCreated ? requestTitle : "Cần kiểm tra hoàn cọc thủ công";
+        String message = refundCreated ? requestMessage : String.format(VN_LOCALE,
+                "Đơn #%d bị hủy và cần hoàn %,dđ cọc nhưng không tìm thấy giao dịch cọc thành công, "
+                        + "nên chưa tạo được yêu cầu hoàn tiền. Vui lòng kiểm tra và xử lý thủ công.",
+                bookingId, refundAmount);
+        try {
+            for (User admin : userRepository.findByRole(Role.ADMIN)) {
+                notificationService.createNotification(admin.getId(), type, title, message, bookingId);
+            }
+        } catch (Exception e) {
+            log.warn("Failed to notify admins about refund for booking {}: {}", bookingId, e.getMessage());
+        }
+    }
+
+    /** Câu về tiền cọc trong thông báo gửi chủ xe khi khách tự hủy đơn. */
+    static String customerCancelRefundNote(boolean depositWasPaid, boolean refundCreated, long refundAmount) {
+        if (!depositWasPaid) {
+            return "Khách chưa thanh toán cọc, không phát sinh hoàn tiền.";
+        }
+        if (refundAmount <= 0) {
+            return "Theo chính sách hủy, khách không được hoàn cọc.";
+        }
+        return refundCreated
+                ? String.format(VN_LOCALE, "Hoàn cọc: %,dđ.", refundAmount)
+                : String.format(VN_LOCALE, "Cần hoàn cọc %,dđ, quản trị viên sẽ xử lý.", refundAmount);
+    }
+
+    /** Câu về tiền cọc trong thông báo gửi khách khi chủ xe hủy đơn. */
+    static String ownerRejectRefundNote(boolean depositWasPaid, boolean refundCreated, long refundAmount) {
+        if (!depositWasPaid) {
+            return "Bạn chưa thanh toán cọc nên không phát sinh khoản hoàn tiền. ";
+        }
+        if (refundAmount <= 0) {
+            return "Đơn không có khoản cọc cần hoàn. ";
+        }
+        return refundCreated
+                ? String.format(VN_LOCALE, "Bạn sẽ được HOÀN 100%% cọc (%,dđ). ", refundAmount)
+                : String.format(VN_LOCALE, "Bạn sẽ được hoàn 100%% cọc (%,dđ), bộ phận hỗ trợ sẽ liên hệ để xử lý. ", refundAmount);
+    }
+
     @Override
     @Transactional
     public void autoCancelUnapprovedBooking(Long id) {
@@ -1052,6 +1097,7 @@ public class BookingServiceImpl implements BookingService {
                 .findFirst()
                 .orElseGet(() -> paymentRepository.findByBookingIdAndStatus(id, PaymentStatus.SUCCESS).orElse(null));
 
+        boolean refundCreated = false;
         if (payment != null && refundAmount > 0) {
             Refund refund = Refund.builder()
                     .paymentId(payment.getId())
@@ -1061,6 +1107,7 @@ public class BookingServiceImpl implements BookingService {
                     .status(PaymentStatus.PENDING)
                     .build();
             refundRepository.save(refund);
+            refundCreated = true;
             log.info("[AutoCancel] Refund created for booking #{}: amount={}", id, refundAmount);
         }
 
@@ -1122,22 +1169,11 @@ public class BookingServiceImpl implements BookingService {
             log.warn("[AutoCancel] Failed to notify owner: {}", e.getMessage());
         }
 
-        // 3. Thông báo cho ADMIN: Cần xử lý hoàn tiền
-        try {
-            List<User> admins = userRepository.findByRole(Role.ADMIN);
-            for (User admin : admins) {
-                notificationService.createNotification(
-                        admin.getId(),
-                        NotificationType.REFUND_REQUESTED,
-                        "Yêu cầu hoàn tiền tự động do quá hạn duyệt",
-                        String.format("Đơn #%d quá hạn 4h chủ xe không duyệt đã tự động hủy. Cần hoàn %sđ cho khách. Vui lòng duyệt.",
-                                id, df.format(refundAmount)),
-                        id
-                );
-            }
-        } catch (Exception e) {
-            log.warn("[AutoCancel] Failed to notify admins: {}", e.getMessage());
-        }
+        // 3. Thông báo cho ADMIN: Cần xử lý hoàn tiền (chỉ khi có khoản cần hoàn)
+        notifyAdminsAboutRefund(id, refundAmount, refundCreated,
+                "Yêu cầu hoàn tiền tự động do quá hạn duyệt",
+                String.format("Đơn #%d quá hạn 4h chủ xe không duyệt đã tự động hủy. Cần hoàn %sđ cho khách. Vui lòng duyệt.",
+                        id, df.format(refundAmount)));
 
         log.info("[AutoCancel] Successfully auto-cancelled unapproved booking #{}", id);
     }

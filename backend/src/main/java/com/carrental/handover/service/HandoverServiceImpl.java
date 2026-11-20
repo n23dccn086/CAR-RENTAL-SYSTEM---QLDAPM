@@ -12,6 +12,9 @@ import com.carrental.common.constant.ErrorCode;
 import com.carrental.common.exception.BadRequestException;
 import com.carrental.common.exception.ResourceNotFoundException;
 import com.carrental.common.exception.UnauthorizedException;
+import com.carrental.driver.entity.AssignmentStatus;
+import com.carrental.driver.entity.DriverAssignment;
+import com.carrental.driver.repository.DriverAssignmentRepository;
 import com.carrental.handover.dto.HandoverMapper;
 import com.carrental.handover.dto.HandoverRequest;
 import com.carrental.handover.dto.HandoverResponse;
@@ -56,6 +59,7 @@ public class HandoverServiceImpl implements HandoverService {
     NotificationService notificationService;
     ConfigHelper configHelper;
     com.carrental.common.service.FileStorageService fileStorageService;
+    DriverAssignmentRepository driverAssignmentRepository;
 
     private static final long FREE_MINUTES = 15L;
     private static final long HOURLY_THRESHOLD = 60L;
@@ -63,6 +67,29 @@ public class HandoverServiceImpl implements HandoverService {
     private static final long FULL_DAY_THRESHOLD = 1440L;
 
     private static final ZoneId VN_ZONE = ZoneId.of("Asia/Ho_Chi_Minh");
+
+    /**
+     * Đơn có tài xế: phân công MỚI NHẤT của đơn phải là của đúng tài xế hiện tại và ở trạng thái ACCEPTED
+     * thì mới được tạo biên bản giao/nhận xe.
+     * Không dùng "có bất kỳ bản ghi ACCEPTED nào": khi chủ xe gán lại tài xế, bản ghi ACCEPTED cũ không bị hủy
+     * (manualAssignDriver chỉ hủy PENDING) nên sẽ lọt qua dù tài xế chưa nhận lại đơn.
+     * Cùng quy tắc với giao diện chủ xe (OwnerBookingsPage lấy phân công đầu tiên của danh sách mới nhất).
+     */
+    void ensureDriverAccepted(Booking booking) {
+        if (booking.getDriverId() == null) {
+            return;
+        }
+        DriverAssignment latest = driverAssignmentRepository
+                .findByBookingIdOrderByCreatedAtDesc(booking.getId())
+                .stream().findFirst().orElse(null);
+        boolean accepted = latest != null
+                && latest.getStatus() == AssignmentStatus.ACCEPTED
+                && booking.getDriverId().equals(latest.getDriverId());
+        if (!accepted) {
+            throw new BadRequestException(ErrorCode.VALIDATION_ERROR,
+                    "Không thể tạo biên bản: tài xế chưa xác nhận nhận đơn này.");
+        }
+    }
 
     // ===== CREATE =====
 
@@ -86,6 +113,8 @@ public class HandoverServiceImpl implements HandoverService {
             throw new BadRequestException(ErrorCode.VALIDATION_ERROR,
                     "Không thể tạo biên bản bàn giao: Đơn thuê có tài xế chưa được phân công tài xế nhận chuyến.");
         }
+
+        ensureDriverAccepted(booking);
 
         String type = request.getHandoverType();
         if ("PICKUP".equalsIgnoreCase(type)) {
@@ -778,6 +807,8 @@ public class HandoverServiceImpl implements HandoverService {
                     "Chỉ tạo biên bản giao xe khi đơn ở trạng thái APPROVED");
         }
 
+        ensureDriverAccepted(booking);
+
         if (handoverRepository.existsByBookingIdAndHandoverType(request.getBookingId(), "PICKUP")) {
             throw new BadRequestException(ErrorCode.VALIDATION_ERROR,
                     "Biên bản giao xe đã tồn tại cho đơn này");
@@ -898,6 +929,8 @@ public class HandoverServiceImpl implements HandoverService {
             throw new BadRequestException(ErrorCode.BOOKING_STATUS_INVALID,
                     "Chỉ tạo biên bản nhận xe khi đơn ở trạng thái RENTED");
         }
+
+        ensureDriverAccepted(booking);
 
         if (handoverRepository.existsByBookingIdAndHandoverType(request.getBookingId(), "RETURN")) {
             throw new BadRequestException(ErrorCode.VALIDATION_ERROR,

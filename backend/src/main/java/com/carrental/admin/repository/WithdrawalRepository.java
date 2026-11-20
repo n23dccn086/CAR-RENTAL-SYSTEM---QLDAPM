@@ -27,12 +27,20 @@ public interface WithdrawalRepository extends JpaRepository<Withdrawal, Long> {
     BigDecimal sumPendingAmountByOwner(@Param("ownerId") Long ownerId);
 
     /**
-     * Tổng tiền ĐÃ RÚT (bao gồm cả COMPLETED).
-     * Dùng để tính availableBalance = totalIncome - totalWithdrawn.
+     * Tổng tiền ĐÃ RÚT THỰC SỰ (admin đã chuyển khoản — COMPLETED).
+     * Dùng để hiển thị "Đã rút" cho chủ xe.
+     */
+    @Query("SELECT COALESCE(SUM(w.amount), 0) FROM Withdrawal w " +
+           "WHERE w.ownerId = :ownerId AND w.status = 'COMPLETED'")
+    BigDecimal sumCompletedAmountByOwner(@Param("ownerId") Long ownerId);
+
+    /**
+     * Tổng tiền ĐÃ GIỮ CHỖ (đã rút + đang chờ rút).
+     * Dùng để tính availableBalance = totalIncome - reserved.
      * Bao gồm: PENDING + APPROVED + PROCESSING + COMPLETED (không tính REJECTED).
      */
     @Query("SELECT COALESCE(SUM(w.amount), 0) FROM Withdrawal w " +
            "WHERE w.ownerId = :ownerId " +
            "AND w.status IN ('PENDING', 'APPROVED', 'PROCESSING', 'COMPLETED')")
-    BigDecimal sumWithdrawnAmountByOwner(@Param("ownerId") Long ownerId);
+    BigDecimal sumReservedAmountByOwner(@Param("ownerId") Long ownerId);
 }
