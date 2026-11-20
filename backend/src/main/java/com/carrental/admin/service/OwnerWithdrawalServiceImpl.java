@@ -81,14 +81,14 @@ public class OwnerWithdrawalServiceImpl implements OwnerWithdrawalService {
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
 
         // 4. Tính số dư khả dụng
-        BigDecimal totalWithdrawn = withdrawalRepository.sumWithdrawnAmountByOwner(ownerId);
-        BigDecimal availableBalance = totalIncome.subtract(totalWithdrawn);
+        BigDecimal reserved = withdrawalRepository.sumReservedAmountByOwner(ownerId);
+        BigDecimal availableBalance = totalIncome.subtract(reserved);
         if (availableBalance.compareTo(BigDecimal.ZERO) < 0) {
             availableBalance = BigDecimal.ZERO;
         }
 
-        log.info("Owner {} balance: totalIncome={}, totalWithdrawn={}, available={}",
-                ownerId, totalIncome, totalWithdrawn, availableBalance);
+        log.info("Owner {} balance: totalIncome={}, reserved={}, available={}",
+                ownerId, totalIncome, reserved, availableBalance);
 
         // 5. Check số dư đủ
         if (request.getAmount().compareTo(availableBalance) > 0) {
@@ -181,14 +181,15 @@ public class OwnerWithdrawalServiceImpl implements OwnerWithdrawalService {
                         .setScale(0, RoundingMode.DOWN))
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
 
-        // 2. Tổng ĐÃ RÚT (PENDING + APPROVED + PROCESSING + COMPLETED)
-        BigDecimal totalWithdrawn = withdrawalRepository.sumWithdrawnAmountByOwner(ownerId);
+        // 2. Tổng ĐÃ RÚT — chỉ các yêu cầu admin đã chuyển khoản (COMPLETED)
+        BigDecimal totalWithdrawn = withdrawalRepository.sumCompletedAmountByOwner(ownerId);
 
-        // 3. Đang chờ rút
+        // 3. Đang chờ rút (PENDING / APPROVED / PROCESSING)
         BigDecimal pendingAmount = withdrawalRepository.sumPendingAmountByOwner(ownerId);
 
-        // 4. Số dư khả dụng
-        BigDecimal availableBalance = totalIncome.subtract(totalWithdrawn);
+        // 4. Số dư khả dụng = thu nhập - (đã rút + đang chờ rút)
+        BigDecimal reserved = withdrawalRepository.sumReservedAmountByOwner(ownerId);
+        BigDecimal availableBalance = totalIncome.subtract(reserved);
         if (availableBalance.compareTo(BigDecimal.ZERO) < 0) {
             availableBalance = BigDecimal.ZERO;
         }

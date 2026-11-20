@@ -227,8 +227,14 @@ export default function OwnerBookingsPage() {
 
               const canApprove = b.status === 'PAID'
               const isNoDriver = b.rentalMode === 'WITH_DRIVER' && ((b.driver_assignment_status || b.driverAssignmentStatus) === 'NO_DRIVER_AVAILABLE' || (!b.driverId && !b.driver))
-              const canCreatePickup = b.status === 'APPROVED' && !pickupHandover && !isNoDriver
-              const canCreateReturn = b.status === 'RENTED' && !returnHandover && !isNoDriver
+              // Đơn có tài xế: phân công mới nhất phải là của đúng tài xế hiện tại và đã ACCEPTED
+              // (cùng quy tắc với HandoverServiceImpl.ensureDriverAccepted ở backend)
+              const latestAccepted = assignment
+                ? assignment.status === 'ACCEPTED' && (assignment.driverId == null || assignment.driverId === b.driverId)
+                : (b.driver_assignment_status || b.driverAssignmentStatus) === 'ACCEPTED'
+              const waitingDriver = !!b.driverId && !latestAccepted
+              const canCreatePickup = b.status === 'APPROVED' && !pickupHandover && !isNoDriver && !waitingDriver
+              const canCreateReturn = b.status === 'RENTED' && !returnHandover && !isNoDriver && !waitingDriver
               const canCancel = ['PENDING', 'PAID', 'APPROVED'].includes(b.status)
 
               return (
@@ -328,6 +334,20 @@ export default function OwnerBookingsPage() {
                         fontWeight: 'bold',
                       }}>
                         ⚠️ Chưa có tài xế nhận chuyến
+                      </span>
+                    )}
+
+                    {!isNoDriver && waitingDriver && ['APPROVED', 'RENTED'].includes(b.status) && (
+                      <span style={{
+                        padding: '8px 14px',
+                        border: '1px dashed var(--dong)',
+                        color: 'var(--dong)',
+                        fontFamily: 'var(--mono)',
+                        fontSize: '10px',
+                        letterSpacing: '1px',
+                        textTransform: 'uppercase',
+                      }}>
+                        ⏳ Chờ tài xế nhận đơn để tạo biên bản
                       </span>
                     )}
 
