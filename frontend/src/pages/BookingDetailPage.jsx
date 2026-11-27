@@ -696,7 +696,7 @@ export default function BookingDetailPage() {
                     : "Chưa có tài xế"
                 }
               />
-              <InfoRow
+              {booking.status !== "CANCELLED" && <InfoRow
                 label="Trạng thái tài xế"
                 value={
                   booking.driver_assignment_status === "ACCEPTED"
@@ -711,7 +711,7 @@ export default function BookingDetailPage() {
                     ? "⏰ Quá hạn phản hồi"
                     : (booking.driverName ? "Đã gán" : "Chưa gán")
                 }
-              />
+              />}
             </>
           )}
           <InfoRow label="Khách hàng" value={booking.customerName} />

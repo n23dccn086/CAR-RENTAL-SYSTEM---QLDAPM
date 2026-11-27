@@ -599,7 +599,7 @@ export default function MyBookingsPage() {
                         }}
                       >
                         <span>👨‍✈️ Tài xế: <strong>{b.driverName || b.driver?.name}</strong></span>
-                        {b.driver_assignment_status === "PENDING" && <span style={{ color: "var(--dong)" }}>(Chờ xác nhận)</span>}
+                        {b.driver_assignment_status === "PENDING" && b.status !== "CANCELLED" && <span style={{ color: "var(--dong)" }}>(Chờ xác nhận)</span>}
                         {b.driver_assignment_status === "ACCEPTED" && <span style={{ color: "#287444" }}>(Đã nhận)</span>}
                       </div>
                     )}

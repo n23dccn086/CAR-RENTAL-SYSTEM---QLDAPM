@@ -395,7 +395,7 @@ export default function OwnerBookingsPage() {
                       </button>
                     )}
 
-                    {b.driverId && (
+                    {b.driverId && b.status !== 'CANCELLED' && (
                       <div style={{
                         padding: '10px 18px',
                         border: `1px solid ${assignmentStatusColors[assignment?.status] || 'var(--muc-mo)'}`,
