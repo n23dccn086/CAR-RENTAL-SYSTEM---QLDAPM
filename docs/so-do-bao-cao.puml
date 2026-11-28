@@ -1,0 +1,840 @@
+' =============================================================================
+' CODE PLANTUML CHO 9 HÌNH SƠ ĐỒ TRONG BÁO CÁO ĐỒ ÁN (không gồm ảnh giao diện 9.1–9.13)
+'   Hình 1.1  Use Case tổng quát          Hình 3.2  Tuần tự Đặt xe & Thanh toán cọc
+'   Hình 2.1  Bảng Kanban Trello          Hình 3.3  Chuyển trạng thái Đơn đặt xe
+'   Hình 2.2  Kiến trúc tổng thể          Hình 6.1  Kiểm thử API đăng nhập (Postman)
+'   Hình 3.1  WBS                         Hình F.1  ERD đầy đủ 24 bảng
+'                                         Hình F.2  ERD các thực thể cốt lõi
+' Cách dùng: mỗi khối @start... @end... là một hình — dán từng khối vào planttext.com.
+' =============================================================================
+
+' ============================================================ HÌNH 1.1
+@startuml
+title Hình 1.1: Sơ đồ Use Case tổng quát hệ thống Car Rental System
+left to right direction
+skinparam shadowing false
+skinparam packageStyle rectangle
+
+actor "Khách hàng\n(CUSTOMER)" as Customer
+actor "Khách vãng lai\n(GUEST)" as Guest
+actor "Chủ xe\n(OWNER)" as Owner
+actor "Quản trị viên\n(ADMIN)" as Admin
+
+rectangle "Hệ thống Car Rental System" {
+  usecase "Xác thực tài khoản (KYC)" as UC_KYC
+  usecase "Đặt xe & Thanh toán cọc" as UC_Book
+  usecase "Đánh giá chuyến đi" as UC_Review
+  usecase "Tìm kiếm & Xem chi tiết xe" as UC_Search
+  usecase "Ký biên bản Giao/Nhận xe" as UC_Handover
+  usecase "Đăng ký / Đăng nhập" as UC_Auth
+  usecase "Hỏi đáp Trợ lý ảo AI" as UC_AI
+  usecase "Quản lý đội xe & Tài xế" as UC_Fleet
+  usecase "Duyệt đơn & Quản lý doanh thu" as UC_Approve
+  usecase "Rút tiền" as UC_Withdraw
+  usecase "Quản lý người dùng & Duyệt hồ sơ" as UC_Users
+  usecase "Giải quyết tranh chấp" as UC_Dispute
+}
+
+Customer --> UC_KYC
+Customer --> UC_Book
+Customer --> UC_Review
+Customer --> UC_Search
+Customer --> UC_Handover
+Customer --> UC_Auth
+Customer --> UC_AI
+
+Guest --> UC_Search
+Guest --> UC_Auth
+Guest --> UC_AI
+
+Owner --> UC_Handover
+Owner --> UC_Auth
+Owner --> UC_AI
+Owner --> UC_Fleet
+Owner --> UC_Approve
+Owner --> UC_Withdraw
+
+Admin --> UC_Auth
+Admin --> UC_AI
+Admin --> UC_Users
+Admin --> UC_Dispute
+@enduml
+
+' ============================================================ HÌNH 2.1
+@startsalt
+title Hình 2.1: Bảng quản lý công việc Kanban trên Trello của nhóm
+{+
+  { <b>Trello</b> | "Tìm kiếm                                        " | [Tạo mới] }
+  ==
+  { <size:14><b>CAR RENTAL</b></size> | . | DH · DH · AT · DH · TK | [<&person> Chia sẻ] }
+  ==
+  {
+    {+
+      <b>Charter</b> (1)
+      {+
+        PROJECT CHARTER
+      }
+      <&plus> Thêm thẻ
+    } | {+
+      <b>Backlog</b> (0)
+      <&plus> Thêm thẻ
+    } | {+
+      <b>To Do</b> (3)
+      {+
+        CARD 10: Xử lý đơn & Notification
+        <&task> 0/7
+      }
+      {+
+        CARD 11: Thanh toán
+        <&task> 0/8
+      }
+      {+
+        CARD 12: Biên bản & Đánh giá
+        <&task> 0/7
+      }
+      <&plus> Thêm thẻ
+    } | {+
+      <b>In Progress</b> (6)
+      {+
+        CARD 7: Auth & User
+        <&task> 1/9
+      }
+      {+
+        CARD 8: Quản lý xe
+        <&task> 0/10
+      }
+      {+
+        CARD 9: Tìm kiếm & Đặt xe
+        <&task> 0/10
+      }
+      {+
+        CARD 15: Admin Dashboard
+        <&task> 0/9
+      }
+      {+
+        CARD 14: Tài xế & Import Excel
+        <&task> 0/9
+      }
+      {+
+        CARD 13: Tính phí vượt & Hủy đơn
+        <&task> 0/6
+      }
+      <&plus> Thêm thẻ
+    } | {+
+      <b>Done</b> (7)
+      {+
+        CARD 2: Vẽ Use Case & Đặc tả
+        <&task> 4/4
+      }
+      {+
+        CARD 3: Thiết kế Database & API Contract
+        <&task> 3/3
+      }
+      {+
+        CARD 1: Viết SRS
+        <&task> 2/2
+      }
+      {+
+        CARD 4: Thiết kế UI/UX
+        <&task> 2/3
+      }
+      {+
+        CARD 5: Setup Project & Môi trường
+        <&task> 6/6
+      }
+      {+
+        CARD 6: Database & Seed Data
+        <&task> 4/4
+      }
+      {+
+        CARD 16: AI Chatbot
+        <&task> 9/9
+      }
+      <&plus> Thêm thẻ
+    } | {+
+      <b>Code Review / Testing</b>
+      <&plus> Thêm thẻ
+    }
+  }
+}
+@endsalt
+
+' ============================================================ HÌNH 2.2
+@startuml
+title Hình 2.2: Sơ đồ kiến trúc tổng thể hệ thống 3 thành phần (Backend, Frontend, AI Service)
+skinparam shadowing false
+skinparam defaultTextAlignment center
+
+package "Client (Trình duyệt)" {
+  rectangle "React 19 Frontend\n(Vite 8, Zustand)" as FE
+}
+
+package "Server Backend" {
+  rectangle "Spring Boot 4.0.8\n(Java 21)" as BE
+  database "PostgreSQL 15\n(Flyway V1–V38)" as PG
+  rectangle "Redis 7\n(Queue + Blacklist)" as RD
+}
+
+package "AI Microservice" {
+  rectangle "Python FastAPI" as AI
+  database "ChromaDB" as CH
+}
+
+cloud "Google Gemini API\n(gemini-2.5-flash)" as GM
+
+FE <--> BE : HTTP / REST API (JWT)
+FE <--> AI : HTTP / JSON
+BE <--> PG : JPA / Hibernate
+BE <--> RD : Spring Data Redis
+AI --> BE : Gọi REST API bằng JWT\nngười dùng (tra cứu đơn)
+AI <--> CH : Truy xuất Vector (RAG)
+AI <--> GM : Gọi API sinh văn bản
+@enduml
+
+' ============================================================ HÌNH 3.1
+@startwbs
+title Hình 3.1: Sơ đồ phân rã công việc (WBS) của dự án
+* Dự án Car Rental System
+** 1. Quản lý dự án
+*** 1.1. Lập kế hoạch
+*** 1.2. Họp Daily Standup
+*** 1.3. Họp Sprint Review
+*** 1.4. Viết báo cáo & Làm Slide
+** 2. Phân tích & Thiết kế
+*** 2.1. Viết tài liệu SRS
+*** 2.2. Vẽ sơ đồ Use Case
+*** 2.3. Vẽ sơ đồ ERD
+*** 2.4. Đặc tả API Contract
+** 3. Phát triển Backend
+*** 3.1. Module Auth & User
+*** 3.2. Module Car & Booking
+*** 3.3. Module Payment & Handover
+*** 3.4. Module Admin & Dispute
+*** 3.5. AI Service (FastAPI + RAG)
+** 4. Phát triển Frontend
+*** 4.1. Phân hệ Khách hàng & trang chung (19 trang)
+*** 4.2. Phân hệ Chủ xe (8 trang)
+*** 4.3. Phân hệ Quản trị (10 trang)
+*** 4.4. Trang Tài xế qua Magic Link (1 trang)
+** 5. Kiểm thử & Bàn giao
+*** 5.1. Viết Test Plan & Test Case
+*** 5.2. Kiểm thử tích hợp (API)
+*** 5.3. Kiểm thử UAT
+*** 5.4. Fix Bug & Đóng gói Demo
+@endwbs
+
+' ============================================================ HÌNH 3.2
+@startuml
+title Hình 3.2: Sơ đồ tuần tự quy trình Đặt xe và Thanh toán cọc trực tuyến\n(môi trường demo: bước callback được giả lập bằng API mock-success)
+skinparam shadowing false
+autonumber
+
+actor "Khách hàng" as C
+participant "Frontend (React)" as FE
+participant "Backend (Spring Boot)" as BE
+database "PostgreSQL" as DB
+queue "Redis" as R
+
+C -> FE : Chọn xe, ngày nhận/trả, hình thức thuê
+FE -> BE : POST /api/v1/bookings
+BE -> DB : Kiểm tra trùng lịch (đơn đang hiệu lực + lịch chặn)
+alt Trùng lịch
+  BE --> FE : Lỗi: xe đã có lịch trong khoảng ngày này
+  FE --> C : Thông báo, yêu cầu chọn ngày khác
+else Còn trống
+  BE -> DB : Lưu đơn (Status: PENDING)
+  BE --> FE : Booking ID + Số tiền cọc
+  FE --> C : Chuyển sang trang thanh toán
+  C -> FE : Chọn cổng (MoMo…) và bấm Thanh toán
+  FE -> BE : POST /api/v1/payments (DEPOSIT)
+  BE -> DB : Tạo giao dịch (Status: PENDING)
+  BE --> FE : Payment ID
+  FE -> BE : POST /api/v1/payments/{id}/mock-success\n(giả lập callback MoMo)
+  BE -> BE : Kiểm tra người gọi là chủ giao dịch
+  BE -> DB : Cập nhật Payment (SUCCESS), Booking (PAID)
+  BE -> R : Hẹn giờ tự hủy sau 4h nếu chủ xe chưa duyệt
+  BE --> FE : Trả về kết quả
+  FE --> C : Thông báo đặt xe thành công
+end
+@enduml
+
+' ============================================================ HÌNH 3.3
+@startuml
+title Hình 3.3: Sơ đồ chuyển đổi trạng thái của Đơn đặt xe
+hide empty description
+skinparam shadowing false
+skinparam state {
+  BackgroundColor LightBlue
+  BorderColor Blue
+}
+
+[*] --> PENDING : Khách tạo đơn
+PENDING --> PAID : Thanh toán cọc thành công
+PENDING --> CANCELLED : Khách hủy /\nQuá hạn 12h chưa cọc
+PAID --> APPROVED : Chủ xe duyệt đơn
+PAID --> CANCELLED : Chủ xe từ chối / Khách hủy /\nQuá 4h chủ xe chưa duyệt
+APPROVED --> RENTED : Ký biên bản giao xe (Pickup)
+APPROVED --> CANCELLED : Khách hủy / Chủ xe hủy
+RENTED --> RETURNED : Ký biên bản nhận xe (Return)
+RETURNED --> COMPLETED : Khách thanh toán nốt tiền
+COMPLETED --> [*]
+CANCELLED --> [*]
+@enduml
+
+' ============================================================ HÌNH 6.1
+@startsalt
+title Hình 6.1: Kiểm thử API đăng nhập trên Postman
+{+
+  { My Collection  >  <b>New Request</b> | . | [Save] | [Share] }
+  ==
+  { ^POST^ | "http://localhost:8080/api/v1/auth/login                    " | [ <b>Send</b> ] }
+  {/ Docs | Params | Authorization | Headers (8) | <b>Body</b> | Scripts | Settings }
+  { () none | () form-data | () x-www-form-urlencoded | (X) raw | () binary | () GraphQL | ^JSON^ }
+  {#
+    <b>Khóa (Request body JSON)</b> | <b>Giá trị</b>
+    phone | 0900000003
+    password | Admin@123
+  }
+  ==
+  { <b>Body</b> | Cookies | Headers (12) | Test Results | . | <b>200 OK</b> · 307 ms · 1.85 KB }
+  {#
+    <b>Khóa (Response JSON)</b> | <b>Giá trị</b>
+    success | true
+    code | 0
+    message | Đăng nhập thành công
+    data.accessToken | eyJhbGciOiJIUzI1NiJ9.eyJyb2xlIjoiQURNSU4i… (rút gọn)
+    data.refreshToken | eyJhbGciOiJIUzI1NiJ9.eyJ0eXBlIjoiUkVGUkVTSCIs… (rút gọn)
+    data.tokenType | Bearer
+    data.expiresIn | 3600
+    data.user | (thông tin người dùng)
+  }
+}
+@endsalt
+
+' ============================================================ HÌNH F.1
+@startuml erd
+title Hình F.1: Sơ đồ cơ sở dữ liệu quan hệ thực thể (ERD – 24 bảng)
+' =============================================================================
+' CAR RENTAL SYSTEM — Sơ đồ thực thể quan hệ (ERD), 24 bảng
+' Nguồn: Flyway migration V1..V37 (backend/src/main/resources/db/migration)
+' Bản chi tiết cột / chỉ mục: docs/database-schema.sql
+' Ký hiệu: * = NOT NULL, <<PK>> khóa chính, <<FK>> khóa ngoại, <<UK>> duy nhất
+'          Đường nét đứt (..) = tham chiếu logic, KHÔNG khai báo FK trong CSDL
+' =============================================================================
+hide circle
+skinparam linetype ortho
+skinparam shadowing false
+skinparam defaultFontName Arial
+skinparam class {
+  BackgroundColor #FFFFFF
+  BorderColor #555555
+  ArrowColor #555555
+}
+
+' ---------------------------------------------------------------------------
+package "Người dùng & xác thực" #F3F7FF {
+  entity users {
+    * id : BIGSERIAL <<PK>>
+    --
+    * name : VARCHAR(100)
+    * phone : VARCHAR(15) <<UK>>
+    email : VARCHAR(150) <<UK>>
+    * password_hash : VARCHAR(255)
+    * role : VARCHAR(20)  // CUSTOMER|OWNER|DRIVER|ADMIN
+    verification_status : VARCHAR(20)
+    address, date_of_birth, avatar_url
+    rejection_reason : TEXT
+    last_login_at : TIMESTAMP
+    is_active : BOOLEAN
+    created_at, updated_at, deleted_at
+  }
+
+  entity user_documents {
+    * id : BIGSERIAL <<PK>>
+    --
+    * user_id : BIGINT <<FK>>
+    * document_type : VARCHAR(30)  // GPLX_FRONT|GPLX_BACK|CCCD_FRONT|CCCD_BACK|SELFIE
+    * document_url : VARCHAR(500)
+    uploaded_at : TIMESTAMP
+  }
+
+  entity password_reset_otps {
+    * id : BIGSERIAL <<PK>>
+    --
+    * phone : VARCHAR(15)
+    * otp : VARCHAR(6)
+    * expires_at : TIMESTAMP
+    * is_used : BOOLEAN
+    * attempts : INT
+    created_at : TIMESTAMP
+  }
+
+  entity owner_requests {
+    * id : BIGSERIAL <<PK>>
+    --
+    * user_id : BIGINT <<FK>>
+    * full_name, date_of_birth, gender, address
+    * cccd, cccd_issued_date, cccd_issued_place
+    * bank_name, bank_account, account_holder
+    * status : VARCHAR(20)  // PENDING|APPROVED|REJECTED
+    rejection_reason : TEXT
+    processed_by : BIGINT <<FK>>
+    processed_at : TIMESTAMP
+    created_at, updated_at, deleted_at
+  }
+
+  entity owner_request_documents {
+    * id : BIGSERIAL <<PK>>
+    --
+    * request_id : BIGINT <<FK>>
+    * document_type : VARCHAR(30)
+    * document_url : VARCHAR(500)
+    uploaded_at : TIMESTAMP
+  }
+}
+
+' ---------------------------------------------------------------------------
+package "Xe" #F5FFF3 {
+  entity cars {
+    * id : BIGSERIAL <<PK>>
+    --
+    * owner_id : BIGINT <<FK>>
+    * plate : VARCHAR(20) <<UK>>
+    * brand, model, year
+    * seats : INT  // 4|5|7 (kiểm tra ở ứng dụng)
+    * transmission, fuel_type, car_type
+    color, current_km
+    * price_per_day : BIGINT
+    price_weekend, price_holiday, price_with_driver
+    extra_km_price, delivery_fee, cleaning_fee
+    base_km_per_day, deposit_percent, insurance_fee_per_day
+    * status : VARCHAR(20)
+    * rental_mode : VARCHAR(20)
+    address, delivery_radius, description
+    created_at, updated_at, deleted_at
+  }
+
+  entity car_images {
+    * id : BIGSERIAL <<PK>>
+    --
+    * car_id : BIGINT <<FK>>
+    * image_url : VARCHAR(500)
+    image_type, display_order
+    created_at
+  }
+
+  entity car_documents {
+    * id : BIGSERIAL <<PK>>
+    --
+    * car_id : BIGINT <<FK>>
+    * document_type : VARCHAR(50)
+    * document_url : VARCHAR(500)
+    expiry_date : DATE
+    verified : BOOLEAN
+    created_at
+  }
+
+  entity car_blocked_dates {
+    * id : BIGSERIAL <<PK>>
+    --
+    * car_id : BIGINT <<FK>>
+    * start_date : DATE
+    * end_date : DATE
+    reason : VARCHAR(50)
+    note : TEXT
+    created_at
+  }
+}
+
+' ---------------------------------------------------------------------------
+package "Tài xế" #FFF9F0 {
+  entity drivers {
+    * id : BIGSERIAL <<PK>>
+    --
+    * owner_id : BIGINT <<FK>>
+    * name : VARCHAR(100)
+    * phone : VARCHAR(15) <<UK>>
+    email, cccd
+    * license_number, license_class
+    license_expiry, date_of_birth, address
+    experience_years, avatar_url
+    * status : VARCHAR(20)  // PENDING|ACTIVE|BUSY|INACTIVE|REJECTED
+    rating, total_trips, rejection_reason
+    created_at, updated_at, deleted_at
+  }
+
+  entity driver_assignments {
+    * id : BIGSERIAL <<PK>>
+    --
+    * booking_id : BIGINT <<FK>>
+    * driver_id : BIGINT <<FK>>
+    * token : VARCHAR(64) <<UK>>
+    * status : VARCHAR(20)  // PENDING|ACCEPTED|REJECTED|EXPIRED|CANCELLED
+    reject_reason : VARCHAR(255)
+    * deadline_at : TIMESTAMP  // +3h
+    responded_at : TIMESTAMP
+    attempt_number : INT  // tối đa 5
+    created_at, updated_at
+  }
+}
+
+' ---------------------------------------------------------------------------
+package "Đặt xe & thanh toán" #FFF3F3 {
+  entity bookings {
+    * id : BIGSERIAL <<PK>>
+    --
+    * customer_id : BIGINT <<FK>>
+    * car_id : BIGINT <<FK>>
+    * owner_id : BIGINT <<FK>>
+    * start_date, end_date : TIMESTAMP
+    actual_return_date : TIMESTAMP
+    pickup_address, return_address
+    * rental_mode : VARCHAR(20)
+    driver_id : BIGINT  // tham chiếu logic
+    * total_price, deposit_amount, remaining_amount : BIGINT
+    * status : VARCHAR(30)  // PENDING|PAID|APPROVED|RENTED|RETURNED|COMPLETED|CANCELLED
+    customer_note, owner_note, cancel_reason
+    cancelled_at, created_at, updated_at
+  }
+
+  entity booking_details {
+    * id : BIGSERIAL <<PK>>
+    --
+    * booking_id : BIGINT <<FK>>
+    * rental_days : INT
+    * price_per_day, rental_fee : BIGINT
+    delivery_fee, insurance_fee, driver_fee
+    discount, extra_fee, note
+    created_at
+  }
+
+  entity payments {
+    * id : BIGSERIAL <<PK>>
+    --
+    * booking_id : BIGINT <<FK>>
+    * customer_id : BIGINT <<FK>>
+    * amount : BIGINT
+    * payment_method : VARCHAR(30)
+    transaction_id : VARCHAR(100) <<UK>>
+    gateway_transaction_id
+    * payment_type : VARCHAR(20)  // DEPOSIT|FULL|REMAINING
+    * status : VARCHAR(20)
+    payment_url, signature, gateway_response
+    paid_at, created_at, updated_at
+  }
+
+  entity refunds {
+    * id : BIGSERIAL <<PK>>
+    --
+    * payment_id : BIGINT <<FK>>
+    * booking_id : BIGINT <<FK>>
+    * amount : BIGINT
+    reason : TEXT
+    * status : VARCHAR(20)  // PENDING|SUCCESS|CANCELLED
+    refund_transaction_id, processed_at
+    created_at
+  }
+}
+
+' ---------------------------------------------------------------------------
+package "Giao nhận & tương tác" #F8F3FF {
+  entity handover_records {
+    * id : BIGSERIAL <<PK>>
+    --
+    * booking_id : BIGINT <<FK>>
+    * handover_type : VARCHAR(20)  // PICKUP|RETURN
+    km_reading, fuel_level
+    exterior_note, interior_note, damages
+    extra_fees, extra_fees_note
+    owner_signature, customer_signature : TEXT
+    owner_signed_at, customer_signed_at
+    record_hash : VARCHAR(64)
+    * status : VARCHAR(20)  // PENDING|SIGNED|CANCELLED
+    actual_return_time, late_fee, late_minutes
+    km_driven, km_allowed, km_overage, km_overage_fee
+    created_at, updated_at, deleted_at
+    --
+    <<UK>> (booking_id, handover_type)
+  }
+
+  entity handover_images {
+    * id : BIGSERIAL <<PK>>
+    --
+    * handover_id : BIGINT <<FK>>
+    * image_url : VARCHAR(500)
+    image_type, note
+    created_at
+  }
+
+  entity reviews {
+    * id : BIGSERIAL <<PK>>
+    --
+    * booking_id : BIGINT <<FK>>
+    * customer_id : BIGINT <<FK>>
+    * car_id : BIGINT <<FK>>
+    * owner_id : BIGINT <<FK>>
+    * car_rating, owner_rating : INT
+    driver_rating : INT
+    comment, images
+    is_anonymous : BOOLEAN
+    owner_reply, replied_at
+    customer_reply, customer_replied_at
+    created_at, updated_at
+  }
+
+  entity review_replies {
+    * id : BIGSERIAL <<PK>>
+    --
+    * review_id : BIGINT <<FK>>
+    * author_id : BIGINT  // tham chiếu logic
+    * author_role : VARCHAR(20)  // CHECK CUSTOMER|OWNER
+    * content : TEXT
+    created_at, updated_at
+  }
+
+  entity disputes {
+    * id : BIGSERIAL <<PK>>
+    --
+    * dispute_code : VARCHAR(20) <<UK>>
+    * booking_id : BIGINT <<FK>>
+    * raised_by : BIGINT <<FK>>
+    * against_user : BIGINT <<FK>>
+    resolved_by : BIGINT <<FK>>
+    * category : VARCHAR(30)
+    * description : TEXT
+    evidence, evidence_history : JSONB
+    claimed_amount, resolved_amount : DECIMAL(12,0)
+    * status : VARCHAR(20)  // 9 trạng thái
+    resolution, admin_request
+    counter_description, counter_evidence, counter_filed_at
+    counter_deadline_at (48h), review_deadline_at (24h)
+    awaiting_response_from
+    contract_url, contract_generated_at
+    deadline_at, last_submitted_at, resolved_at
+    created_at, updated_at, deleted_at
+  }
+
+  entity notifications {
+    * id : BIGSERIAL <<PK>>
+    --
+    * user_id : BIGINT <<FK>>
+    * title : VARCHAR(255)
+    * content : TEXT
+    * type : VARCHAR(30)
+    reference_id : BIGINT
+    is_read : BOOLEAN
+    created_at
+  }
+}
+
+' ---------------------------------------------------------------------------
+package "Quản trị" #F2F2F2 {
+  entity withdrawals {
+    * id : BIGSERIAL <<PK>>
+    --
+    * owner_id : BIGINT <<FK>>
+    processed_by : BIGINT <<FK>>
+    * amount : DECIMAL(12,0)
+    fee : NUMERIC(12,0)
+    * net_amount : NUMERIC(12,0)
+    * bank_name, bank_account, account_holder
+    * status : VARCHAR(20)  // PENDING|COMPLETED|REJECTED
+    reject_reason, transaction_id, processed_at
+    created_at, updated_at, deleted_at
+  }
+
+  entity platform_config {
+    * id : BIGSERIAL <<PK>>
+    --
+    * config_key : VARCHAR(100) <<UK>>
+    * config_value : TEXT
+    * config_type : VARCHAR(20)
+    description : VARCHAR(255)
+    updated_by : BIGINT <<FK>>
+    created_at, updated_at
+  }
+
+  entity approval_logs {
+    * id : BIGSERIAL <<PK>>
+    --
+    * target_type : VARCHAR(30)
+    * target_id : BIGINT  // tham chiếu đa hình
+    * action : VARCHAR(20)
+    reason : TEXT
+    * approved_by : BIGINT <<FK>>
+    created_at
+  }
+}
+
+' ============================ QUAN HỆ ======================================
+' Người dùng & xác thực
+users ||--o{ user_documents : "nộp KYC"
+users ||--o{ owner_requests : "đăng ký chủ xe"
+users |o--o{ owner_requests : "processed_by"
+owner_requests ||--o{ owner_request_documents : "đính kèm"
+users ||..o{ password_reset_otps : "theo phone (logic)"
+
+' Xe
+users ||--o{ cars : "sở hữu (owner_id)"
+cars ||--o{ car_images : ""
+cars ||--o{ car_documents : ""
+cars ||--o{ car_blocked_dates : "chặn lịch"
+
+' Tài xế
+users ||--o{ drivers : "quản lý (owner_id)"
+drivers ||--o{ driver_assignments : "được phân công"
+bookings ||--o{ driver_assignments : "lượt gán (≤5)"
+drivers |o..o{ bookings : "driver_id (logic)"
+
+' Đặt xe & thanh toán
+users ||--o{ bookings : "customer_id"
+users ||--o{ bookings : "owner_id"
+cars ||--o{ bookings : "car_id"
+bookings ||--o{ booking_details : "bảng kê phí"
+bookings ||--o{ payments : "DEPOSIT / REMAINING"
+users ||--o{ payments : "customer_id"
+payments ||--o{ refunds : ""
+bookings ||--o{ refunds : ""
+
+' Giao nhận & tương tác
+bookings ||--o{ handover_records : "PICKUP + RETURN (UK)"
+handover_records ||--o{ handover_images : ""
+bookings ||--o{ reviews : ""
+users ||--o{ reviews : "customer_id / owner_id"
+cars ||--o{ reviews : "car_id"
+reviews ||--o{ review_replies : "luồng phản hồi"
+users ||..o{ review_replies : "author_id (logic)"
+bookings ||--o{ disputes : ""
+users ||--o{ disputes : "raised_by / against_user"
+users |o--o{ disputes : "resolved_by"
+users ||--o{ notifications : ""
+
+' Quản trị
+users ||--o{ withdrawals : "owner_id"
+users |o--o{ withdrawals : "processed_by"
+users |o--o{ platform_config : "updated_by"
+users ||--o{ approval_logs : "approved_by"
+
+@enduml
+
+' ============================================================ HÌNH F.2
+@startuml
+title Hình F.2: Sơ đồ ERD các thực thể cốt lõi
+skinparam shadowing false
+hide methods
+
+class users << (T,#FFAAAA) >> {
+  **id** : BIGSERIAL
+  --
+  name : VARCHAR(100)
+  phone : VARCHAR(15) [unique]
+  email : VARCHAR(150)
+  password_hash : VARCHAR(255)
+  role : VARCHAR(20)
+  verification_status : VARCHAR(20)
+}
+
+class cars << (T,#FFAAAA) >> {
+  **id** : BIGSERIAL
+  --
+  <u>owner_id</u> : BIGINT
+  plate : VARCHAR(20) [unique]
+  brand : VARCHAR
+  model : VARCHAR
+  seats : INT
+  price_per_day : BIGINT
+  price_weekend : BIGINT
+  status : VARCHAR(20)
+}
+
+class drivers << (T,#FFAAAA) >> {
+  **id** : BIGSERIAL
+  --
+  <u>owner_id</u> : BIGINT
+  name : VARCHAR(100)
+  phone : VARCHAR(15)
+  license_number : VARCHAR
+  status : VARCHAR(20)
+}
+
+class withdrawals << (T,#FFAAAA) >> {
+  **id** : BIGSERIAL
+  --
+  <u>owner_id</u> : BIGINT
+  amount : DECIMAL(12,0)
+  net_amount : NUMERIC(12,0)
+  status : VARCHAR(20)
+}
+
+class notifications << (T,#FFAAAA) >> {
+  **id** : BIGSERIAL
+  --
+  <u>user_id</u> : BIGINT
+  title : VARCHAR(255)
+  content : TEXT
+  is_read : BOOLEAN
+}
+
+class bookings << (T,#FFAAAA) >> {
+  **id** : BIGSERIAL
+  --
+  <u>customer_id</u> : BIGINT
+  <u>car_id</u> : BIGINT
+  <u>owner_id</u> : BIGINT
+  start_date : TIMESTAMP
+  end_date : TIMESTAMP
+  total_price : BIGINT
+  deposit_amount : BIGINT
+  status : VARCHAR(30)
+}
+
+class payments << (T,#FFAAAA) >> {
+  **id** : BIGSERIAL
+  --
+  <u>booking_id</u> : BIGINT
+  amount : BIGINT
+  payment_type : VARCHAR(20)
+  status : VARCHAR(20)
+  transaction_id : VARCHAR(100)
+}
+
+class handover_records << (T,#FFAAAA) >> {
+  **id** : BIGSERIAL
+  --
+  <u>booking_id</u> : BIGINT
+  handover_type : VARCHAR(20)
+  km_reading : INT
+  status : VARCHAR(20)
+  late_fee : NUMERIC
+}
+
+class reviews << (T,#FFAAAA) >> {
+  **id** : BIGSERIAL
+  --
+  <u>booking_id</u> : BIGINT
+  car_rating : INT
+  owner_rating : INT
+  comment : TEXT
+}
+
+class disputes << (T,#FFAAAA) >> {
+  **id** : BIGSERIAL
+  --
+  <u>booking_id</u> : BIGINT
+  raised_by : BIGINT
+  against_user : BIGINT
+  status : VARCHAR(20)
+  resolution : TEXT
+}
+
+users "1" -- "0..*" cars : sở hữu >
+users "1" -- "0..*" bookings : đặt >
+users "1" -- "0..*" drivers : quản lý >
+users "1" -- "0..*" withdrawals : rút tiền >
+users "1" -- "0..*" notifications : nhận >
+cars "1" -- "0..*" bookings : được thuê >
+bookings "1" -- "0..*" payments : thanh toán >
+bookings "1" -- "0..2" handover_records : biên bản >
+bookings "1" -- "0..1" reviews : đánh giá >
+bookings "1" -- "0..*" disputes : khiếu nại >
+@enduml
