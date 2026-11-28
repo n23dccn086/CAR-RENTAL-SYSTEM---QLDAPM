@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import {
   getAllConfigs,
   updateConfig,
@@ -39,7 +39,21 @@ const CONFIG_META = {
   default_late_fee_per_hour: {
     label: "Phí trả xe muộn",
     unit: "đ/giờ",
-    hint: "Phí cho mỗi giờ trả xe muộn (áp dụng cả tự lái và có tài xế)",
+    hint: "Phí khi trả trễ 15–60 phút; trễ 1–4 giờ thu ½ đơn giá ngày, 4–24 giờ thu 1 ngày, mỗi 24 giờ trọn thu 120% đơn giá ngày",
+    min: 0,
+  },
+
+  // ===== PHÍ DỊCH VỤ THEO NGÀY =====
+  insurance_fee_per_day: {
+    label: "Phí bảo hiểm",
+    unit: "đ/ngày",
+    hint: "Thu theo số ngày thuê khi khách chọn mua bảo hiểm",
+    min: 0,
+  },
+  driver_fee_per_day: {
+    label: "Phí tài xế",
+    unit: "đ/ngày",
+    hint: "Thu theo số ngày thuê khi đơn có tài xế",
     min: 0,
   },
 
@@ -154,6 +168,10 @@ const CONFIG_GROUPS = [
     keys: ["default_late_fee_per_hour"],
   },
   {
+    title: "Phí dịch vụ theo ngày",
+    keys: ["insurance_fee_per_day", "driver_fee_per_day"],
+  },
+  {
     title: "Phí vượt km (áp dụng MỌI loại xe — chỉ thuê tự lái)",
     keys: [
       "default_km_per_day",
@@ -198,33 +216,39 @@ export default function AdminConfigPage() {
   const [createError, setCreateError] = useState("");
   const [createSubmitting, setCreateSubmitting] = useState(false);
 
-  const fetchConfigs = async () => {
+  const showMessage = useCallback((type, text) => {
+    setMessage({ type, text });
+    setTimeout(() => setMessage({ type: "", text: "" }), 4000);
+  }, []);
+
+  // Tải danh sách config; mọi setState đều nằm sau await nên gọi được trực tiếp trong useEffect
+  const loadConfigs = useCallback(() => {
+    return getAllConfigs()
+      .then((res) => {
+        const list = res.data || [];
+        setConfigs(list);
+        const initEdits = {};
+        list.forEach((c) => {
+          initEdits[c.configKey] = c.configValue;
+        });
+        setEdits(initEdits);
+      })
+      .catch((err) => {
+        console.error(err);
+        showMessage("error", "Không tải được cấu hình");
+      })
+      .finally(() => setLoading(false));
+  }, [showMessage]);
+
+  // Tải lại (sau khi tạo config mới): hiện spinner rồi tải
+  const fetchConfigs = () => {
     setLoading(true);
-    try {
-      const res = await getAllConfigs();
-      const list = res.data || [];
-      setConfigs(list);
-      const initEdits = {};
-      list.forEach((c) => {
-        initEdits[c.configKey] = c.configValue;
-      });
-      setEdits(initEdits);
-    } catch (err) {
-      console.error(err);
-      showMessage("error", "Không tải được cấu hình");
-    } finally {
-      setLoading(false);
-    }
+    return loadConfigs();
   };
 
   useEffect(() => {
-    fetchConfigs();
-  }, []);
-
-  const showMessage = (type, text) => {
-    setMessage({ type, text });
-    setTimeout(() => setMessage({ type: "", text: "" }), 4000);
-  };
+    loadConfigs();
+  }, [loadConfigs]);
 
   const validateValue = (config, value) => {
     const meta = CONFIG_META[config.configKey] || {};

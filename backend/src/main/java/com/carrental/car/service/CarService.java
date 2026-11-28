@@ -68,6 +68,8 @@ public interface CarService {
     // ============================================================
     CarBlockedDate blockDates(Long carId, Long ownerId, BlockedDateRequest request);
 
+    void unblockDates(Long carId, Long blockId, Long ownerId);
+
     // ============================================================
     // PUBLIC SEARCH
     // ============================================================

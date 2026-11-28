@@ -7,10 +7,16 @@ export default function PaymentSuccessModal({
   onGoToDetail,
 }) {
   const [countdown, setCountdown] = useState(5);
+  const [prevIsOpen, setPrevIsOpen] = useState(isOpen);
+
+  // Reset bộ đếm mỗi khi modal được mở lại (điều chỉnh state trong render thay vì trong effect)
+  if (isOpen !== prevIsOpen) {
+    setPrevIsOpen(isOpen);
+    if (isOpen) setCountdown(5);
+  }
 
   useEffect(() => {
     if (!isOpen) return;
-    setCountdown(5);
     const timer = setInterval(() => {
       setCountdown((prev) => {
         if (prev <= 1) {

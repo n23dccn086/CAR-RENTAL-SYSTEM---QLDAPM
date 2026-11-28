@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import api from '../services/api'
 import HandoverFormModal from '../components/HandoverFormModal'
-import { useDialog } from '../context/DialogContext'
+import { useDialog } from '../context/dialogCore'
 
 export default function OwnerBookingsPage() {
   const { alert: dialogAlert } = useDialog()
@@ -34,48 +34,57 @@ export default function OwnerBookingsPage() {
   const [currentPage, setCurrentPage] = useState(1)
   const ITEMS_PER_PAGE = 10
 
-  const fetchBookings = async () => {
-    setLoading(true)
-    try {
-      const res = await api.get('/bookings/owner')
-      const data = res.data.data || []
-      setBookings(data)
+  // Tải đơn + phân công tài xế + biên bản (state chỉ cập nhật trong callback bất đồng bộ)
+  const loadBookings = () =>
+    api.get('/bookings/owner')
+      .then(async (res) => {
+        const data = res.data.data || []
+        setBookings(data)
 
-      const assignMap = {}
-      const handoverMap = {}
+        const assignMap = {}
+        const handoverMap = {}
 
-      for (const b of data) {
-        if (b.driverId) {
+        for (const b of data) {
+          if (b.driverId) {
+            try {
+              const aRes = await api.get(`/driver/assignments/booking/${b.id}`)
+              const list = aRes.data.data || []
+              if (list.length > 0) assignMap[b.id] = list[0]
+            } catch { /* chưa có phân công → bỏ qua */ }
+          }
+
           try {
-            const aRes = await api.get(`/driver/assignments/booking/${b.id}`)
-            const list = aRes.data.data || []
-            if (list.length > 0) assignMap[b.id] = list[0]
-          } catch (e) {}
+            const hRes = await api.get(`/handovers/booking/${b.id}`)
+            const handoversList = hRes.data.data || []
+            handoverMap[b.id] = {}
+            handoversList.forEach(h => {
+              handoverMap[b.id][h.handoverType] = h
+            })
+          } catch {
+            handoverMap[b.id] = {}
+          }
         }
 
-        try {
-          const hRes = await api.get(`/handovers/booking/${b.id}`)
-          const handoversList = hRes.data.data || []
-          handoverMap[b.id] = {}
-          handoversList.forEach(h => {
-            handoverMap[b.id][h.handoverType] = h
-          })
-        } catch (e) {
-          handoverMap[b.id] = {}
-        }
-      }
+        setAssignments(assignMap)
+        setHandovers(handoverMap)
+      })
+      .catch(err => console.error(err))
+      .finally(() => setLoading(false))
 
-      setAssignments(assignMap)
-      setHandovers(handoverMap)
-    } catch (err) {
-      console.error(err)
-    } finally {
-      setLoading(false)
-    }
+  // Tải lại có hiển thị loading (dùng sau khi tạo biên bản / duyệt / hủy)
+  const fetchBookings = () => {
+    setLoading(true)
+    return loadBookings()
   }
 
-  useEffect(() => { fetchBookings() }, [])
-  useEffect(() => { setCurrentPage(1) }, [filter])
+  useEffect(() => { loadBookings() }, [])
+
+  // Đổi bộ lọc → quay về trang 1
+  const changeFilter = (value) => {
+    if (value === filter) return
+    setFilter(value)
+    setCurrentPage(1)
+  }
 
   const openHandoverModal = (booking, type) => {
     setHandoverModal({ open: true, booking, type })
@@ -194,7 +203,7 @@ export default function OwnerBookingsPage() {
 
       <div style={{ display: 'flex', gap: '12px', marginBottom: '40px', flexWrap: 'wrap' }}>
         {['ALL', 'PENDING', 'PAID', 'APPROVED', 'RENTED', 'RETURNED', 'COMPLETED', 'CANCELLED'].map(s => (
-          <button key={s} onClick={() => setFilter(s)} style={{
+          <button key={s} onClick={() => changeFilter(s)} style={{
             padding: '8px 16px',
             background: filter === s ? 'var(--muc)' : 'transparent',
             color: filter === s ? 'var(--kem)' : 'var(--muc-mo)',

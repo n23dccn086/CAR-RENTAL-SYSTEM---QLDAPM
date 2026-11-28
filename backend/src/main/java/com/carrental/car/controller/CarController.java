@@ -350,6 +350,17 @@ public class CarController {
         return ApiResponse.success("Chặn lịch xe thành công", blockedDate);
     }
 
+    @DeleteMapping("/{id}/blocked-dates/{blockId}")
+    @PreAuthorize("hasAnyRole('OWNER', 'ADMIN')")
+    public ApiResponse<Void> unblockDates(
+            @PathVariable Long id,
+            @PathVariable Long blockId,
+            HttpServletRequest httpRequest) {
+        Long ownerId = extractUserId(httpRequest);
+        carService.unblockDates(id, blockId, ownerId);
+        return ApiResponse.success("Đã gỡ chặn lịch", null);
+    }
+
     // ===== ADMIN =====
 
     @PutMapping("/{id}/approve")

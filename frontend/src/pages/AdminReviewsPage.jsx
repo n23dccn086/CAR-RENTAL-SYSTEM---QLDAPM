@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
 import api from '../services/api'
-import { useDialog } from '../context/DialogContext'
+import { useDialog } from '../context/dialogCore'
 import ReviewThread from '../components/ReviewThread'
 
 export default function AdminReviewsPage() {
@@ -16,26 +16,28 @@ export default function AdminReviewsPage() {
   const [currentPage, setCurrentPage] = useState(1)
   const ITEMS_PER_PAGE = 10
 
-  const fetchReviews = async () => {
-    setLoading(true)
-    try {
-      const res = await api.get('/reviews/all')
-      setReviews(res.data.data || [])
-    } catch (err) {
-      console.error(err)
-      setReviews([])
-    } finally {
-      setLoading(false)
-    }
-  }
-
+  // Tải tất cả đánh giá khi mount (loading đã là true từ state ban đầu)
   useEffect(() => {
-    fetchReviews()
+    api.get('/reviews/all')
+      .then(res => setReviews(res.data.data || []))
+      .catch(err => {
+        console.error(err)
+        setReviews([])
+      })
+      .finally(() => setLoading(false))
   }, [])
 
-  useEffect(() => {
+  // Đổi bộ lọc sao / từ khóa → quay về trang 1
+  const changeStarFilter = (value) => {
+    if (value === starFilter) return
+    setStarFilter(value)
     setCurrentPage(1)
-  }, [starFilter, search])
+  }
+
+  const changeSearch = (value) => {
+    setSearch(value)
+    setCurrentPage(1)
+  }
 
   const showMessage = (text) => {
     setMsg(text)
@@ -197,7 +199,7 @@ export default function AdminReviewsPage() {
           {['ALL', '5', '4', '3', '2', '1'].map(st => (
             <button
               key={st}
-              onClick={() => setStarFilter(st)}
+              onClick={() => changeStarFilter(st)}
               style={{
                 padding: '8px 16px',
                 background: starFilter === st ? 'var(--muc)' : 'transparent',
@@ -219,7 +221,7 @@ export default function AdminReviewsPage() {
             type="text"
             placeholder="Tìm theo xe, khách hàng, nội dung..."
             value={search}
-            onChange={(e) => setSearch(e.target.value)}
+            onChange={(e) => changeSearch(e.target.value)}
             style={{
               padding: '10px 16px',
               border: '1px solid rgba(15,14,12,0.2)',

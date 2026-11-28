@@ -40,10 +40,15 @@ public class CarRequest {
     Integer year;
 
     @NotNull(message = "Số chỗ không được để trống")
-    @Min(value = 2, message = "Số chỗ tối thiểu là 2")
-    @Max(value = 30, message = "Số chỗ tối đa là 30")
     @JsonAlias({"seats"})
     Integer seats;
+
+    /** Phạm vi dự án (In-Scope #1) chỉ nhận xe du lịch 4, 5 và 7 chỗ. */
+    @AssertTrue(message = "Hệ thống chỉ nhận xe 4, 5 hoặc 7 chỗ")
+    @com.fasterxml.jackson.annotation.JsonIgnore
+    public boolean isSeatsSupported() {
+        return seats == null || seats == 4 || seats == 5 || seats == 7;
+    }
 
     @NotNull(message = "Hộp số không được để trống")
     @JsonAlias({"transmission"})

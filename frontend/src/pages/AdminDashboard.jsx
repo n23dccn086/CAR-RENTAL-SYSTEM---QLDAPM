@@ -9,26 +9,22 @@ export default function AdminDashboard() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
+  // Tải số liệu khi mount (loading đã là true từ state ban đầu)
   useEffect(() => {
-    fetchStats();
+    Promise.all([
+      api.get("/admin/dashboard/stats"),
+      api.get("/admin/dashboard/deposits").catch(() => null),
+    ])
+      .then(([res, depRes]) => {
+        setStats(res.data.data);
+        if (depRes?.data?.data) setDeposits(depRes.data.data);
+      })
+      .catch((err) => {
+        console.error("Failed to load stats:", err);
+        setError(err.response?.data?.message || "Không tải được số liệu");
+      })
+      .finally(() => setLoading(false));
   }, []);
-
-  const fetchStats = async () => {
-    setLoading(true);
-    try {
-      const [res, depRes] = await Promise.all([
-        api.get("/admin/dashboard/stats"),
-        api.get("/admin/dashboard/deposits").catch(() => null),
-      ]);
-      setStats(res.data.data);
-      if (depRes?.data?.data) setDeposits(depRes.data.data);
-    } catch (err) {
-      console.error("Failed to load stats:", err);
-      setError(err.response?.data?.message || "Không tải được số liệu");
-    } finally {
-      setLoading(false);
-    }
-  };
 
   const formatPrice = (p) => new Intl.NumberFormat("vi-VN").format(p || 0);
 

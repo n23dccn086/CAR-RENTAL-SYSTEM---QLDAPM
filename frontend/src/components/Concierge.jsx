@@ -20,7 +20,7 @@ export default function Concierge() {
     try {
       const response = await sendChatMessage(input)
       setMessages(prev => [...prev, { role: 'bot', content: response.reply || 'Xin lỗi, tôi không hiểu.' }])
-    } catch (err) {
+    } catch {
       setMessages(prev => [...prev, { role: 'bot', content: 'Xin lỗi, AI đang bận. Thử lại sau ạ.' }])
     } finally {
       setLoading(false)

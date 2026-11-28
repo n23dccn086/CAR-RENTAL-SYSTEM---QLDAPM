@@ -24,11 +24,8 @@ public class PricingService {
 
     ConfigHelper configHelper;      // ← THÊM: inject helper đọc config
 
-    // Giá bảo hiểm mỗi ngày (VND) — vẫn hardcode, chưa có config
-    private static final long INSURANCE_FEE_PER_DAY = 100_000L;
-
-    // Phí tài xế mỗi ngày (VND) — vẫn hardcode
-    private static final long DRIVER_FEE_PER_DAY = 500_000L;
+    // Phí bảo hiểm / phí tài xế mỗi ngày: đọc từ platform_config (insurance_fee_per_day, driver_fee_per_day),
+    // Admin chỉnh được trong trang Cấu hình (V38).
 
     // Số ngày tối thiểu
     private static final int MIN_RENTAL_DAYS = 1;
@@ -42,22 +39,25 @@ public class PricingService {
 
         int rentalDays = calculateRentalDays(request.getStartDate(), request.getEndDate());
 
+        // Tính giá TỪNG ngày thuê: ngày rơi vào T7/CN dùng giá cuối tuần, còn lại giá thường.
+        // (Trước đây lấy giá của ngày nhận xe nhân cho cả đơn → thuê T6→T2 bị tính toàn giá thường,
+        //  thuê T7→T4 bị tính toàn giá cuối tuần.)
+        long rentalFee = calculateRentalFee(car, request.getStartDate(), rentalDays);
         long pricePerDay = getPricePerDay(car, request.getStartDate());
-        long rentalFee = pricePerDay * rentalDays;
 
         long deliveryFee = Boolean.TRUE.equals(request.getDeliveryRequired())
                 ? (car.getDeliveryFee() != null ? car.getDeliveryFee() : 0L)
                 : 0L;
 
         long insuranceFee = Boolean.TRUE.equals(request.getHasInsurance())
-                ? INSURANCE_FEE_PER_DAY * rentalDays
+                ? configHelper.getInsuranceFeePerDay() * rentalDays
                 : 0L;
 
         long driverFee = 0L;
         if (request.getRentalMode() == RentalMode.WITH_DRIVER
                 || request.getRentalMode() == RentalMode.BOTH) {
             if (Boolean.TRUE.equals(request.getHasDriver())) {
-                driverFee = DRIVER_FEE_PER_DAY * rentalDays;
+                driverFee = configHelper.getDriverFeePerDay() * rentalDays;
             }
         }
 
@@ -125,7 +125,18 @@ public class PricingService {
     }
 
     /**
-     * Lấy giá thuê theo ngày (xử lý giá cuối tuần, lễ)
+     * Tổng tiền thuê = tổng đơn giá của từng ngày (ngày thứ i bắt đầu tại start + i×24h).
+     */
+    long calculateRentalFee(Car car, LocalDateTime startDate, int rentalDays) {
+        long total = 0L;
+        for (int i = 0; i < rentalDays; i++) {
+            total += getPricePerDay(car, startDate.plusDays(i));
+        }
+        return total;
+    }
+
+    /**
+     * Đơn giá của 1 ngày thuê: giá cuối tuần nếu ngày đó là T7/CN và xe có cấu hình giá cuối tuần.
      */
     private long getPricePerDay(Car car, LocalDateTime startDate) {
         int dayOfWeek = startDate.getDayOfWeek().getValue();

@@ -19,6 +19,7 @@ export default function CarEditPage() {
     fuelType: 'GASOLINE',
     currentKm: 0,
     pricePerDay: 1000000,
+    priceWeekend: '',
     carType: 'SEDAN',
     rentalMode: 'BOTH',
     address: '',
@@ -35,6 +36,44 @@ export default function CarEditPage() {
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
 
+  // ★ Lịch chặn (bảo dưỡng / dùng riêng) — server từ chối đặt xe trùng các khoảng này
+  const [blocks, setBlocks] = useState([])
+  const [blockForm, setBlockForm] = useState({ startDate: '', endDate: '', reason: 'maintenance', note: '' })
+  const [blockError, setBlockError] = useState('')
+  const [blockSaving, setBlockSaving] = useState(false)
+
+  const addBlock = async () => {
+    setBlockError('')
+    if (!blockForm.startDate || !blockForm.endDate) return setBlockError('Chọn ngày bắt đầu và ngày kết thúc')
+    if (blockForm.endDate < blockForm.startDate) return setBlockError('Ngày kết thúc phải sau hoặc bằng ngày bắt đầu')
+    setBlockSaving(true)
+    try {
+      const res = await api.post(`/cars/${id}/blocked-dates`, {
+        start_date: blockForm.startDate,
+        end_date: blockForm.endDate,
+        reason: blockForm.reason,
+        note: blockForm.note?.trim() || null,
+      })
+      const b = res.data.data
+      setBlocks(prev => [...prev, { id: b.id, start_date: b.startDate, end_date: b.endDate, reason: b.reason, note: b.note }])
+      setBlockForm({ startDate: '', endDate: '', reason: 'maintenance', note: '' })
+    } catch (err) {
+      setBlockError(err.response?.data?.message || 'Không chặn được lịch')
+    } finally {
+      setBlockSaving(false)
+    }
+  }
+
+  const removeBlock = async (blockId) => {
+    setBlockError('')
+    try {
+      await api.delete(`/cars/${id}/blocked-dates/${blockId}`)
+      setBlocks(prev => prev.filter(b => b.id !== blockId))
+    } catch (err) {
+      setBlockError(err.response?.data?.message || 'Không gỡ được lịch chặn')
+    }
+  }
+
   useEffect(() => {
     getCarById(id)
       .then(res => {
@@ -50,11 +89,14 @@ export default function CarEditPage() {
           fuelType: c.fuelType || 'GASOLINE',
           currentKm: c.currentKm || 0,
           pricePerDay: c.pricePerDay || 1000000,
+          // API trả price_weekend = giá thường khi chưa cấu hình → chỉ hiện khi khác giá thường
+          priceWeekend: c.priceWeekend && c.priceWeekend !== c.pricePerDay ? c.priceWeekend : '',
           carType: c.carType || 'SEDAN',
           rentalMode: c.rentalMode || 'BOTH',
           address: c.address || '',
           description: c.description || ''
         })
+        setBlocks((c.blockedDates || c.blockedDatesList || []).filter(b => b.id != null))
         // Lấy ảnh đầu tiên nếu có
         if (c.imageUrls && c.imageUrls.length > 0) {
           setExistingImage(c.imageUrls[0])
@@ -68,7 +110,7 @@ export default function CarEditPage() {
 
   const handleChange = (e) => {
     const { name, value } = e.target
-    const numberFields = ['year', 'seats', 'currentKm', 'pricePerDay']
+    const numberFields = ['year', 'seats', 'currentKm', 'pricePerDay', 'priceWeekend']
     setForm({ ...form, [name]: numberFields.includes(name) ? (value === '' ? '' : Number(value)) : value })
   }
 
@@ -120,6 +162,8 @@ export default function CarEditPage() {
         color: form.color?.trim() || null,
         currentKm: form.currentKm ? Number(form.currentKm) : 0,
         pricePerDay: Number(form.pricePerDay),
+        // 0 = bỏ giá cuối tuần (PricingService chỉ dùng giá cuối tuần khi > 0)
+        priceWeekend: form.priceWeekend ? Number(form.priceWeekend) : 0,
         carType: form.carType,
         rentalMode: form.rentalMode,
         address: form.address?.trim() || null,
@@ -286,9 +330,18 @@ export default function CarEditPage() {
             </select>
           </div>
 
-          <FormInput label="Số chỗ" name="seats" type="number" value={form.seats} onChange={handleChange} required />
+          <div>
+            <label style={labelStyle}>Số chỗ *</label>
+            {/* Phạm vi dự án: chỉ xe 4, 5, 7 chỗ (khớp validate backend CarRequest) */}
+            <select name="seats" value={form.seats} onChange={handleChange} style={inputStyle} required>
+              <option value="4">4 chỗ</option>
+              <option value="5">5 chỗ</option>
+              <option value="7">7 chỗ</option>
+            </select>
+          </div>
           <FormInput label="Số km hiện tại" name="currentKm" type="number" value={form.currentKm} onChange={handleChange} />
           <FormInput label="Giá thuê / ngày (VNĐ)" name="pricePerDay" type="number" value={form.pricePerDay} onChange={handleChange} required />
+          <FormInput label="Giá cuối tuần T7/CN (VNĐ, tùy chọn)" name="priceWeekend" type="number" value={form.priceWeekend} onChange={handleChange} placeholder="Để trống = giá ngày thường" />
           <FormInput label="Địa chỉ" name="address" value={form.address} onChange={handleChange} />
 
           <div>
@@ -338,6 +391,45 @@ export default function CarEditPage() {
           </button>
         </div>
       </form>
+
+      {/* ★ LỊCH CHẶN */}
+      <div style={{ marginTop: '48px', paddingTop: '32px', borderTop: '1px solid rgba(15,14,12,0.15)' }}>
+        <label style={labelStyle}>Chặn lịch xe (bảo dưỡng / dùng riêng)</label>
+        <p style={{ fontFamily: 'var(--serif-2)', fontStyle: 'italic', color: 'var(--muc-mo)', marginBottom: '16px' }}>
+          Khách sẽ không đặt được xe trong các ngày này (tính cả ngày đầu và ngày cuối).
+        </p>
+        {blocks.length === 0 ? (
+          <p style={{ fontFamily: 'var(--serif-2)', color: 'var(--muc-mo)', marginBottom: '16px' }}>Chưa có lịch chặn.</p>
+        ) : (
+          <ul style={{ listStyle: 'none', padding: 0, marginBottom: '16px' }}>
+            {blocks.map(b => (
+              <li key={b.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px', padding: '10px 14px', background: 'var(--kem-dam)', border: '1px solid rgba(15,14,12,0.15)', marginBottom: '8px', fontFamily: 'var(--serif-2)' }}>
+                <span>
+                  <strong>{b.start_date}</strong> → <strong>{b.end_date}</strong>
+                  {' · '}{b.reason === 'personal' ? 'Dùng riêng' : 'Bảo dưỡng'}
+                  {b.note ? ` · ${b.note}` : ''}
+                </span>
+                <button type="button" onClick={() => removeBlock(b.id)} style={{ background: 'transparent', border: '1px solid var(--do)', color: 'var(--do)', padding: '6px 12px', fontFamily: 'var(--mono)', fontSize: '10px', letterSpacing: '1px', textTransform: 'uppercase', cursor: 'pointer' }}>
+                  Gỡ chặn
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '12px' }}>
+          <input type="date" value={blockForm.startDate} onChange={e => setBlockForm({ ...blockForm, startDate: e.target.value })} style={inputStyle} aria-label="Ngày bắt đầu" />
+          <input type="date" value={blockForm.endDate} onChange={e => setBlockForm({ ...blockForm, endDate: e.target.value })} style={inputStyle} aria-label="Ngày kết thúc" />
+          <select value={blockForm.reason} onChange={e => setBlockForm({ ...blockForm, reason: e.target.value })} style={inputStyle}>
+            <option value="maintenance">Bảo dưỡng</option>
+            <option value="personal">Dùng riêng</option>
+          </select>
+        </div>
+        <input type="text" placeholder="Ghi chú (tùy chọn)" value={blockForm.note} onChange={e => setBlockForm({ ...blockForm, note: e.target.value })} style={{ ...inputStyle, marginTop: '12px' }} />
+        {blockError && <p style={{ color: 'var(--do)', fontFamily: 'var(--serif-2)', fontStyle: 'italic', marginTop: '8px' }}>{blockError}</p>}
+        <button type="button" onClick={addBlock} disabled={blockSaving} className="btn-login" style={{ marginTop: '12px', justifyContent: 'center', padding: '12px 24px' }}>
+          <span>{blockSaving ? 'Đang lưu...' : '+ Thêm lịch chặn'}</span>
+        </button>
+      </div>
     </div>
   )
 }

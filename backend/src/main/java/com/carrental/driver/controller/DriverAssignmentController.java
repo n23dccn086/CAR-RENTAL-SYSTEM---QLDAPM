@@ -4,7 +4,10 @@ import com.carrental.booking.entity.Booking;
 import com.carrental.booking.repository.BookingRepository;
 import com.carrental.car.entity.Car;
 import com.carrental.car.repository.CarRepository;
+import com.carrental.common.constant.ErrorCode;
 import com.carrental.common.dto.ApiResponse;
+import com.carrental.common.exception.ResourceNotFoundException;
+import com.carrental.common.exception.UnauthorizedException;
 import com.carrental.driver.dto.DriverAssignmentResponse;
 import com.carrental.driver.entity.Driver;
 import com.carrental.driver.entity.DriverAssignment;
@@ -90,14 +93,17 @@ public class DriverAssignmentController {
      */
     @PostMapping("/booking/{bookingId}/auto-assign")
     public ApiResponse<DriverAssignmentResponse> autoAssign(
-            @PathVariable Long bookingId) {
+            @PathVariable Long bookingId,
+            @RequestAttribute(name = "userId", required = false) Long userId,
+            @RequestAttribute(name = "role", required = false) String role) {
         log.info("AUTO-ASSIGN for booking: {}", bookingId);
+        requireOwnerOrAdmin(bookingId, userId, role);
         DriverAssignment assignment = assignmentService.assignDriverToBooking(bookingId);
         if (assignment == null) {
             return ApiResponse.error(9002,
                     "Không có tài xế rảnh. Vui lòng gán thủ công.");
         }
-        return ApiResponse.success("Đã gán tài xế", buildResponse(assignment));
+        return ApiResponse.success("Đã gán tài xế", withoutToken(buildResponse(assignment)));
     }
 
     /**
@@ -106,13 +112,41 @@ public class DriverAssignmentController {
      */
     @GetMapping("/booking/{bookingId}")
     public ApiResponse<List<DriverAssignmentResponse>> getByBooking(
-            @PathVariable Long bookingId) {
+            @PathVariable Long bookingId,
+            @RequestAttribute(name = "userId", required = false) Long userId,
+            @RequestAttribute(name = "role", required = false) String role) {
         log.info("GET assignments by booking: {}", bookingId);
+        requireOwnerOrAdmin(bookingId, userId, role);
         List<DriverAssignment> list = assignmentService.getAssignmentsByBooking(bookingId);
         List<DriverAssignmentResponse> responses = list.stream()
                 .map(this::buildResponse)
+                .map(this::withoutToken)
                 .toList();
         return ApiResponse.success(responses);
+    }
+
+    /**
+     * Nhóm /driver/assignments/** nằm trong filter chain public (để magic link chạy không cần login),
+     * nên các API dành cho chủ xe phải tự kiểm tra: có JWT và là chủ của đơn (hoặc ADMIN).
+     */
+    private void requireOwnerOrAdmin(Long bookingId, Long userId, String role) {
+        if (userId == null) {
+            throw new UnauthorizedException(ErrorCode.UNAUTHENTICATED);
+        }
+        if ("ADMIN".equals(role)) {
+            return;
+        }
+        Booking booking = bookingRepository.findById(bookingId)
+                .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.BOOKING_NOT_FOUND));
+        if (!userId.equals(booking.getOwnerId())) {
+            throw new UnauthorizedException(ErrorCode.PERMISSION_DENIED);
+        }
+    }
+
+    /** Magic-link token chỉ được gửi cho tài xế qua SMS, không trả về cho API của chủ xe. */
+    private DriverAssignmentResponse withoutToken(DriverAssignmentResponse response) {
+        response.setToken(null);
+        return response;
     }
 
     // ===== HELPER =====

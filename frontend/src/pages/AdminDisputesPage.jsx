@@ -1,6 +1,6 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import api from "../services/api";
-import { useDialog } from "../context/DialogContext";
+import { useDialog } from "../context/dialogCore";
 
 export default function AdminDisputesPage() {
   const { confirm, prompt, alert: dialogAlert } = useDialog();
@@ -25,27 +25,35 @@ export default function AdminDisputesPage() {
   const [resolveError, setResolveError] = useState("");
   const [resolveSubmitting, setResolveSubmitting] = useState(false);
 
-  const fetchDisputes = async () => {
+  // Tải danh sách khiếu nại theo bộ lọc (state chỉ cập nhật trong callback bất đồng bộ)
+  const loadDisputes = useCallback(() => {
+    const params = filter ? { status: filter } : {};
+    return api
+      .get("/admin/disputes", { params })
+      .then((res) => {
+        setDisputes(Array.isArray(res.data.data) ? res.data.data : (res.data.data?.disputes || []));
+      })
+      .catch((err) => console.error(err))
+      .finally(() => setLoading(false));
+  }, [filter]);
+
+  // Tải lại có hiển thị loading (dùng sau các thao tác xử lý)
+  const fetchDisputes = () => {
     setLoading(true);
-    try {
-      const params = filter ? { status: filter } : {};
-      const res = await api.get("/admin/disputes", { params });
-      setDisputes(Array.isArray(res.data.data) ? res.data.data : (res.data.data?.disputes || []));
-    } catch (err) {
-      console.error(err);
-    } finally {
-      setLoading(false);
-    }
+    return loadDisputes();
   };
 
   useEffect(() => {
-    fetchDisputes();
-  }, [filter]);
+    loadDisputes();
+  }, [loadDisputes]);
 
-  // Reset page khi filter đổi
-  useEffect(() => {
+  // Đổi filter → hiển thị loading và reset về trang 1
+  const changeFilter = (value) => {
+    if (value === filter) return;
+    setLoading(true);
+    setFilter(value);
     setCurrentPage(1);
-  }, [filter]);
+  };
 
   const showMessage = (msg) => {
     setMessage(msg);
@@ -233,7 +241,7 @@ export default function AdminDisputesPage() {
     try {
       const parsed = JSON.parse(raw);
       return Array.isArray(parsed) ? parsed : [];
-    } catch (e) {
+    } catch {
       return [];
     }
   };
@@ -332,7 +340,7 @@ export default function AdminDisputesPage() {
         ].map((opt) => (
           <button
             key={opt.v}
-            onClick={() => setFilter(opt.v)}
+            onClick={() => changeFilter(opt.v)}
             style={{
               padding: "8px 16px",
               background: filter === opt.v ? "var(--muc)" : "transparent",
@@ -381,13 +389,13 @@ export default function AdminDisputesPage() {
               let files = [];
               try {
                 files = d.evidence ? JSON.parse(d.evidence) : [];
-              } catch (e) {}
+              } catch { /* JSON không hợp lệ → giữ mảng rỗng */ }
               let counterFiles = [];
               try {
                 counterFiles = d.counterEvidence
                   ? JSON.parse(d.counterEvidence)
                   : [];
-              } catch (e) {}
+              } catch { /* JSON không hợp lệ → giữ mảng rỗng */ }
 
               const history = parseHistory(d.evidenceHistory);
 
@@ -1169,13 +1177,13 @@ function DetailModal({
   let files = [];
   try {
     files = dispute.evidence ? JSON.parse(dispute.evidence) : [];
-  } catch (e) {}
+  } catch { /* JSON không hợp lệ → giữ mảng rỗng */ }
   let counterFiles = [];
   try {
     counterFiles = dispute.counterEvidence
       ? JSON.parse(dispute.counterEvidence)
       : [];
-  } catch (e) {}
+  } catch { /* JSON không hợp lệ → giữ mảng rỗng */ }
 
   const formatPrice = (p) => new Intl.NumberFormat("vi-VN").format(p || 0);
   const formatDate = (d) =>
@@ -1194,7 +1202,7 @@ function DetailModal({
     try {
       const parsed = JSON.parse(raw);
       return Array.isArray(parsed) ? parsed : [];
-    } catch (e) {
+    } catch {
       return [];
     }
   };

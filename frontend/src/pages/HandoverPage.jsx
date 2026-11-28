@@ -40,36 +40,39 @@ export default function HandoverPage() {
   const backInfo = getBackInfo()
 
   // ===== LOAD =====
-  useEffect(() => {
-    loadHandover()
-  }, [id])
-
-  const loadHandover = async () => {
+  // Đổi biên bản (id trên URL) → hiển thị lại loading (điều chỉnh state trong render thay vì trong effect)
+  const [loadedForId, setLoadedForId] = useState(id)
+  if (id !== loadedForId) {
+    setLoadedForId(id)
     setLoading(true)
-    try {
-      const res = await getHandoverById(id)
-      const data = res.data
-      setHandover(data)
+  }
 
-      if (data?.bookingId) {
-        try {
-          const [bRes, pRes] = await Promise.all([
+  useEffect(() => {
+    getHandoverById(id)
+      .then(res => {
+        const data = res.data
+        setHandover(data)
+
+        if (data?.bookingId) {
+          return Promise.all([
             getBookingById(data.bookingId).catch(() => null),
             api.get(`/payments/booking/${data.bookingId}`).catch(() => null),
           ])
-          const bData = bRes?.data?.data || bRes?.data || bRes
-          if (bData && (bData.id || bData.status)) setBooking(bData)
-          if (pRes?.data?.data) setPayments(pRes.data.data)
-        } catch (e) {
-          console.warn("Could not load booking or payment details", e)
+            .then(([bRes, pRes]) => {
+              const bData = bRes?.data?.data || bRes?.data || bRes
+              if (bData && (bData.id || bData.status)) setBooking(bData)
+              if (pRes?.data?.data) setPayments(pRes.data.data)
+            })
+            .catch(e => {
+              console.warn("Could not load booking or payment details", e)
+            })
         }
-      }
-    } catch (err) {
-      setError(err.response?.data?.message || 'Không tải được biên bản')
-    } finally {
-      setLoading(false)
-    }
-  }
+      })
+      .catch(err => {
+        setError(err.response?.data?.message || 'Không tải được biên bản')
+      })
+      .finally(() => setLoading(false))
+  }, [id])
 
   // ===== KÝ =====
   const handleSign = async (role) => {

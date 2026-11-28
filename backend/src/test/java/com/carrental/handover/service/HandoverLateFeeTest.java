@@ -133,4 +133,15 @@ class HandoverLateFeeTest {
         when(handoverRepository.findByBookingIdAndHandoverType(18L, "PICKUP")).thenReturn(Optional.empty());
         assertNull(ReflectionTestUtils.invokeMethod(service, "calculateReturnKmOverage", booking, 10_420));
     }
+
+    @Test
+    @DisplayName("LF6 - Trễ nhiều ngày: mỗi 24h trọn vẹn = 120% đơn giá, phần lẻ theo bảng mốc")
+    void multiDayLateFeeScales() {
+        // 2 ngày trọn = 2 × 840.000
+        assertEquals(1_680_000L, lateFee(END.plusDays(2)));
+        // 2 ngày + 5h lẻ = 2 × 840.000 + 1 ngày (≥ 4h)
+        assertEquals(1_680_000L + 700_000L, lateFee(END.plusDays(2).plusHours(5)));
+        // 5 ngày + 30 phút lẻ = 5 × 840.000 + phí 1 giờ
+        assertEquals(5 * 840_000L + 100_000L, lateFee(END.plusDays(5).plusMinutes(30)));
+    }
 }

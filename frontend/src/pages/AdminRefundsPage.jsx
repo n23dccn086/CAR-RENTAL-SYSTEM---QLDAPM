@@ -1,7 +1,7 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { Link } from 'react-router-dom'
 import api from '../services/api'
-import { useDialog } from '../context/DialogContext'
+import { useDialog } from '../context/dialogCore'
 
 export default function AdminRefundsPage() {
   const { confirm, prompt, alert: dialogAlert } = useDialog()
@@ -18,40 +18,47 @@ export default function AdminRefundsPage() {
   // Phân trang
   const [currentPage, setCurrentPage] = useState(0)
   const [totalPages, setTotalPages] = useState(0)
-  const [totalElements, setTotalElements] = useState(0)
   const PAGE_SIZE = 10
 
-  const fetchRefunds = async () => {
-    setLoading(true)
-    try {
-      const params = {
-        page: currentPage,
-        size: PAGE_SIZE,
-      }
-      if (filter) params.status = filter
-
-      const res = await api.get('/admin/refunds', { params })
-      const pageData = res.data.data || {}
-      setRefunds(pageData.content || [])
-      setTotalPages(pageData.totalPages || 0)
-      setTotalElements(pageData.totalElements || 0)
-    } catch (err) {
-      console.error(err)
-      setRefunds([])
-      setTotalPages(0)
-      setTotalElements(0)
-    } finally {
-      setLoading(false)
+  // Tải danh sách hoàn tiền theo filter + trang (state chỉ cập nhật trong callback bất đồng bộ)
+  const loadRefunds = useCallback(() => {
+    const params = {
+      page: currentPage,
+      size: PAGE_SIZE,
     }
+    if (filter) params.status = filter
+
+    return api.get('/admin/refunds', { params })
+      .then(res => {
+        const pageData = res.data.data || {}
+        setRefunds(pageData.content || [])
+        setTotalPages(pageData.totalPages || 0)
+      })
+      .catch(err => {
+        console.error(err)
+        setRefunds([])
+        setTotalPages(0)
+      })
+      .finally(() => setLoading(false))
+  }, [filter, currentPage])
+
+  // Tải lại có hiển thị loading (dùng sau các thao tác duyệt / từ chối)
+  const fetchRefunds = () => {
+    setLoading(true)
+    return loadRefunds()
   }
 
   useEffect(() => {
-    fetchRefunds()
-  }, [filter, currentPage])
+    loadRefunds()
+  }, [loadRefunds])
 
-  useEffect(() => {
+  // Đổi filter → hiển thị loading và quay về trang đầu
+  const changeFilter = (value) => {
+    if (value === filter) return
+    setLoading(true)
+    setFilter(value)
     setCurrentPage(0)
-  }, [filter])
+  }
 
   const showMessage = (msg) => {
     setMsg(msg)
@@ -160,7 +167,8 @@ export default function AdminRefundsPage() {
   }
 
   const goToPage = (p) => {
-    if (p >= 0 && p < totalPages) {
+    if (p >= 0 && p < totalPages && p !== currentPage) {
+      setLoading(true)
       setCurrentPage(p)
     }
   }
@@ -233,7 +241,7 @@ export default function AdminRefundsPage() {
         ].map(opt => (
           <button
             key={opt.v}
-            onClick={() => setFilter(opt.v)}
+            onClick={() => changeFilter(opt.v)}
             style={{
               padding: '8px 16px',
               background: filter === opt.v ? 'var(--muc)' : 'transparent',

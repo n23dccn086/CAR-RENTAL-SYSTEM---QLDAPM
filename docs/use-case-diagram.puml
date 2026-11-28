@@ -1,0 +1,203 @@
+@startuml use-case-diagram
+' =============================================================================
+' CAR RENTAL SYSTEM — Sơ đồ Use Case tổng quát (khớp docs/srs.md, mục 4)
+' Trạng thái: (không ghi chú) = Hoàn thiện, <<MVP>> = MVP, <<Đặc tả>> = chỉ đặc tả
+' Tài xế KHÔNG có tài khoản web: chỉ thao tác qua Magic Link (SMS giả lập).
+' =============================================================================
+left to right direction
+skinparam shadowing false
+skinparam defaultFontName Arial
+skinparam packageStyle rectangle
+skinparam usecase {
+  BackgroundColor #FFFFFF
+  BorderColor #444444
+  BackgroundColor<<MVP>> #FFF4D6
+  BorderColor<<MVP>> #C98A00
+  BackgroundColor<<Đặc tả>> #EEEEEE
+  BorderColor<<Đặc tả>> #888888
+}
+
+actor "Khách vãng lai\n(Guest)" as Guest
+actor "Khách hàng\n(Customer)" as Customer
+actor "Chủ xe\n(Owner)" as Owner
+actor "Tài xế\n(Magic Link)" as Driver
+actor "Quản trị viên\n(Admin)" as Admin
+actor "AI Concierge" as AI <<system>>
+actor "Bộ lập lịch\n(Scheduler + Redis)" as Scheduler <<system>>
+actor "Cổng MoMo\n(sandbox / mock)" as MoMo <<external>>
+actor "Google Gemini" as Gemini <<external>>
+
+Guest <|-- Customer
+Customer <|-- Owner
+
+rectangle "Car Rental System" {
+
+  package "Tài khoản & dùng chung" {
+    usecase "UC-C01 Đăng ký tài khoản" as C01
+    usecase "UC-C02 Đăng nhập / đăng xuất" as C02
+    usecase "UC-C14 Quên mật khẩu bằng OTP" as C14
+    usecase "UC-C15 Cập nhật hồ sơ & đổi mật khẩu" as C15
+    usecase "UC-C19 Trung tâm thông báo" as C19
+  }
+
+  package "Khách hàng" {
+    usecase "UC-C03 Xác thực KYC (5 ảnh)" as C03
+    usecase "UC-C04 Tìm kiếm xe" as C04
+    usecase "UC-C05 Xem chi tiết xe" as C05
+    usecase "UC-C06 Đặt xe & báo giá" as C06
+    usecase "UC-C07 Thanh toán cọc" as C07 <<MVP>>
+    usecase "UC-C08 Quản lý đơn thuê" as C08
+    usecase "UC-C09 Ký biên bản bàn giao số" as C09
+    usecase "UC-C10 Đánh giá sau chuyến (CSAT)" as C10
+    usecase "UC-C11 Hủy đơn & hoàn cọc" as C11
+    usecase "UC-C12 Tính phí vượt giờ" as C12
+    usecase "UC-C13 Tính phí vượt km" as C13
+    usecase "UC-C16 Thanh toán quyết toán" as C16 <<MVP>>
+    usecase "UC-C17 Khiếu nại / phản tố tranh chấp\n(phía khách)" as C17
+    usecase "UC-C18 Trả lời phản hồi đánh giá" as C18
+  }
+
+  package "Chủ xe" {
+    usecase "UC-O01 Đăng ký làm chủ xe" as O01
+    usecase "UC-O02 Quản lý xe (CRUD)" as O02
+    usecase "UC-O03 Upload giấy tờ xe" as O03 <<MVP>>
+    usecase "UC-O04 Cấu hình giá & chặn lịch" as O04
+    usecase "UC-O05 Duyệt / từ chối đơn" as O05
+    usecase "UC-O06 Lập & cập nhật biên bản bàn giao" as O06
+    usecase "UC-O07 Bảng điều khiển doanh thu" as O07
+    usecase "UC-O08 Yêu cầu rút tiền" as O08
+    usecase "UC-O09 Quản lý tài xế (CRUD)" as O09
+    usecase "UC-O10 Phân công tài xế qua Magic Link" as O10
+    usecase "UC-O11 Import xe từ Excel" as O11
+    usecase "UC-O12 Import tài xế từ Excel" as O12
+    usecase "UC-O13 Phản hồi đánh giá" as O13
+    usecase "UC-O14 Khiếu nại / phản tố tranh chấp\n(phía chủ xe)" as O14
+  }
+
+  package "Tài xế" {
+    usecase "UC-D01 Truy cập bằng Magic Link" as D01
+    usecase "UC-D02 Xem lịch chạy" as D02 <<MVP>>
+    usecase "UC-D03 Nhận / từ chối chuyến" as D03
+    usecase "UC-D04 Báo sự cố" as D04 <<Đặc tả>>
+    usecase "UC-D05 Xem thu nhập" as D05 <<Đặc tả>>
+  }
+
+  package "Trợ lý AI" {
+    usecase "UC-AI01 Gợi ý xe" as AI01 <<MVP>>
+    usecase "UC-AI02 Tư vấn thủ tục (RAG)" as AI02
+    usecase "UC-AI03 Tra cứu đơn / số liệu qua JWT" as AI03
+    usecase "UC-AI04 Hướng dẫn xử lý sự cố" as AI04 <<MVP>>
+  }
+
+  package "Quản trị" {
+    usecase "UC-AD01 Duyệt xe & KYC" as AD01
+    usecase "UC-AD02 Giải quyết tranh chấp & hoàn cọc" as AD02
+    usecase "UC-AD03 Cấu hình biểu phí" as AD03
+    usecase "UC-AD04 Dashboard doanh thu" as AD04
+    usecase "UC-AD05 Duyệt rút tiền" as AD05
+    usecase "UC-AD06 Quản lý người dùng" as AD06
+    usecase "UC-AD07 Kiểm duyệt đánh giá" as AD07
+    usecase "UC-AD08 Theo dõi quỹ cọc tạm giữ" as AD08
+    usecase "UC-AD09 Duyệt hồ sơ chủ xe" as AD09
+    usecase "UC-AD10 Duyệt & khóa tài xế" as AD10
+  }
+}
+
+' ----------------------------- Khách vãng lai -------------------------------
+Guest --> C01
+Guest --> C02
+Guest --> C14
+Guest --> C04
+Guest --> C05
+Guest --> AI01
+Guest --> AI02
+
+' ----------------------------- Khách hàng -----------------------------------
+Customer --> C03
+Customer --> C06
+Customer --> C07
+Customer --> C08
+Customer --> C09
+Customer --> C10
+Customer --> C11
+Customer --> C15
+Customer --> C16
+Customer --> C17
+Customer --> C18
+Customer --> C19
+Customer --> AI03
+Customer --> AI04
+Customer --> O01
+
+' ----------------------------- Chủ xe ---------------------------------------
+Owner --> O02
+Owner --> O03
+Owner --> O04
+Owner --> O05
+Owner --> O06
+Owner --> O07
+Owner --> O08
+Owner --> O09
+Owner --> O10
+Owner --> O11
+Owner --> O12
+Owner --> O13
+Owner --> O14
+
+' ----------------------------- Tài xế ---------------------------------------
+Driver --> D01
+Driver --> D02
+Driver --> D03
+Driver --> D04
+Driver --> D05
+
+' ----------------------------- Admin ----------------------------------------
+Admin --> C02
+Admin --> C19
+Admin --> AI03
+Admin --> AD01
+Admin --> AD02
+Admin --> AD03
+Admin --> AD04
+Admin --> AD05
+Admin --> AD06
+Admin --> AD07
+Admin --> AD08
+Admin --> AD09
+Admin --> AD10
+
+' ----------------------------- Tác nhân hệ thống ----------------------------
+AI01 --> AI
+AI02 --> AI
+AI03 --> AI
+AI04 --> AI
+AI --> Gemini
+C07 --> MoMo
+C16 --> MoMo
+Scheduler --> C11 : tự hủy đơn quá hạn\n(PENDING 12h / PAID 4h)
+Scheduler --> O10 : hết hạn 3h → gán tài xế kế tiếp
+Scheduler --> AD02 : hạn phản tố 48h / bổ sung 24h
+
+' ----------------------------- include / extend -----------------------------
+C06 ..> C03 : <<include>>\n(thuê tự lái)
+C06 ..> C05 : <<include>>
+C07 ..> C06 : <<extend>>
+O06 ..> C12 : <<include>>\n(biên bản RETURN)
+O06 ..> C13 : <<include>>\n(biên bản RETURN)
+C10 ..> C08 : <<extend>>\n(đơn COMPLETED)
+C18 ..> O13 : <<extend>>
+O05 ..> O10 : <<include>>\n(đơn có tài xế)
+O10 ..> D01 : <<include>>
+D03 ..> D01 : <<include>>
+D02 ..> D01 : <<include>>
+C11 ..> AD02 : <<include>>\n(Admin duyệt hoàn cọc)
+C17 ..> AD02 : <<include>>
+O14 ..> AD02 : <<include>>
+O01 ..> AD09 : <<include>>
+O02 ..> AD01 : <<include>>\n(xe mới chờ duyệt)
+O09 ..> AD10 : <<include>>
+O08 ..> AD05 : <<include>>
+O11 ..> O02 : <<extend>>
+O12 ..> O09 : <<extend>>
+
+@enduml

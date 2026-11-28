@@ -1,8 +1,6 @@
 export default function CarSVG({ type = 'SEDAN', color = '#8b2c2c', hover = false }) {
   const bodyColor = color
   const darkColor = '#0f0e0c'
-  const windowColor = '#a8c5d6'
-  const wheelColor = '#2a2825'
   const rimColor = '#c9a961'
 
   // Chiều cao khác nhau tùy loại xe

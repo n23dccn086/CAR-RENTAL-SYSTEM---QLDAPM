@@ -45,6 +45,11 @@ public class DriverAssignmentServiceImpl implements DriverAssignmentService {
 
     static final int RESPONSE_TIMEOUT_HOURS = 3;
 
+    /** Địa chỉ frontend để dựng Magic Link (biến môi trường FRONTEND_URL). */
+    @lombok.experimental.NonFinal
+    @org.springframework.beans.factory.annotation.Value("${app.frontend-url:http://localhost:5173}")
+    String frontendUrl = "http://localhost:5173";
+
     // ===== ASSIGN (AUTO) =====
 
     @Override
@@ -611,8 +616,8 @@ public class DriverAssignmentServiceImpl implements DriverAssignmentService {
         String carInfo = car != null ? car.getBrand() + " " + car.getModel() : "Xe";
 
         String magicLink = String.format(
-                "http://localhost:5173/driver/assignment/%d?token=%s",
-                assignment.getId(), assignment.getToken()
+                "%s/driver/assignment/%d?token=%s",
+                frontendUrl, assignment.getId(), assignment.getToken()
         );
 
         String message = String.format(

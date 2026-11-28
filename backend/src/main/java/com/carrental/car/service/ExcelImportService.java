@@ -118,7 +118,7 @@ public class ExcelImportService {
         if (brand == null || brand.isBlank()) throw new RuntimeException("Hãng trống");
         if (model == null || model.isBlank()) throw new RuntimeException("Model trống");
         if (year == null || year < 1990 || year > 2100) throw new RuntimeException("Năm SX không hợp lệ");
-        if (seats == null || seats < 2 || seats > 30) throw new RuntimeException("Số chỗ không hợp lệ (2-30)");
+        if (seats == null || (seats != 4 && seats != 5 && seats != 7)) throw new RuntimeException("Số chỗ không hợp lệ (chỉ nhận 4, 5 hoặc 7 chỗ)");
         if (pricePerDay == null || pricePerDay < 0) throw new RuntimeException("Giá thuê không hợp lệ");
 
         CarType carType;

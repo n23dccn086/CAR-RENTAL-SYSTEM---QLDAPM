@@ -74,7 +74,7 @@ const imageUrl = hasImage ? car.imageUrls[0] : null
             fontWeight: 700,
             zIndex: 3,
           }}>
-            {car.status === 'RENTED' ? 'ĐÃ ĐẶT' : car.status}
+            {car.status === 'RENTED' ? 'ĐANG CHO THUÊ' : car.status}
           </div>
         )}
 

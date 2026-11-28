@@ -71,11 +71,57 @@ public class MomoGateway implements PaymentGateway {
     @Override
     public boolean verifySignature(String params) {
         log.info("Momo: Verifying signature");
-        if (params == null || "DEMO_SECRET".equals(secretKey) || secretKey.isBlank()) {
-            return true;
+        if (params == null || params.isBlank()) {
+            return false;
         }
-        // Cho phép verify nếu có signature trong payload
-        return true;
+        // Chế độ demo (chưa cấu hình secret thật): KHÔNG nhận callback từ bên ngoài,
+        // vì không có cách nào kiểm chứng. Demo đi qua POST /payments/{id}/mock-success (cần JWT).
+        if (secretKey == null || secretKey.isBlank() || "DEMO_SECRET".equals(secretKey)) {
+            log.warn("Momo: callback rejected — gateway is running with DEMO credentials");
+            return false;
+        }
+        String received = extractField(params, "signature");
+        if (received == null) {
+            return false;
+        }
+        // Chuỗi ký IPN theo tài liệu MoMo v2 (các trường sắp xếp theo alphabet)
+        String raw = "accessKey=" + accessKey
+                + "&amount=" + nvl(extractField(params, "amount"))
+                + "&extraData=" + nvl(extractField(params, "extraData"))
+                + "&message=" + nvl(extractField(params, "message"))
+                + "&orderId=" + nvl(extractField(params, "orderId"))
+                + "&orderInfo=" + nvl(extractField(params, "orderInfo"))
+                + "&orderType=" + nvl(extractField(params, "orderType"))
+                + "&partnerCode=" + nvl(extractField(params, "partnerCode"))
+                + "&payType=" + nvl(extractField(params, "payType"))
+                + "&requestId=" + nvl(extractField(params, "requestId"))
+                + "&responseTime=" + nvl(extractField(params, "responseTime"))
+                + "&resultCode=" + nvl(extractField(params, "resultCode"))
+                + "&transId=" + nvl(extractField(params, "transId"));
+        String expected = hmacSHA256(raw, secretKey);
+        return java.security.MessageDigest.isEqual(
+                expected.getBytes(StandardCharsets.UTF_8),
+                received.getBytes(StandardCharsets.UTF_8));
+    }
+
+    private static String nvl(String s) {
+        return s == null ? "" : s;
+    }
+
+    /** Lấy giá trị 1 trường từ payload JSON ({"k": "v"} hoặc {"k": 123}) hoặc form-urlencoded (k=v&...). */
+    private static String extractField(String payload, String key) {
+        String k = java.util.regex.Pattern.quote(key);
+        java.util.regex.Matcher m = java.util.regex.Pattern
+                .compile("\"" + k + "\"\\s*:\\s*(?:\"((?:[^\"\\\\]|\\\\.)*)\"|(-?[0-9]+))")
+                .matcher(payload);
+        if (m.find()) {
+            return m.group(1) != null ? m.group(1) : m.group(2);
+        }
+        m = java.util.regex.Pattern.compile("(?:^|[?&])" + k + "=([^&]*)").matcher(payload);
+        if (m.find()) {
+            return java.net.URLDecoder.decode(m.group(1), StandardCharsets.UTF_8);
+        }
+        return null;
     }
 
     @Override

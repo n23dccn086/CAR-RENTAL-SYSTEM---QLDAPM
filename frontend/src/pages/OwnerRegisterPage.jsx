@@ -1,6 +1,4 @@
 import { useState, useEffect } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
-import { useAuth } from '../hooks/useAuth'
 import {
   submitOwnerRequest,
   uploadOwnerDocuments,
@@ -22,8 +20,6 @@ const DOC_TYPES = [
 ]
 
 export default function OwnerRegisterPage() {
-  const navigate = useNavigate()
-  const { user } = useAuth()
 
   const [step, setStep] = useState(1)
   const [existingRequest, setExistingRequest] = useState(null)

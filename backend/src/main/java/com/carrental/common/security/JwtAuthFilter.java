@@ -37,6 +37,7 @@ import java.util.Collections;
 public class JwtAuthFilter extends OncePerRequestFilter {
 
     JwtService jwtService;
+    TokenBlacklistService tokenBlacklistService;
 
     @Override
     protected boolean shouldNotFilter(HttpServletRequest request) {
@@ -72,6 +73,12 @@ public class JwtAuthFilter extends OncePerRequestFilter {
             if (!"ACCESS".equals(tokenType)) {
                 // Token không phải ACCESS (ví dụ REFRESH) → coi như không có token
                 filterChain.doFilter(request, response);
+                return;
+            }
+
+            // 1b. Token đã bị thu hồi khi đăng xuất → 401
+            if (tokenBlacklistService.isRevoked(token)) {
+                writeUnauthorized(response, 3007, "Phiên đăng nhập đã kết thúc. Vui lòng đăng nhập lại.");
                 return;
             }
 

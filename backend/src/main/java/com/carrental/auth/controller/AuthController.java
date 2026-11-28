@@ -33,6 +33,7 @@ public class AuthController {
 
     AuthService authService;
     JwtService jwtService;
+    com.carrental.common.security.TokenBlacklistService tokenBlacklistService;
     OtpService otpService;  // ★ MỚI
 
     /**
@@ -83,6 +84,12 @@ public class AuthController {
             );
         }
 
+        if (tokenBlacklistService.isRevoked(token)) {
+            throw new com.carrental.common.exception.UnauthorizedException(
+                    com.carrental.common.constant.ErrorCode.REFRESH_TOKEN_INVALID,
+                    "Refresh token đã bị thu hồi. Vui lòng đăng nhập lại.");
+        }
+
         log.info("REST request to refresh token");
         AuthResponse response = authService.refreshToken(token);
         return ApiResponse.success("Token đã được làm mới", response);
@@ -93,15 +100,29 @@ public class AuthController {
      * POST /api/v1/auth/logout
      */
     @PostMapping("/logout")
-    public ApiResponse<Void> logout(HttpServletRequest request) {
+    public ApiResponse<Void> logout(
+            HttpServletRequest request,
+            @RequestBody(required = false) com.carrental.auth.dto.RefreshTokenRequest body) {
         log.info("REST request to logout");
         String authHeader = request.getHeader("Authorization");
         if (authHeader != null && authHeader.startsWith("Bearer ")) {
+            String accessToken = authHeader.substring(7);
             try {
-                Long userId = jwtService.extractUserId(authHeader.substring(7));
+                Long userId = jwtService.extractUserId(accessToken);
+                // Thu hồi access token đến khi nó hết hạn tự nhiên
+                tokenBlacklistService.revoke(accessToken, jwtService.extractExpiration(accessToken));
                 authService.logout(userId);
             } catch (Exception e) {
                 log.debug("Logout token extraction ignored: {}", e.getMessage());
+            }
+        }
+        // Thu hồi luôn refresh token (frontend gửi kèm trong body) để không thể xin access token mới
+        if (body != null && body.getRefreshToken() != null && !body.getRefreshToken().isBlank()) {
+            try {
+                String refreshToken = body.getRefreshToken();
+                tokenBlacklistService.revoke(refreshToken, jwtService.extractExpiration(refreshToken));
+            } catch (Exception e) {
+                log.debug("Logout refresh token ignored: {}", e.getMessage());
             }
         }
         return ApiResponse.success("Đăng xuất thành công", null);

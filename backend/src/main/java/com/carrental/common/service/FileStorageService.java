@@ -21,8 +21,15 @@ public class FileStorageService {
 
     private final Path rootLocation;
 
+    /** Dùng trong unit test: lưu vào ./uploads */
     public FileStorageService() {
-        this.rootLocation = Paths.get("uploads").toAbsolutePath().normalize();
+        this("uploads");
+    }
+
+    /** Thư mục lưu file lấy từ cấu hình app.upload-dir (biến môi trường APP_UPLOAD_DIR). */
+    @org.springframework.beans.factory.annotation.Autowired
+    public FileStorageService(@org.springframework.beans.factory.annotation.Value("${app.upload-dir:uploads}") String uploadDir) {
+        this.rootLocation = Paths.get(uploadDir).toAbsolutePath().normalize();
         try {
             Files.createDirectories(rootLocation);
             log.info("Upload directory: {}", rootLocation);

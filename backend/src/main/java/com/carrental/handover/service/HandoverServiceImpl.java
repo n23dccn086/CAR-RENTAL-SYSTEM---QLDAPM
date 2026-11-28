@@ -366,13 +366,13 @@ public class HandoverServiceImpl implements HandoverService {
                     booking.setRemainingAmount(newTotal - booking.getDepositAmount());
                 }
 
-                boolean hasOtherActive = bookingRepository.existsByCarIdAndStatusIn(
-                        booking.getCarId(),
-                        List.of(BookingStatus.PENDING, BookingStatus.PAID, BookingStatus.APPROVED, BookingStatus.RENTED)
+                // Chỉ đơn đang giữ xe thực tế (RENTED) mới ngăn trả xe về AVAILABLE; đơn tương lai không khóa xe.
+                boolean hasOtherActive = bookingRepository.existsByCarIdAndStatusInAndIdNot(
+                        booking.getCarId(), List.of(BookingStatus.RENTED), booking.getId()
                 );
                 if (!hasOtherActive) {
                     Car car = carRepository.findById(booking.getCarId()).orElse(null);
-                    if (car != null) {
+                    if (car != null && car.getStatus() == CarStatus.RENTED) {
                         car.setStatus(CarStatus.AVAILABLE);
                         carRepository.save(car);
                     }
@@ -466,22 +466,27 @@ public class HandoverServiceImpl implements HandoverService {
         long pricePerDay = getPricePerDay(booking);
         BigDecimal feePerHour = configHelper.getLateFeePerHour();
 
+        // Mỗi 24h trễ trọn vẹn = 120% đơn giá ngày; phần lẻ còn lại tính theo bảng mốc < 24h.
+        // (Trước đây mọi mức trễ ≥ 24h đều chỉ phạt 120% của 1 ngày → trả trễ 5 ngày vẫn chỉ mất 1,2 ngày tiền.)
+        long fullDaysLate = minutes / FULL_DAY_THRESHOLD;
+        long remainder = minutes % FULL_DAY_THRESHOLD;
+        BigDecimal fee = BigDecimal.valueOf(fullDaysLate * (pricePerDay * 120 / 100))
+                .add(lateFeeUnderOneDay(remainder, pricePerDay, feePerHour));
+        return new LateFeeResult(fee, minutes);
+    }
+
+    /** Bảng mốc trễ dưới 24h: <15p miễn phí, <60p = phí 1 giờ, <4h = ½ ngày, <24h = 1 ngày. */
+    private BigDecimal lateFeeUnderOneDay(long minutes, long pricePerDay, BigDecimal feePerHour) {
         if (minutes < FREE_MINUTES) {
-            return new LateFeeResult(BigDecimal.ZERO, minutes);
+            return BigDecimal.ZERO;
         }
         if (minutes < HOURLY_THRESHOLD) {
-            return new LateFeeResult(feePerHour, minutes);
+            return feePerHour;
         }
         if (minutes < HALF_DAY_THRESHOLD) {
-            long fee = pricePerDay / 2;
-            return new LateFeeResult(BigDecimal.valueOf(fee), minutes);
+            return BigDecimal.valueOf(pricePerDay / 2);
         }
-        if (minutes < FULL_DAY_THRESHOLD) {
-            return new LateFeeResult(BigDecimal.valueOf(pricePerDay), minutes);
-        }
-
-        long fee = pricePerDay + (pricePerDay * 20 / 100);
-        return new LateFeeResult(BigDecimal.valueOf(fee), minutes);
+        return BigDecimal.valueOf(pricePerDay);
     }
 
     /**

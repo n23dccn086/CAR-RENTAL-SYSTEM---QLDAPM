@@ -140,7 +140,7 @@ public class CarServiceImpl implements CarService {
         List<Map<String, Object>> blockedList = new ArrayList<>();
         try {
             List<Booking> activeBookings = bookingRepository.findByCarIdAndStatusIn(
-                    id, List.of(BookingStatus.PAID, BookingStatus.APPROVED, BookingStatus.RENTED));
+                    id, List.of(BookingStatus.PENDING, BookingStatus.PAID, BookingStatus.APPROVED, BookingStatus.RENTED));
             for (Booking b : activeBookings) {
                 Map<String, Object> map = new LinkedHashMap<>();
                 map.put("start_date", b.getStartDate().toLocalDate().toString());
@@ -152,6 +152,7 @@ public class CarServiceImpl implements CarService {
             List<CarBlockedDate> explicitBlocks = carBlockedDateRepository.findByCarId(id);
             for (CarBlockedDate cbd : explicitBlocks) {
                 Map<String, Object> map = new LinkedHashMap<>();
+                map.put("id", cbd.getId());
                 map.put("start_date", cbd.getStartDate().toString());
                 map.put("end_date", cbd.getEndDate().toString());
                 map.put("reason", cbd.getReason());
@@ -203,7 +204,7 @@ public class CarServiceImpl implements CarService {
     public List<CarResponse> getAllCars(String status) {
         List<Car> cars;
         if (status == null || status.isBlank() || status.equalsIgnoreCase("AVAILABLE")) {
-            cars = carRepository.findAvailableCarsWithoutActiveBookings();
+            cars = carRepository.findBookableCars();
         } else if (status.equalsIgnoreCase("ALL")) {
             cars = carRepository.findAll().stream()
                     .filter(c -> c.getDeletedAt() == null)
@@ -420,7 +421,7 @@ public class CarServiceImpl implements CarService {
     @Override
     @Transactional(readOnly = true)
     public List<CarResponse> getAvailableCars() {
-        List<Car> cars = carRepository.findAvailableCarsWithoutActiveBookings();
+        List<Car> cars = carRepository.findBookableCars();
         return cars.stream().map(this::enrichStats).toList();
     }
 
@@ -887,5 +888,23 @@ public class CarServiceImpl implements CarService {
                 .build();
 
         return carBlockedDateRepository.save(blockedDate);
+    }
+
+    // DELETE /cars/:id/blocked-dates/:blockId — chủ xe gỡ một khoảng chặn lịch
+    @Override
+    @Transactional
+    public void unblockDates(Long carId, Long blockId, Long ownerId) {
+        Car car = getCarEntityById(carId);
+        if (!car.getOwnerId().equals(ownerId)) {
+            User caller = userRepository.findById(ownerId).orElse(null);
+            if (caller == null || caller.getRole() != Role.ADMIN) {
+                throw new UnauthorizedException(ErrorCode.CAR_NOT_OWNED);
+            }
+        }
+        CarBlockedDate block = carBlockedDateRepository.findById(blockId)
+                .filter(b -> carId.equals(b.getCarId()))
+                .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.VALIDATION_ERROR, "Không tìm thấy khoảng chặn lịch"));
+        carBlockedDateRepository.delete(block);
+        log.info("Unblocked dates {} of car {}", blockId, carId);
     }
 }

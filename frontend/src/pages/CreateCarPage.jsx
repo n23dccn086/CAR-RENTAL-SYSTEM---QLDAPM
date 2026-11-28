@@ -17,6 +17,7 @@ export default function CreateCarPage() {
     fuelType: 'GASOLINE',
     currentKm: 0,
     pricePerDay: 1000000,
+    priceWeekend: '',
     carType: 'SEDAN',
     rentalMode: 'BOTH',
     address: '',
@@ -32,7 +33,7 @@ export default function CreateCarPage() {
 
   const handleChange = (e) => {
     const { name, value } = e.target
-    const numberFields = ['year', 'seats', 'currentKm', 'pricePerDay']
+    const numberFields = ['year', 'seats', 'currentKm', 'pricePerDay', 'priceWeekend']
     setForm({ ...form, [name]: numberFields.includes(name) ? (value === '' ? '' : Number(value)) : value })
   }
 
@@ -103,6 +104,8 @@ export default function CreateCarPage() {
         color: form.color?.trim() || null,
         currentKm: form.currentKm ? Number(form.currentKm) : 0,
         pricePerDay: Number(form.pricePerDay),
+        // Giá T7/CN; để trống = dùng giá ngày thường
+        priceWeekend: form.priceWeekend ? Number(form.priceWeekend) : null,
         carType: form.carType,
         rentalMode: form.rentalMode,
         address: form.address?.trim() || null,
@@ -233,9 +236,18 @@ export default function CreateCarPage() {
             </select>
           </div>
 
-          <FormInput label="Số chỗ" name="seats" type="number" value={form.seats} onChange={handleChange} required />
+          <div>
+            <label style={labelStyle}>Số chỗ *</label>
+            {/* Phạm vi dự án: chỉ xe 4, 5, 7 chỗ (khớp validate backend CarRequest) */}
+            <select name="seats" value={form.seats} onChange={handleChange} style={inputStyle} required>
+              <option value="4">4 chỗ</option>
+              <option value="5">5 chỗ</option>
+              <option value="7">7 chỗ</option>
+            </select>
+          </div>
           <FormInput label="Số km hiện tại" name="currentKm" type="number" value={form.currentKm} onChange={handleChange} />
           <FormInput label="Giá thuê / ngày (VNĐ)" name="pricePerDay" type="number" value={form.pricePerDay} onChange={handleChange} required />
+          <FormInput label="Giá cuối tuần T7/CN (VNĐ, tùy chọn)" name="priceWeekend" type="number" value={form.priceWeekend} onChange={handleChange} placeholder="Để trống = giá ngày thường" />
           <FormInput label="Địa chỉ" name="address" value={form.address} onChange={handleChange} placeholder="123 Nguyễn Huệ, Q1, TP.HCM" />
 
           <div>

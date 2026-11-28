@@ -1,5 +1,4 @@
 import { useState, useEffect } from 'react'
-import SignatureCanvas from './SignatureCanvas'
 import {
   createHandover,
   uploadImage,
@@ -16,22 +15,34 @@ import api from '../services/api'
  *  - handoverType: 'PICKUP' | 'RETURN'
  *  - onSuccess: function (gọi sau khi tạo thành công)
  */
-export default function HandoverFormModal({
+export default function HandoverFormModal(props) {
+  if (!props.open || !props.booking) return null
+  // Nội dung chỉ được mount khi modal mở → mỗi lần mở (hoặc đổi loại biên bản)
+  // form được khởi tạo lại từ đầu, thay vì reset state bằng useEffect.
+  return <HandoverFormModalContent key={props.handoverType} {...props} />
+}
+
+function HandoverFormModalContent({
   open,
   onClose,
   booking,
   handoverType,
   onSuccess,
 }) {
-  const [form, setForm] = useState({
-    kmReading: '',
-    fuelLevel: 80,
-    exteriorNote: '',
-    interiorNote: '',
-    extraFees: 0,
-    extraFeesNote: '',
-    damages: '',
-    actualReturnTime: '',
+  const isPickup = handoverType === 'PICKUP'
+
+  const [form, setForm] = useState(() => {
+    const nowStr = new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 16)
+    return {
+      kmReading: '',
+      fuelLevel: 80,
+      exteriorNote: '',
+      interiorNote: '',
+      extraFees: 0,
+      extraFeesNote: '',
+      damages: '',
+      actualReturnTime: !isPickup ? nowStr : '',
+    }
   })
 
   const [images, setImages] = useState([])
@@ -40,26 +51,6 @@ export default function HandoverFormModal({
   const [error, setError] = useState('')
   const [config, setConfig] = useState(null)
   const [pickupKm, setPickupKm] = useState(null)
-
-  const isPickup = handoverType === 'PICKUP'
-
-  useEffect(() => {
-    if (open) {
-      const nowStr = new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 16)
-      setForm({
-        kmReading: '',
-        fuelLevel: 80,
-        exteriorNote: '',
-        interiorNote: '',
-        extraFees: 0,
-        extraFeesNote: '',
-        damages: '',
-        actualReturnTime: !isPickup ? nowStr : '',
-      })
-      setImages([])
-      setError('')
-    }
-  }, [open, isPickup])
 
   // Load config & pickup km khi tạo biên bản trả xe
   useEffect(() => {
@@ -87,13 +78,9 @@ export default function HandoverFormModal({
   const subtitle = `Đơn #${booking.id} · ${booking.carName || 'Xe'} ${booking.carPlate ? `(${booking.carPlate})` : ''}`
 
   // ===== TÍNH TOÁN DỰ KIẾN CHI PHÍ CHO BIÊN BẢN NHẬN XE =====
-  let kmDriven = 0
   let kmAllowed = 0
   let kmOver = 0
   let kmOverageFee = 0
-  let rentalDays = 1
-  let maxOverPerDay = 500
-  let maxTotalCap = 2000
   let maxAllowedOver = 500
   let isOverageExceeded = false
 
@@ -101,18 +88,18 @@ export default function HandoverFormModal({
   const isReturnKmInvalid = !isPickup && pickupKm != null && !isNaN(returnKm) && returnKm < pickupKm
 
   if (pickupKm != null && !isNaN(returnKm) && returnKm > pickupKm && booking) {
-    kmDriven = returnKm - pickupKm
+    const kmDriven = returnKm - pickupKm
     const start = new Date(booking.startDate)
     const end = new Date(booking.endDate)
     const hours = Math.max(0, (end - start) / (1000 * 60 * 60))
-    rentalDays = Math.max(1, Math.ceil(hours / 24))
+    const rentalDays = Math.max(1, Math.ceil(hours / 24))
 
     const kmPerDay = parseInt(config?.default_km_per_day) || 300
     kmAllowed = kmPerDay * rentalDays
     kmOver = Math.max(0, kmDriven - kmAllowed)
 
-    maxOverPerDay = parseInt(config?.max_km_overage_per_day) || 500
-    maxTotalCap = parseInt(config?.max_total_km_overage) || 2000
+    const maxOverPerDay = parseInt(config?.max_km_overage_per_day) || 500
+    const maxTotalCap = parseInt(config?.max_total_km_overage) || 2000
     maxAllowedOver = Math.min(maxTotalCap, maxOverPerDay * rentalDays)
     isOverageExceeded = kmOver > maxAllowedOver
 
@@ -148,16 +135,19 @@ export default function HandoverFormModal({
         const pricePerDay = Number(booking.pricePerDay || (booking.totalPrice ? Math.round(booking.totalPrice / totalDurationDays) : 1000000))
         const feePerHour = parseInt(config?.late_fee_per_hour) || 100000
 
-        // Mốc phải khớp HandoverServiceImpl.calculateLateFee: <60p, <240p, <1440p
-        if (lateMinutes < 60) {
-          lateFee = feePerHour
-        } else if (lateMinutes < 240) {
-          lateFee = Math.round(pricePerDay / 2)
-        } else if (lateMinutes < 1440) {
-          lateFee = pricePerDay
-        } else {
-          lateFee = Math.round(pricePerDay * 1.2)
+        // Phải khớp HandoverServiceImpl.calculateLateFee:
+        // mỗi 24h trễ trọn vẹn = 120% đơn giá ngày; phần lẻ < 24h theo mốc <15p / <60p / <240p / <1440p
+        const fullDays = Math.floor(lateMinutes / 1440)
+        const rem = lateMinutes % 1440
+        let remFee = 0
+        if (rem >= 240) {
+          remFee = pricePerDay
+        } else if (rem >= 60) {
+          remFee = Math.floor(pricePerDay / 2)
+        } else if (rem >= 15) {
+          remFee = feePerHour
         }
+        lateFee = fullDays * Math.floor(pricePerDay * 120 / 100) + remFee
       }
     }
   }
@@ -752,23 +742,18 @@ export default function HandoverFormModal({
 // ★ UC-C13: COMPONENT PREVIEW PHÍ VƯỢT KM
 // ============================================================
 function KmOveragePreview({ booking, returnKm, config: parentConfig, pickupKm: parentPickupKm }) {
-  const [config, setConfig] = useState(parentConfig || null)
-  const [pickupKm, setPickupKm] = useState(parentPickupKm ?? null)
-
-  useEffect(() => {
-    if (parentConfig) setConfig(parentConfig)
-  }, [parentConfig])
-
-  useEffect(() => {
-    if (parentPickupKm !== undefined) setPickupKm(parentPickupKm)
-  }, [parentPickupKm])
+  // Giá trị từ props (nếu có) được ưu tiên; chỉ dùng dữ liệu tự tải khi props chưa có
+  const [fetchedConfig, setFetchedConfig] = useState(null)
+  const [fetchedPickupKm, setFetchedPickupKm] = useState(null)
+  const config = parentConfig || fetchedConfig
+  const pickupKm = parentPickupKm ?? fetchedPickupKm
 
   // Load config từ admin nếu chưa có từ props
   useEffect(() => {
     if (parentConfig) return
     api.get('/handovers/fee-config')
-      .then(r => setConfig(r.data.data || {}))
-      .catch(() => setConfig({}))
+      .then(r => setFetchedConfig(r.data.data || {}))
+      .catch(() => setFetchedConfig({}))
   }, [parentConfig])
 
   // Load km PICKUP của booking nếu chưa có từ props
@@ -778,7 +763,7 @@ function KmOveragePreview({ booking, returnKm, config: parentConfig, pickupKm: p
       .then(res => {
         const list = res.data.data || []
         const pickup = list.find(h => h.handoverType === 'PICKUP')
-        if (pickup) setPickupKm(pickup.kmReading)
+        if (pickup) setFetchedPickupKm(pickup.kmReading)
       })
       .catch(() => {})
   }, [booking.id, parentPickupKm])
@@ -892,7 +877,7 @@ function KmOveragePreview({ booking, returnKm, config: parentConfig, pickupKm: p
   const price2 = parseInt(config.km_overage_bracket_2_price) || 8000
   const price3 = parseInt(config.km_overage_bracket_3_price) || 12000
 
-  let fee = 0
+  let fee
   const breakdown = []
 
   if (kmOver <= limit1) {

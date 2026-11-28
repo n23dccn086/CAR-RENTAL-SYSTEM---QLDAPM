@@ -1,7 +1,7 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { createPortal } from "react-dom";
 import api from "../services/api";
-import { useDialog } from "../context/DialogContext";
+import { useDialog } from "../context/dialogCore";
 
 const STATUS_MAP = {
   PENDING: { label: "Chờ duyệt", color: "var(--dong)" },
@@ -57,37 +57,54 @@ export default function OwnerDriversPage() {
   const [formError, setFormError] = useState("");
   const [message, setMessage] = useState("");
 
-  const fetchDrivers = async () => {
+  // Khi bộ lọc / trang thay đổi: bộ lọc đổi → quay về trang 0; luôn hiển thị loading cho lần tải mới.
+  // (Điều chỉnh state ngay trong render dựa trên giá trị lần trước, thay vì setState trong effect.)
+  const [prevQuery, setPrevQuery] = useState({ status, debouncedSearch, sort, page });
+  const filtersChanged =
+    prevQuery.status !== status ||
+    prevQuery.debouncedSearch !== debouncedSearch ||
+    prevQuery.sort !== sort;
+  if (filtersChanged || prevQuery.page !== page) {
+    const nextPage = filtersChanged ? 0 : page;
+    setPrevQuery({ status, debouncedSearch, sort, page: nextPage });
+    if (nextPage !== page) setPage(nextPage);
     setLoading(true);
-    try {
-      const params = new URLSearchParams();
-      if (status) params.append("status", status);
-      if (debouncedSearch.trim())
-        params.append("search", debouncedSearch.trim());
-      params.append("sort", sort);
-      params.append("page", page);
-      params.append("size", SIZE);
+  }
 
-      const res = await api.get(`/drivers/my?${params.toString()}`);
-      const pageData = res.data.data || {};
-      setDrivers(pageData.content || []);
-      setTotalPages(pageData.totalPages || 0);
-      setTotalElements(pageData.totalElements || 0);
-    } catch (err) {
-      console.error(err);
-      setDrivers([]);
-    } finally {
-      setLoading(false);
-    }
+  // Tải danh sách tài xế (state chỉ cập nhật trong callback bất đồng bộ)
+  const loadDrivers = useCallback(() => {
+    const params = new URLSearchParams();
+    if (status) params.append("status", status);
+    if (debouncedSearch.trim())
+      params.append("search", debouncedSearch.trim());
+    params.append("sort", sort);
+    params.append("page", page);
+    params.append("size", SIZE);
+
+    return api
+      .get(`/drivers/my?${params.toString()}`)
+      .then((res) => {
+        const pageData = res.data.data || {};
+        setDrivers(pageData.content || []);
+        setTotalPages(pageData.totalPages || 0);
+        setTotalElements(pageData.totalElements || 0);
+      })
+      .catch((err) => {
+        console.error(err);
+        setDrivers([]);
+      })
+      .finally(() => setLoading(false));
+  }, [status, debouncedSearch, sort, page]);
+
+  // Tải lại có hiển thị loading (dùng sau import / thêm / sửa / xóa)
+  const fetchDrivers = () => {
+    setLoading(true);
+    return loadDrivers();
   };
 
   useEffect(() => {
-    fetchDrivers();
-  }, [status, debouncedSearch, sort, page]);
-
-  useEffect(() => {
-    setPage(0);
-  }, [status, debouncedSearch, sort]);
+    loadDrivers();
+  }, [loadDrivers]);
 
   const showMessage = (msg) => {
     setMessage(msg);

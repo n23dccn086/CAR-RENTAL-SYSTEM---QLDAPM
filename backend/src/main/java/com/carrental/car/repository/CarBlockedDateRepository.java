@@ -14,6 +14,10 @@ public interface CarBlockedDateRepository extends JpaRepository<CarBlockedDate, 
 
     List<CarBlockedDate> findByCarIdAndEndDateGreaterThanEqual(Long carId, LocalDate date);
 
+    /** Có khoảng chặn lịch nào giao với [from, to] (tính theo ngày, bao gồm 2 đầu) không. */
+    boolean existsByCarIdAndStartDateLessThanEqualAndEndDateGreaterThanEqual(
+            Long carId, LocalDate to, LocalDate from);
+
     // ★ MỚI THÊM: Dùng để xóa cứng blocked dates khi hard delete car
     void deleteByCarId(Long carId);
 }

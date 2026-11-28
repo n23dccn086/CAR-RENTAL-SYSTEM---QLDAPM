@@ -1,7 +1,7 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { createPortal } from 'react-dom'
 import api from '../services/api'
-import { useDialog } from '../context/DialogContext'
+import { useDialog } from '../context/dialogCore'
 
 const STATUS_MAP = {
   PENDING:  { label: 'Chờ duyệt',       color: 'var(--dong)' },
@@ -33,34 +33,44 @@ export default function AdminDriversPage() {
   const [rejectSubmitting, setRejectSubmitting] = useState(false)
   const [rejectError, setRejectError] = useState('')
 
-  const fetchDrivers = async () => {
-    setLoading(true)
-    try {
-      const params = { page: currentPage, size: PAGE_SIZE }
-      if (filter) params.status = filter
+  // Tải danh sách tài xế theo filter + trang (state chỉ cập nhật trong callback bất đồng bộ)
+  const loadDrivers = useCallback(() => {
+    const params = { page: currentPage, size: PAGE_SIZE }
+    if (filter) params.status = filter
 
-      const res = await api.get('/admin/drivers', { params })
-      const pageData = res.data.data || {}
-      setDrivers(pageData.content || [])
-      setTotalPages(pageData.totalPages || 0)
-      setTotalElements(pageData.totalElements || 0)
-    } catch (err) {
-      console.error(err)
-      setDrivers([])
-      setTotalPages(0)
-      setTotalElements(0)
-    } finally {
-      setLoading(false)
-    }
+    return api.get('/admin/drivers', { params })
+      .then(res => {
+        const pageData = res.data.data || {}
+        setDrivers(pageData.content || [])
+        setTotalPages(pageData.totalPages || 0)
+        setTotalElements(pageData.totalElements || 0)
+      })
+      .catch(err => {
+        console.error(err)
+        setDrivers([])
+        setTotalPages(0)
+        setTotalElements(0)
+      })
+      .finally(() => setLoading(false))
+  }, [filter, currentPage])
+
+  // Tải lại có hiển thị loading (dùng sau các thao tác duyệt / khóa)
+  const fetchDrivers = () => {
+    setLoading(true)
+    return loadDrivers()
   }
 
   useEffect(() => {
-    fetchDrivers()
-  }, [filter, currentPage])
+    loadDrivers()
+  }, [loadDrivers])
 
-  useEffect(() => {
+  // Đổi filter → hiển thị loading và quay về trang đầu
+  const changeFilter = (value) => {
+    if (value === filter) return
+    setLoading(true)
+    setFilter(value)
     setCurrentPage(0)
-  }, [filter])
+  }
 
   const showMessage = (msg) => {
     setMessage(msg)
@@ -199,7 +209,8 @@ export default function AdminDriversPage() {
   const pendingCount = drivers.filter(d => d.status === 'PENDING').length
 
   const goToPage = (p) => {
-    if (p >= 0 && p < totalPages) {
+    if (p >= 0 && p < totalPages && p !== currentPage) {
+      setLoading(true)
       setCurrentPage(p)
     }
   }
@@ -235,7 +246,7 @@ export default function AdminDriversPage() {
           { v: 'REJECTED', l: 'Bị từ chối' },
           { v: '',         l: 'Tất cả' },
         ].map(opt => (
-          <button key={opt.v} onClick={() => setFilter(opt.v)} style={{
+          <button key={opt.v} onClick={() => changeFilter(opt.v)} style={{
             padding: '8px 16px',
             background: filter === opt.v ? 'var(--muc)' : 'transparent',
             color: filter === opt.v ? 'var(--kem)' : 'var(--muc-mo)',
@@ -468,7 +479,7 @@ export default function AdminDriversPage() {
 // ============================================================
 // MODAL CHI TIẾT TÀI XẾ
 // ============================================================
-function DriverDetailModal({ driver, loading, onClose, onApprove, onReject, onLock, onUnlock }) {
+function DriverDetailModal({ driver, onClose, onApprove, onReject, onLock, onUnlock }) {
   const formatDate = (d) =>
     d ? new Date(d).toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric' }) : '—'
 

@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { getMyBookings } from "../services/bookingService";
 import api from "../services/api";
-import { useDialog } from "../context/DialogContext";
+import { useDialog } from "../context/dialogCore";
 import { canCancelBooking, isNoDriverBooking } from "../utils/constants";
 
 export default function MyBookingsPage() {
@@ -18,45 +18,45 @@ export default function MyBookingsPage() {
 
   const [handovers, setHandovers] = useState({});
 
-  const fetchBookings = async () => {
-    try {
-      const res = await getMyBookings();
-      const list = res.data || [];
-      setBookings(list);
+  // Tải đơn + biên bản bàn giao (state chỉ cập nhật trong callback bất đồng bộ)
+  const fetchBookings = () =>
+    getMyBookings()
+      .then((res) => {
+        const list = res.data || [];
+        setBookings(list);
 
-      const relevant = list.filter((b) =>
-        ["APPROVED", "RENTED", "RETURNED", "COMPLETED"].includes(b.status)
-      );
-      const handoverMap = {};
-      await Promise.all(
-        relevant.map(async (b) => {
-          try {
-            const hRes = await api.get(`/handovers/booking/${b.id}`);
-            const hList = hRes.data.data || [];
-            handoverMap[b.id] = {};
-            hList.forEach((h) => {
-              handoverMap[b.id][h.handoverType] = h;
-            });
-          } catch (e) {
-            handoverMap[b.id] = {};
-          }
-        })
-      );
-      setHandovers(handoverMap);
-    } catch (err) {
-      console.error(err);
-    } finally {
-      setLoading(false);
-    }
-  };
+        const relevant = list.filter((b) =>
+          ["APPROVED", "RENTED", "RETURNED", "COMPLETED"].includes(b.status)
+        );
+        const handoverMap = {};
+        return Promise.all(
+          relevant.map(async (b) => {
+            try {
+              const hRes = await api.get(`/handovers/booking/${b.id}`);
+              const hList = hRes.data.data || [];
+              handoverMap[b.id] = {};
+              hList.forEach((h) => {
+                handoverMap[b.id][h.handoverType] = h;
+              });
+            } catch {
+              handoverMap[b.id] = {};
+            }
+          })
+        ).then(() => setHandovers(handoverMap));
+      })
+      .catch((err) => console.error(err))
+      .finally(() => setLoading(false));
 
   useEffect(() => {
     fetchBookings();
   }, []);
 
-  useEffect(() => {
+  // Đổi bộ lọc → quay về trang 1
+  const changeFilter = (value) => {
+    if (value === filter) return;
+    setFilter(value);
     setCurrentPage(1);
-  }, [filter]);
+  };
 
   const formatPrice = (p) => new Intl.NumberFormat("vi-VN").format(p || 0);
 
@@ -76,10 +76,11 @@ export default function MyBookingsPage() {
     const hoursUntilStart = (startDate - now) / (1000 * 60 * 60);
 
     const deposit = booking.depositAmount || 0;
-    let refundPercent = 0;
-    let refundAmount = 0;
-    let ruleReason = "";
-    let timeInfo = "";
+    // Luôn được gán trong một trong các nhánh bên dưới
+    let refundPercent;
+    let refundAmount;
+    let ruleReason;
+    let timeInfo;
 
     const formatDuration = (hours) => {
       if (hours < 0) return "đã qua";
@@ -316,7 +317,7 @@ export default function MyBookingsPage() {
         ].map((s) => (
           <button
             key={s}
-            onClick={() => setFilter(s)}
+            onClick={() => changeFilter(s)}
             style={{
               padding: "8px 16px",
               background: filter === s ? "var(--muc)" : "transparent",
@@ -394,12 +395,6 @@ export default function MyBookingsPage() {
                 returnHandover &&
                 returnHandover.status === "PENDING" &&
                 !returnHandover.customerSignature;
-
-              const canSignHandover =
-                !isCancelled &&
-                (needsSignPickup ||
-                  needsSignReturn ||
-                  ["APPROVED", "RENTED", "RETURNED"].includes(b.status));
 
               const canPayFinal =
                 b.status === "RETURNED" &&

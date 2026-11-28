@@ -7,7 +7,8 @@ services:
     environment:
       POSTGRES_DB: car_rental
       POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: yourpassword
+      # Khớp PASSWORD_POSTGRES trong backend/.env.example và default của application.yml
+      POSTGRES_PASSWORD: 123456
     ports:
       - "5432:5432"
     volumes:

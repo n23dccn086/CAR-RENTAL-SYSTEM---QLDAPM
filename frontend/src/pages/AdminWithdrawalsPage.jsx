@@ -1,10 +1,10 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import {
   getAllWithdrawals,
   approveWithdrawal,
   rejectWithdrawal,
 } from '../services/withdrawalService'
-import { useDialog } from '../context/DialogContext'
+import { useDialog } from '../context/dialogCore'
 
 export default function AdminWithdrawalsPage() {
   const { prompt, alert: dialogAlert } = useDialog()
@@ -22,25 +22,31 @@ export default function AdminWithdrawalsPage() {
   const [rejectSubmitting, setRejectSubmitting] = useState(false)
   const [rejectError, setRejectError] = useState('')
 
-  const fetchData = async () => {
+  // Tải danh sách yêu cầu rút tiền theo filter (state chỉ cập nhật trong callback bất đồng bộ)
+  const loadData = useCallback(() => {
+    return getAllWithdrawals(filter || null)
+      .then(res => setWithdrawals(res.data || []))
+      .catch(err => console.error(err))
+      .finally(() => setLoading(false))
+  }, [filter])
+
+  // Tải lại có hiển thị loading (dùng sau khi duyệt / từ chối)
+  const fetchData = () => {
     setLoading(true)
-    try {
-      const res = await getAllWithdrawals(filter || null)
-      setWithdrawals(res.data || [])
-    } catch (err) {
-      console.error(err)
-    } finally {
-      setLoading(false)
-    }
+    return loadData()
   }
 
   useEffect(() => {
-    fetchData()
-  }, [filter])
+    loadData()
+  }, [loadData])
 
-  useEffect(() => {
+  // Đổi filter → hiển thị loading và reset về trang 1
+  const changeFilter = (value) => {
+    if (value === filter) return
+    setLoading(true)
+    setFilter(value)
     setCurrentPage(1)
-  }, [filter])
+  }
 
   const handleApprove = async (item) => {
     const displayAmount = item.netAmount || item.amount
@@ -50,6 +56,7 @@ export default function AdminWithdrawalsPage() {
       message: `Số tiền yêu cầu: ${formatPrice(item.amount)}đ · Phí: ${formatPrice(item.fee || 0)}đ\n→ Thực chuyển: ${formatPrice(displayAmount)}đ`,
       inputLabel: "Mã giao dịch ngân hàng (TxID)",
       placeholder: "Nhập mã giao dịch chuyển khoản...",
+      // eslint-disable-next-line react-hooks/purity -- chạy trong click handler (không phải lúc render); compiler báo nhầm vì handler được gắn bên trong .map()
       defaultValue: 'TXN_' + Date.now(),
       required: false,
       inputType: 'text',
@@ -202,7 +209,7 @@ export default function AdminWithdrawalsPage() {
         ].map((opt) => (
           <button
             key={opt.v}
-            onClick={() => setFilter(opt.v)}
+            onClick={() => changeFilter(opt.v)}
             style={{
               padding: '8px 16px',
               background: filter === opt.v ? 'var(--muc)' : 'transparent',

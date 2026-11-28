@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { Link } from "react-router-dom";
 import api from "../services/api";
 import { useNotificationStore } from "../stores/notificationStore";
@@ -153,45 +153,62 @@ export default function NotificationsPage() {
   const pollingRef = useRef(null);
 
   // ===== FETCH =====
-  const fetchNotifications = async () => {
+  // Tải thông báo theo bộ lọc (state chỉ cập nhật trong callback bất đồng bộ)
+  const loadNotifications = useCallback(() => {
+    const params = {};
+    if (filter) params.type = filter;
+    if (unreadOnly) params.unreadOnly = true;
+
+    return api
+      .get("/notifications", { params })
+      .then((res) => {
+        const notifData = res.data.data;
+        const list = Array.isArray(notifData) ? notifData : (notifData?.notifications || []);
+        setNotifications(list);
+        if (notifData && typeof notifData === "object" && notifData.unread_count !== undefined) {
+          setUnreadCount(notifData.unread_count);
+        }
+        setSelectedIds(new Set()); // reset selection khi reload
+      })
+      .catch((err) => console.error(err))
+      .finally(() => setLoading(false));
+  }, [filter, unreadOnly]);
+
+  // Tải lại có hiển thị loading (dùng sau các thao tác đánh dấu / xóa)
+  const fetchNotifications = () => {
     setLoading(true);
-    try {
-      const params = {};
-      if (filter) params.type = filter;
-      if (unreadOnly) params.unreadOnly = true;
-
-      const res = await api.get("/notifications", { params });
-      const notifData = res.data.data;
-      const list = Array.isArray(notifData) ? notifData : (notifData?.notifications || []);
-      setNotifications(list);
-      if (notifData && typeof notifData === "object" && notifData.unread_count !== undefined) {
-        setUnreadCount(notifData.unread_count);
-      }
-      setSelectedIds(new Set()); // reset selection khi reload
-    } catch (err) {
-      console.error(err);
-    } finally {
-      setLoading(false);
-    }
+    return loadNotifications();
   };
 
-  const fetchUnreadCount = async () => {
-    try {
-      const res = await api.get("/notifications/unread-count");
-      const count = typeof res.data?.data === "number" ? res.data.data : (res.data || 0);
-      setUnreadCount(count);
-      useNotificationStore.getState().setUnreadCount(count);
-    } catch (err) {}
-  };
+  const fetchUnreadCount = () =>
+    api
+      .get("/notifications/unread-count")
+      .then((res) => {
+        const count = typeof res.data?.data === "number" ? res.data.data : (res.data || 0);
+        setUnreadCount(count);
+        useNotificationStore.getState().setUnreadCount(count);
+      })
+      .catch(() => { /* bỏ qua lỗi khi cập nhật số chưa đọc */ });
 
   useEffect(() => {
-    fetchNotifications();
+    loadNotifications();
     fetchUnreadCount();
-  }, [filter, unreadOnly]);
+  }, [loadNotifications]);
 
-  useEffect(() => {
+  // Đổi bộ lọc → hiển thị loading, tải lại và reset về trang 1
+  const changeFilter = (value) => {
+    if (value === filter) return;
+    setLoading(true);
+    setFilter(value);
     setCurrentPage(1);
-  }, [filter, unreadOnly]);
+  };
+
+  const changeUnreadOnly = (value) => {
+    if (value === unreadOnly) return;
+    setLoading(true);
+    setUnreadOnly(value);
+    setCurrentPage(1);
+  };
 
   // ★ Polling 5s khi tab active
   useEffect(() => {
@@ -491,7 +508,7 @@ export default function NotificationsPage() {
         {filters.map((opt) => (
           <button
             key={opt.v}
-            onClick={() => setFilter(opt.v)}
+            onClick={() => changeFilter(opt.v)}
             style={{
               padding: "8px 16px",
               background: filter === opt.v ? "var(--muc)" : "transparent",
@@ -526,7 +543,7 @@ export default function NotificationsPage() {
           <input
             type="checkbox"
             checked={unreadOnly}
-            onChange={(e) => setUnreadOnly(e.target.checked)}
+            onChange={(e) => changeUnreadOnly(e.target.checked)}
             style={{ cursor: "pointer" }}
           />
           Chỉ chưa đọc

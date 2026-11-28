@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useEffectEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
 import FormInput from '../components/FormInput'
 import { useAuth } from '../hooks/useAuth'
@@ -13,7 +13,8 @@ export default function ProfilePage() {
   const [msg, setMsg] = useState({ type: '', text: '' })
   const [loading, setLoading] = useState(false)
 
-  useEffect(() => {
+  // Chỉ chạy một lần khi mount; useEffectEvent đọc giá trị hiện tại mà không biến chúng thành dependency
+  const loadProfileOnMount = useEffectEvent(() => {
     if (!isLoggedIn) {
       navigate('/login')
       return
@@ -38,6 +39,10 @@ export default function ProfilePage() {
         })
       }
     })
+  })
+
+  useEffect(() => {
+    loadProfileOnMount()
   }, [])
 
   const showMsg = (type, text) => {
@@ -58,7 +63,7 @@ export default function ProfilePage() {
 
     setLoading(true)
     try {
-      const res = await updateProfile({
+      await updateProfile({
         name: info.name,
         email: info.email || null,
         address: info.address || null,

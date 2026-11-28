@@ -30,7 +30,8 @@ export async function changePassword(currentPassword, newPassword) {
 
 export async function logout() {
   try {
-    await api.post('/auth/logout')
+    // Gửi kèm refresh token để server thu hồi cả hai token (Redis blacklist)
+    await api.post('/auth/logout', { refresh_token: localStorage.getItem('refreshToken') })
   } finally {
     localStorage.removeItem('token')
     localStorage.removeItem('refreshToken')

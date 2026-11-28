@@ -1,9 +1,9 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useParams, Link, useNavigate } from "react-router-dom";
 import { getBookingById } from "../services/bookingService";
 import api from "../services/api";
 import { useAuth } from "../hooks/useAuth";
-import { useDialog } from "../context/DialogContext";
+import { useDialog } from "../context/dialogCore";
 import { canCancelBooking, isNoDriverBooking } from "../utils/constants";
 
 export default function BookingDetailPage() {
@@ -15,7 +15,7 @@ export default function BookingDetailPage() {
   const [handovers, setHandovers] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  const loadBookingDetails = () => {
+  const loadBookingDetails = useCallback(() => {
     Promise.all([
       getBookingById(id),
       api.get(`/handovers/booking/${id}`).catch(() => ({ data: { data: [] } })),
@@ -26,11 +26,11 @@ export default function BookingDetailPage() {
       })
       .catch(console.error)
       .finally(() => setLoading(false));
-  };
+  }, [id]);
 
   useEffect(() => {
     loadBookingDetails();
-  }, [id]);
+  }, [loadBookingDetails]);
 
   const handleCancelBooking = async () => {
     if (!booking) return;

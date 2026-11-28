@@ -65,6 +65,16 @@ public class ConfigHelper {
         return getDecimalConfig("default_late_fee_per_hour", new BigDecimal("100000"));
     }
 
+    // ===== PHÍ DỊCH VỤ THEO NGÀY (bảo hiểm, tài xế) — trước đây hard-code trong PricingService =====
+
+    public long getInsuranceFeePerDay() {
+        return getDecimalConfig("insurance_fee_per_day", new BigDecimal("100000")).longValue();
+    }
+
+    public long getDriverFeePerDay() {
+        return getDecimalConfig("driver_fee_per_day", new BigDecimal("500000")).longValue();
+    }
+
     // ===== REFUND (Khách hủy) =====
 
     public BigDecimal getRefundBefore24hPercent() {

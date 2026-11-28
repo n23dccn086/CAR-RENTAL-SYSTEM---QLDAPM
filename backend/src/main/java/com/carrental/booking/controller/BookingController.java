@@ -14,6 +14,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -220,6 +221,7 @@ public class BookingController {
      * PUT /api/v1/bookings/{id}/paid
      */
     @PutMapping("/{id}/paid")
+    @PreAuthorize("hasRole('ADMIN')")  // chỉ để Admin đối soát thủ công; luồng thật đi qua /payments
     public ApiResponse<BookingResponse> markAsPaid(@PathVariable Long id) {
         log.info("REST request to mark as paid: {}", id);
         return ApiResponse.success("Đã ghi nhận thanh toán cọc", bookingService.markAsPaid(id));

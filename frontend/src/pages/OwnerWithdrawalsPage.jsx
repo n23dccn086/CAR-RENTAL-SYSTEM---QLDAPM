@@ -29,30 +29,38 @@ export default function OwnerWithdrawalsPage() {
   const ITEMS_PER_PAGE = 10
 
   // ===== FETCH =====
-  const fetchData = async () => {
+  // Tải số dư + lịch sử rút tiền (state chỉ cập nhật trong callback bất đồng bộ)
+  const loadData = () =>
+    Promise.all([
+      getBalanceInfo(),
+      getMyWithdrawals(),
+    ])
+      .then(([balanceRes, listRes]) => {
+        setBalanceInfo(balanceRes.data)
+        setWithdrawals(listRes.data || [])
+      })
+      .catch(err => {
+        console.error(err)
+        setMessage({ type: 'error', text: 'Không tải được dữ liệu' })
+      })
+      .finally(() => setLoading(false))
+
+  // Tải lại có hiển thị loading (dùng sau khi tạo yêu cầu rút tiền)
+  const fetchData = () => {
     setLoading(true)
-    try {
-      const [balanceRes, listRes] = await Promise.all([
-        getBalanceInfo(),
-        getMyWithdrawals(),
-      ])
-      setBalanceInfo(balanceRes.data)
-      setWithdrawals(listRes.data || [])
-    } catch (err) {
-      console.error(err)
-      setMessage({ type: 'error', text: 'Không tải được dữ liệu' })
-    } finally {
-      setLoading(false)
-    }
+    return loadData()
   }
 
   useEffect(() => {
-    fetchData()
+    loadData()
   }, [])
 
-  useEffect(() => {
+  // Đổi bộ lọc → quay về trang 1
+  const changeFilter = (value) => {
+    if (value === filter) return
+    setFilter(value)
     setCurrentPage(1)
-  }, [filter])
+  }
 
   // ===== SUBMIT =====
   const handleSubmit = async (e) => {
@@ -282,7 +290,7 @@ export default function OwnerWithdrawalsPage() {
         ].map((opt) => (
           <button
             key={opt.v}
-            onClick={() => setFilter(opt.v)}
+            onClick={() => changeFilter(opt.v)}
             style={{
               padding: '8px 16px',
               background: filter === opt.v ? 'var(--muc)' : 'transparent',

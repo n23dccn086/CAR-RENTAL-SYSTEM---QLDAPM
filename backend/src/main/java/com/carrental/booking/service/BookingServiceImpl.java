@@ -12,6 +12,7 @@ import com.carrental.booking.repository.BookingRepository;
 import com.carrental.car.entity.Car;
 import com.carrental.car.entity.CarStatus;
 import com.carrental.car.entity.RentalMode;
+import com.carrental.car.repository.CarBlockedDateRepository;
 import com.carrental.car.repository.CarRepository;
 import com.carrental.common.constant.ErrorCode;
 import com.carrental.common.exception.BadRequestException;
@@ -73,6 +74,7 @@ public class BookingServiceImpl implements BookingService {
     DriverAssignmentService driverAssignmentService;
     DriverAssignmentRepository driverAssignmentRepository;
     BookingDelayedQueueService delayedQueueService;
+    CarBlockedDateRepository carBlockedDateRepository;
 
     /** Định dạng tiền cố định kiểu Việt Nam (600.000đ), không phụ thuộc locale mặc định của JVM. */
     static final Locale VN_LOCALE = Locale.forLanguageTag("vi-VN");
@@ -96,7 +98,8 @@ public class BookingServiceImpl implements BookingService {
         Car car = carRepository.findById(request.getCarId())
                 .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.CAR_NOT_FOUND));
 
-        if (car.getStatus() != CarStatus.AVAILABLE) {
+        // Xe đang được thuê (RENTED) vẫn nhận đặt cho khoảng ngày khác; tính trùng lịch ở bước kiểm tra ngày.
+        if (car.getStatus() != CarStatus.AVAILABLE && car.getStatus() != CarStatus.RENTED) {
             throw new BadRequestException(ErrorCode.CAR_NOT_AVAILABLE);
         }
 
@@ -113,6 +116,15 @@ public class BookingServiceImpl implements BookingService {
                 request.getCarId(), request.getStartDate(), request.getEndDate());
         if (exists) {
             throw new BadRequestException(ErrorCode.BOOKING_ALREADY_EXISTS);
+        }
+
+        // Lịch chủ xe tự chặn (bảo dưỡng, dùng riêng...) phải được kiểm tra ở server,
+        // không chỉ hiển thị trên lịch frontend.
+        boolean blocked = carBlockedDateRepository.existsByCarIdAndStartDateLessThanEqualAndEndDateGreaterThanEqual(
+                request.getCarId(), request.getEndDate().toLocalDate(), request.getStartDate().toLocalDate());
+        if (blocked) {
+            throw new BadRequestException(ErrorCode.BOOKING_ALREADY_EXISTS,
+                    "Chủ xe đã chặn lịch trong khoảng thời gian này. Vui lòng chọn ngày khác.");
         }
 
         Long driverId = request.getDriverId();
@@ -193,11 +205,9 @@ public class BookingServiceImpl implements BookingService {
         detail.setBookingId(savedBooking.getId());
         BookingDetail savedDetail = bookingDetailRepository.save(detail);
 
-        // Khóa xe: Đánh dấu đã được đặt để không còn hiển thị trên web
-        car.setStatus(CarStatus.RENTED);
-        carRepository.save(car);
-
-        log.info("Booking created: id={}, total={}, driverId={}, car {} -> RENTED",
+        // KHÔNG khóa cả chiếc xe: lịch được giữ bằng chính đơn này (existsActiveBooking theo khoảng ngày).
+        // CarStatus.RENTED chỉ dùng khi xe thực sự đang ở chỗ khách (sau biên bản giao xe).
+        log.info("Booking created: id={}, total={}, driverId={}, car {}",
                 savedBooking.getId(), totalPrice, driverId, car.getId());
 
         return buildResponse(savedBooking, savedDetail);
@@ -521,12 +531,6 @@ public class BookingServiceImpl implements BookingService {
         Booking updated = bookingRepository.save(booking);
         // Hủy job tự động hủy đơn trong Redis vì chủ xe đã duyệt thành công
         delayedQueueService.removeScheduledCancellation(id);
-
-        Car car = carRepository.findById(booking.getCarId()).orElse(null);
-        if (car != null && car.getStatus() != CarStatus.RENTED) {
-            car.setStatus(CarStatus.RENTED);
-            carRepository.save(car);
-        }
 
         // ★ Thông báo cho Customer
         try {
@@ -869,11 +873,12 @@ public class BookingServiceImpl implements BookingService {
                 .longValue();
     }
 
+    /** Trả xe về AVAILABLE nếu không còn đơn nào đang giữ xe thực tế (RENTED). */
     private void releaseCarIfNoActiveBookings(Long carId) {
         if (carId == null) return;
         boolean hasActive = bookingRepository.existsByCarIdAndStatusIn(
                 carId,
-                List.of(BookingStatus.PENDING, BookingStatus.PAID, BookingStatus.APPROVED, BookingStatus.RENTED)
+                List.of(BookingStatus.RENTED)
         );
         if (!hasActive) {
             carRepository.findById(carId).ifPresent(c -> {

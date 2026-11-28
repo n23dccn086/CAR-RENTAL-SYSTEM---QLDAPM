@@ -6,13 +6,19 @@ import { useAuth } from '../hooks/useAuth'
 import FormInput from '../components/FormInput'
 import api from '../services/api'
 
+// Khóa định danh một lần tải danh sách tài xế rảnh (đổi khi chủ xe / ngày nhận / ngày trả đổi)
+const buildDriverQueryKey = (ownerId, startDate, endDate) => `${ownerId}|${startDate}|${endDate}`
+
 export default function BookingPage() {
   const { carId } = useParams()
   const navigate = useNavigate()
   const { user } = useAuth()
   const [car, setCar] = useState(null)
   const [drivers, setDrivers] = useState([])
-  const [loadingDrivers, setLoadingDrivers] = useState(false)
+  // Khóa của lần tải danh sách tài xế gần nhất đã hoàn tất
+  const [loadedDriverQueryKey, setLoadedDriverQueryKey] = useState(null)
+  // Mốc thời gian nhận xe sớm nhất (now + 1h), tính một lần khi vào trang
+  const [minStartDate] = useState(() => new Date(Date.now() + 60 * 60 * 1000).toISOString().slice(0, 16))
 
   const [form, setForm] = useState({
     startDate: '',
@@ -42,45 +48,54 @@ export default function BookingPage() {
       .catch(() => setDepositPercent(30))
   }, [])
 
+  // Khóa truy vấn tài xế hiện tại: null nếu không cần tải (tự lái hoặc chưa có thông tin xe)
+  const driverQueryKey = form.rentalMode === 'WITH_DRIVER' && car?.ownerId
+    ? buildDriverQueryKey(car.ownerId, form.startDate, form.endDate)
+    : null
+  // Đang tải khi khóa hiện tại chưa có kết quả (suy ra trong render thay vì setState trong effect)
+  const loadingDrivers = driverQueryKey !== null && loadedDriverQueryKey !== driverQueryKey
+
+  // Bỏ danh sách tài xế khi chuyển sang hình thức tự lái
+  const clearDrivers = () => {
+    setDrivers([])
+    setLoadedDriverQueryKey(null)
+  }
+
   // Load drivers khi WITH_DRIVER & tự động random tài xế rảnh lịch
   useEffect(() => {
-    if (form.rentalMode === 'WITH_DRIVER' && car?.ownerId) {
-      setLoadingDrivers(true)
-      const hasDates = form.startDate && form.endDate && new Date(form.startDate) < new Date(form.endDate)
-      const params = {
-        ownerId: car.ownerId,
-        ...(hasDates ? { startDate: form.startDate, endDate: form.endDate } : {})
-      }
-
-      api.get('/drivers/available', { params })
-        .then(res => {
-          const freeDrivers = res.data.data || []
-          setDrivers(freeDrivers)
-
-          // Tự động chọn ngẫu nhiên tài xế chưa có lịch làm việc
-          if (freeDrivers.length > 0) {
-            setForm(prev => {
-              const currentValid = freeDrivers.some(d => String(d.id) === String(prev.driverId))
-              if (!currentValid || !prev.driverId) {
-                const randomIdx = Math.floor(Math.random() * freeDrivers.length)
-                return { ...prev, driverId: String(freeDrivers[randomIdx].id) }
-              }
-              return prev
-            })
-          } else {
-            setForm(prev => ({ ...prev, driverId: '' }))
-          }
-        })
-        .catch(err => {
-          console.error('Failed to load drivers:', err)
-          setDrivers([])
-          setForm(prev => ({ ...prev, driverId: '' }))
-        })
-        .finally(() => setLoadingDrivers(false))
-    } else {
-      setDrivers([])
-      setForm(prev => ({ ...prev, driverId: '' }))
+    if (form.rentalMode !== 'WITH_DRIVER' || !car?.ownerId) return
+    const queryKey = buildDriverQueryKey(car.ownerId, form.startDate, form.endDate)
+    const hasDates = form.startDate && form.endDate && new Date(form.startDate) < new Date(form.endDate)
+    const params = {
+      ownerId: car.ownerId,
+      ...(hasDates ? { startDate: form.startDate, endDate: form.endDate } : {})
     }
+
+    api.get('/drivers/available', { params })
+      .then(res => {
+        const freeDrivers = res.data.data || []
+        setDrivers(freeDrivers)
+
+        // Tự động chọn ngẫu nhiên tài xế chưa có lịch làm việc
+        if (freeDrivers.length > 0) {
+          setForm(prev => {
+            const currentValid = freeDrivers.some(d => String(d.id) === String(prev.driverId))
+            if (!currentValid || !prev.driverId) {
+              const randomIdx = Math.floor(Math.random() * freeDrivers.length)
+              return { ...prev, driverId: String(freeDrivers[randomIdx].id) }
+            }
+            return prev
+          })
+        } else {
+          setForm(prev => ({ ...prev, driverId: '' }))
+        }
+      })
+      .catch(err => {
+        console.error('Failed to load drivers:', err)
+        setDrivers([])
+        setForm(prev => ({ ...prev, driverId: '' }))
+      })
+      .finally(() => setLoadedDriverQueryKey(queryKey))
   }, [form.rentalMode, car?.ownerId, form.startDate, form.endDate])
 
   const handleRandomizeDriver = () => {
@@ -92,12 +107,31 @@ export default function BookingPage() {
     setForm(prev => ({ ...prev, driverId: String(randomPick.id) }))
   }
 
-  const handleChange = (e) => setForm({ ...form, [e.target.name]: e.target.value })
+  const handleChange = (e) => {
+    const { name, value } = e.target
+    if (name === 'rentalMode' && value !== 'WITH_DRIVER') {
+      // Chuyển sang tự lái → bỏ danh sách và lựa chọn tài xế
+      clearDrivers()
+      setForm({ ...form, [name]: value, driverId: '' })
+      return
+    }
+    setForm({ ...form, [name]: value })
+  }
 
   const calcTotal = () => {
     if (!form.startDate || !form.endDate || !car) return 0
-    const days = Math.max(1, Math.ceil((new Date(form.endDate) - new Date(form.startDate)) / (1000 * 60 * 60 * 24)))
-    return days * (car.pricePerDay || 0)
+    const start = new Date(form.startDate)
+    const days = Math.max(1, Math.ceil((new Date(form.endDate) - start) / (1000 * 60 * 60 * 24)))
+    // Khớp PricingService.calculateRentalFee: từng ngày T7/CN dùng giá cuối tuần (nếu xe có cấu hình)
+    const weekday = car.pricePerDay || 0
+    const weekendRaw = car.priceWeekend ?? car.price_weekend
+    const weekend = weekendRaw > 0 ? weekendRaw : weekday
+    let total = 0
+    for (let i = 0; i < days; i++) {
+      const dow = new Date(start.getTime() + i * 24 * 60 * 60 * 1000).getDay()
+      total += (dow === 0 || dow === 6) ? weekend : weekday
+    }
+    return total
   }
 
   const formatPrice = (p) => new Intl.NumberFormat('vi-VN').format(p)
@@ -163,7 +197,8 @@ export default function BookingPage() {
     form.startDate &&
     form.endDate &&
     drivers.length === 0
-  const isCarUnavailable = car && car.status !== 'AVAILABLE'
+  // RENTED = xe đang ở chỗ khách khác, vẫn đặt được cho khoảng ngày không trùng (server kiểm tra trùng lịch)
+  const isCarUnavailable = car && car.status !== 'AVAILABLE' && car.status !== 'RENTED'
   const selectedDriver = drivers.find(d => String(d.id) === String(form.driverId))
 
   return (
@@ -186,10 +221,10 @@ export default function BookingPage() {
               color: 'var(--do)',
             }}>
               <div style={{ fontWeight: 700, fontSize: '16px', marginBottom: '6px' }}>
-                ⚠️ Cỗ xe này hiện đã được đặt hoặc không khả dụng!
+                ⚠️ Cỗ xe này hiện tạm không khả dụng!
               </div>
               <div style={{ fontSize: '14px', color: 'var(--muc)', marginBottom: '12px' }}>
-                Cỗ xe đã có khách đặt trước hoặc đang trong hành trình thuê. Quý khách vui lòng quay lại bộ sưu tập để chọn cỗ xe khác.
+                Chủ xe đã tạm ngừng cho thuê cỗ xe này (bảo dưỡng, hỏng hoặc khóa). Quý khách vui lòng quay lại bộ sưu tập để chọn cỗ xe khác.
               </div>
               <Link to="/search" style={{
                 display: 'inline-flex',
@@ -236,7 +271,7 @@ export default function BookingPage() {
             type="datetime-local"
             value={form.startDate}
             onChange={handleChange}
-            min={new Date(Date.now() + 60 * 60 * 1000).toISOString().slice(0, 16)}
+            min={minStartDate}
             required
           />
           <FormInput
@@ -325,7 +360,10 @@ export default function BookingPage() {
                   <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
                     <button
                       type="button"
-                      onClick={() => setForm(f => ({ ...f, rentalMode: 'SELF_DRIVE', driverId: '' }))}
+                      onClick={() => {
+                        clearDrivers()
+                        setForm(f => ({ ...f, rentalMode: 'SELF_DRIVE', driverId: '' }))
+                      }}
                       style={{
                         padding: '10px 16px',
                         background: 'var(--muc)',
@@ -573,7 +611,7 @@ export default function BookingPage() {
             }}
           >
             <span>
-              {isCarUnavailable ? 'Hết xe / Đã được đặt' :
+              {isCarUnavailable ? 'Xe tạm không khả dụng' :
                noDriverAvailable ? 'Tài xế đã kín lịch làm việc' :
                loading ? 'Đang xử lý...' : 'Xác nhận đặt xe'}
             </span>

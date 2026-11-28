@@ -13,6 +13,7 @@ import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -143,8 +144,15 @@ public class PaymentController {
     @PostMapping("/{id}/mock-success")
     public ApiResponse<PaymentResponse> mockSuccess(
             @PathVariable Long id,
-            @RequestParam(defaultValue = "MOMO") String method) {
+            @RequestParam(defaultValue = "MOMO") String method,
+            HttpServletRequest httpRequest) {
         log.info("MOCK: Simulating payment success for payment: {}, method: {}", id, method);
+        // Chỉ chính khách tạo giao dịch (hoặc Admin) mới được giả lập thanh toán thành công
+        Long userId = extractUserId(httpRequest);
+        boolean isAdmin = "ADMIN".equals(httpRequest.getAttribute("role"));
+        if (!isAdmin && !userId.equals(paymentService.getPaymentEntityById(id).getCustomerId())) {
+            throw new UnauthorizedException(ErrorCode.PERMISSION_DENIED);
+        }
         return ApiResponse.success("Thanh toán thành công (demo)",
                 paymentService.handleMockCallback(id, method));
     }
@@ -152,6 +160,7 @@ public class PaymentController {
     // ===== REFUND =====
 
     @PostMapping("/{id}/refund")
+    @PreAuthorize("hasRole('ADMIN')")  // hoàn tiền thủ công chỉ dành cho Admin
     public ApiResponse<PaymentResponse> refundPayment(
             @PathVariable Long id,
             @RequestParam(required = false) String reason) {

@@ -32,20 +32,16 @@ export default function VerificationPage() {
   const [files, setFiles] = useState({})
   const [previews, setPreviews] = useState({})
 
+  // Tải hồ sơ xác thực (state chỉ cập nhật trong callback bất đồng bộ)
+  const fetchVerification = () =>
+    getMyVerification()
+      .then((res) => setVerification(res.data))
+      .catch((err) => console.error(err))
+      .finally(() => setLoading(false))
+
   useEffect(() => {
     fetchVerification()
   }, [])
-
-  const fetchVerification = async () => {
-    try {
-      const res = await getMyVerification()
-      setVerification(res.data)
-    } catch (err) {
-      console.error(err)
-    } finally {
-      setLoading(false)
-    }
-  }
 
   const showMessage = (type, text) => {
     setMessage({ type, text })

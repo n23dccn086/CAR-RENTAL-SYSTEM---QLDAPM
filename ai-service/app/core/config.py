@@ -6,7 +6,7 @@ class Settings(BaseSettings):
     """Cấu hình AI Service."""
     
     gemini_api_key: str = ""
-    gemini_model: str = "gemini-1.5-flash"
+    gemini_model: str = "gemini-2.5-flash"
     backend_url: str = "http://localhost:8080/api/v1"
     host: str = "0.0.0.0"
     port: int = 8000

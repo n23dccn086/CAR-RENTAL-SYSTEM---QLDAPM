@@ -1,11 +1,11 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { createPortal } from "react-dom";
 import {
   getAllOwnerRequests,
   approveOwnerRequest,
   rejectOwnerRequest,
 } from "../services/ownerRegistrationService";
-import { useDialog } from "../context/DialogContext";
+import { useDialog } from "../context/dialogCore";
 
 const STATUS_MAP = {
   PENDING: { label: "Chờ duyệt", color: "var(--dong)" },
@@ -35,25 +35,31 @@ export default function AdminOwnerRequestsPage() {
   const [rejectSubmitting, setRejectSubmitting] = useState(false);
   const [rejectError, setRejectError] = useState("");
 
-  const fetchRequests = async () => {
+  // Tải danh sách yêu cầu theo filter (state chỉ cập nhật trong callback bất đồng bộ)
+  const loadRequests = useCallback(() => {
+    return getAllOwnerRequests(filter || null)
+      .then((res) => setRequests(res.data || []))
+      .catch((err) => console.error(err))
+      .finally(() => setLoading(false));
+  }, [filter]);
+
+  // Tải lại có hiển thị loading (dùng sau khi duyệt / từ chối)
+  const fetchRequests = () => {
     setLoading(true);
-    try {
-      const res = await getAllOwnerRequests(filter || null);
-      setRequests(res.data || []);
-    } catch (err) {
-      console.error(err);
-    } finally {
-      setLoading(false);
-    }
+    return loadRequests();
   };
 
   useEffect(() => {
-    fetchRequests();
-  }, [filter]);
+    loadRequests();
+  }, [loadRequests]);
 
-  useEffect(() => {
+  // Đổi filter → hiển thị loading và reset về trang 1
+  const changeFilter = (value) => {
+    if (value === filter) return;
+    setLoading(true);
+    setFilter(value);
     setCurrentPage(1);
-  }, [filter]);
+  };
 
   const showMessage = (msg) => {
     setMessage(msg);
@@ -224,7 +230,7 @@ export default function AdminOwnerRequestsPage() {
         ].map((opt) => (
           <button
             key={opt.v}
-            onClick={() => setFilter(opt.v)}
+            onClick={() => changeFilter(opt.v)}
             style={{
               padding: "8px 16px",
               background: filter === opt.v ? "var(--muc)" : "transparent",

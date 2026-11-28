@@ -74,6 +74,8 @@ payment:
 
 app:
   upload-dir: ${APP_UPLOAD_DIR:uploads}
+  # Dùng để dựng Magic Link gửi tài xế
+  frontend-url: ${FRONTEND_URL:http://localhost:5173}
 
 logging:
   level:

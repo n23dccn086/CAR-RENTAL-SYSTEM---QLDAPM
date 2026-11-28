@@ -11,9 +11,12 @@ import java.nio.file.Paths;
 @Configuration
 public class WebMvcConfig implements WebMvcConfigurer {
 
+    @org.springframework.beans.factory.annotation.Value("${app.upload-dir:uploads}")
+    private String uploadDirConfig;
+
     @Override
     public void addResourceHandlers(ResourceHandlerRegistry registry) {
-        Path uploadDir = Paths.get("uploads").toAbsolutePath().normalize();
+        Path uploadDir = Paths.get(uploadDirConfig).toAbsolutePath().normalize();
         String uploadUri = uploadDir.toUri().toString();  // ← FIX: dùng toUri() cho Windows
         System.out.println(">>> Serving static files from: " + uploadUri);
 

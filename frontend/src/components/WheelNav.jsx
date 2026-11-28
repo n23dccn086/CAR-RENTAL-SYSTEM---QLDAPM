@@ -12,6 +12,13 @@ export default function WheelNav() {
   const [open, setOpen] = useState(false);
   const [hover, setHover] = useState(false);
   const wrapRef = useRef(null);
+  const [prevPathname, setPrevPathname] = useState(location.pathname);
+
+  // Đóng menu khi chuyển trang (điều chỉnh state trong render thay vì trong effect)
+  if (location.pathname !== prevPathname) {
+    setPrevPathname(location.pathname);
+    setOpen(false);
+  }
 
   useEffect(() => {
     if (isLoggedIn) {
@@ -19,7 +26,7 @@ export default function WheelNav() {
       const interval = setInterval(fetchUnreadCount, 30000); // Polling mỗi 30s
       return () => clearInterval(interval);
     }
-  }, [isLoggedIn]);
+  }, [isLoggedIn, fetchUnreadCount]);
 
   useEffect(() => {
     const handleClick = (e) => {
@@ -29,10 +36,6 @@ export default function WheelNav() {
     document.addEventListener("mousedown", handleClick);
     return () => document.removeEventListener("mousedown", handleClick);
   }, []);
-
-  useEffect(() => {
-    setOpen(false);
-  }, [location.pathname]);
 
   const handleLogout = () => {
     logout();

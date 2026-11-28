@@ -164,10 +164,10 @@ public class PaymentServiceImpl implements PaymentService {
             }
         }
 
+        // Không được "đoán" payment (trước đây lấy payment PENDING đầu tiên của hệ thống → có thể
+        // ghi nhận thanh toán nhầm cho đơn của người khác). Không khớp orderId thì từ chối.
         if (payment == null) {
-            payment = paymentRepository.findByStatus(PaymentStatus.PENDING)
-                    .stream().findFirst()
-                    .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.PAYMENT_NOT_FOUND));
+            throw new ResourceNotFoundException(ErrorCode.PAYMENT_NOT_FOUND);
         }
 
         if (isSuccess) {
@@ -181,13 +181,9 @@ public class PaymentServiceImpl implements PaymentService {
                         && booking.getStatus() == BookingStatus.PENDING) {
                     booking.setStatus(BookingStatus.PAID);
                     bookingRepository.save(booking);
-                    carRepository.findById(booking.getCarId()).ifPresent(c -> {
-                        c.setStatus(com.carrental.car.entity.CarStatus.RENTED);
-                        carRepository.save(c);
-                    });
                     // Đưa job hủy tự động sau 4 tiếng vào Redis Delayed Queue (lưu trên disk)
                     delayedQueueService.scheduleCancellation(booking.getId(), LocalDateTime.now().plusHours(4));
-                    log.info("Booking updated to PAID: id={}, car {} -> RENTED, scheduled in Redis", booking.getId(), booking.getCarId());
+                    log.info("Booking updated to PAID: id={}, scheduled auto-cancel in Redis", booking.getId());
                 } else if (payment.getPaymentType() == PaymentType.REMAINING
                         && booking.getStatus() == BookingStatus.RETURNED) {
                     booking.setStatus(BookingStatus.COMPLETED);
@@ -195,12 +191,14 @@ public class PaymentServiceImpl implements PaymentService {
                     bookingRepository.save(booking);
                     boolean hasOtherActive = bookingRepository.existsByCarIdAndStatusIn(
                             booking.getCarId(),
-                            List.of(BookingStatus.PENDING, BookingStatus.PAID, BookingStatus.APPROVED, BookingStatus.RENTED)
+                            List.of(BookingStatus.RENTED)
                     );
                     if (!hasOtherActive) {
                         carRepository.findById(booking.getCarId()).ifPresent(c -> {
-                            c.setStatus(com.carrental.car.entity.CarStatus.AVAILABLE);
-                            carRepository.save(c);
+                            if (c.getStatus() == com.carrental.car.entity.CarStatus.RENTED) {
+                                c.setStatus(com.carrental.car.entity.CarStatus.AVAILABLE);
+                                carRepository.save(c);
+                            }
                         });
                     }
                     log.info("Booking updated to COMPLETED: id={}", booking.getId());
@@ -245,13 +243,9 @@ public class PaymentServiceImpl implements PaymentService {
                     && booking.getStatus() == BookingStatus.PENDING) {
                 booking.setStatus(BookingStatus.PAID);
                 bookingRepository.save(booking);
-                carRepository.findById(booking.getCarId()).ifPresent(c -> {
-                    c.setStatus(com.carrental.car.entity.CarStatus.RENTED);
-                    carRepository.save(c);
-                });
                 // Đưa job hủy tự động sau 4 tiếng vào Redis Delayed Queue (lưu trên disk)
                 delayedQueueService.scheduleCancellation(booking.getId(), LocalDateTime.now().plusHours(4));
-                log.info("Booking {} updated to PAID, car {} -> RENTED, scheduled in Redis", booking.getId(), booking.getCarId());
+                log.info("Booking {} updated to PAID, scheduled auto-cancel in Redis", booking.getId());
 
                 // Thông báo cho Owner: Đơn mới
                 try {
@@ -274,12 +268,14 @@ public class PaymentServiceImpl implements PaymentService {
                 bookingRepository.save(booking);
                 boolean hasOtherActive = bookingRepository.existsByCarIdAndStatusIn(
                         booking.getCarId(),
-                        List.of(BookingStatus.PENDING, BookingStatus.PAID, BookingStatus.APPROVED, BookingStatus.RENTED)
+                        List.of(BookingStatus.RENTED)
                 );
                 if (!hasOtherActive) {
                     carRepository.findById(booking.getCarId()).ifPresent(c -> {
-                        c.setStatus(com.carrental.car.entity.CarStatus.AVAILABLE);
-                        carRepository.save(c);
+                        if (c.getStatus() == com.carrental.car.entity.CarStatus.RENTED) {
+                            c.setStatus(com.carrental.car.entity.CarStatus.AVAILABLE);
+                            carRepository.save(c);
+                        }
                     });
                 }
                 log.info("Booking {} updated to COMPLETED", booking.getId());

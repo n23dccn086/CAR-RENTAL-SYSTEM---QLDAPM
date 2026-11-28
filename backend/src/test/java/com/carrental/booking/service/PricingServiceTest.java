@@ -60,4 +60,27 @@ public class PricingServiceTest {
         // 3. Kiểm tra
         assertEquals(expectedTotal, actualTotal, "Tổng tiền phải là 1.300.000đ");
     }
+
+    @Test
+    @DisplayName("Giá cuối tuần tính theo TỪNG ngày, không lấy giá ngày nhận xe nhân cho cả đơn")
+    public void testRentalFeePerDayWeekendPricing() {
+        com.carrental.car.entity.Car car = com.carrental.car.entity.Car.builder()
+                .pricePerDay(700_000L).priceWeekend(900_000L).build();
+
+        // T6 13/11/2026 10:00 → T2 16/11 10:00 = 3 ngày: T6 (thường) + T7 + CN (cuối tuần)
+        java.time.LocalDateTime friday = java.time.LocalDateTime.of(2026, 11, 13, 10, 0);
+        assertEquals(700_000L + 900_000L + 900_000L, pricingService.calculateRentalFee(car, friday, 3));
+
+        // T7 14/11 → T4 18/11 = 4 ngày: T7 + CN (cuối tuần) + T2 + T3 (thường)
+        java.time.LocalDateTime saturday = java.time.LocalDateTime.of(2026, 11, 14, 10, 0);
+        assertEquals(2 * 900_000L + 2 * 700_000L, pricingService.calculateRentalFee(car, saturday, 4));
+    }
+
+    @Test
+    @DisplayName("Xe không cấu hình giá cuối tuần thì mọi ngày dùng giá thường")
+    public void testRentalFeeWithoutWeekendPrice() {
+        com.carrental.car.entity.Car car = com.carrental.car.entity.Car.builder().pricePerDay(500_000L).build();
+        java.time.LocalDateTime saturday = java.time.LocalDateTime.of(2026, 11, 14, 10, 0);
+        assertEquals(1_500_000L, pricingService.calculateRentalFee(car, saturday, 3));
+    }
 }

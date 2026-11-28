@@ -10,7 +10,7 @@ Dịch vụ có khả năng tự động nhận diện vai trò người dùng (
 
 * **Ngôn ngữ:** Python 3.11+
 * **Framework:** FastAPI, Uvicorn (ASGI Server)
-* **Mô hình ngôn ngữ lớn (LLM):** Google Gemini API (`gemini-1.5-flash`)
+* **Mô hình ngôn ngữ lớn (LLM):** Google Gemini API (`gemini-2.5-flash`)
 * **Vector Database (RAG):** ChromaDB (lưu trữ persistent embeddings)
 * **Mô hình Embeddings:** `sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2` (hỗ trợ tiếng Việt đa ngôn ngữ xuất sắc)
 * **HTTP Client:** `httpx` (gọi bất đồng bộ sang Spring Boot Backend)
@@ -93,7 +93,7 @@ pip install -r requirements.txt
 Tạo file `.env` tại thư mục `ai-service`:
 ```env
 GEMINI_API_KEY=your_google_gemini_api_key_here
-GEMINI_MODEL=gemini-1.5-flash
+GEMINI_MODEL=gemini-2.5-flash
 BACKEND_URL=http://localhost:8080/api/v1
 HOST=0.0.0.0
 PORT=8000

@@ -35,9 +35,24 @@ export default function SearchPage() {
     return () => clearTimeout(timer)
   }, [location])
 
+  // Khi bộ lọc / trang thay đổi: bộ lọc đổi → quay về trang 0; luôn hiển thị loading cho lần tải mới.
+  // (Điều chỉnh state ngay trong render dựa trên giá trị lần trước, thay vì setState trong effect.)
+  const [prevQuery, setPrevQuery] = useState({ debouncedLocation, seats, carType, sort, page })
+  const filtersChanged =
+    prevQuery.debouncedLocation !== debouncedLocation ||
+    prevQuery.seats !== seats ||
+    prevQuery.carType !== carType ||
+    prevQuery.sort !== sort
+  if (filtersChanged || prevQuery.page !== page) {
+    const nextPage = filtersChanged ? 0 : page
+    setPrevQuery({ debouncedLocation, seats, carType, sort, page: nextPage })
+    if (nextPage !== page) setPage(nextPage)
+    setLoading(true)
+  }
+
   useEffect(() => {
+    // Mọi setState bên dưới đều diễn ra sau await (bất đồng bộ)
     const fetchCars = async () => {
-      setLoading(true)
       try {
         const params = new URLSearchParams()
         if (debouncedLocation.trim()) params.append('location', debouncedLocation.trim())
@@ -63,10 +78,6 @@ export default function SearchPage() {
     }
     fetchCars()
   }, [debouncedLocation, seats, carType, sort, page])
-
-  useEffect(() => {
-    setPage(0)
-  }, [debouncedLocation, seats, carType, sort])
 
   const toggleSeat = (seat) => {
     setSeats(prev =>

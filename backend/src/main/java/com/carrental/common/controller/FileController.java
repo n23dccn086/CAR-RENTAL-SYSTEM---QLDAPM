@@ -20,9 +20,10 @@ import java.nio.file.Paths;
 @Slf4j
 public class FileController {
 
-    private final Path uploadDir = Paths.get("uploads").toAbsolutePath().normalize();
+    private final Path uploadDir;
 
-    public FileController() {
+    public FileController(@org.springframework.beans.factory.annotation.Value("${app.upload-dir:uploads}") String uploadDirConfig) {
+        this.uploadDir = Paths.get(uploadDirConfig).toAbsolutePath().normalize();
         try {
             java.nio.file.Files.createDirectories(uploadDir);
         } catch (Exception ignored) {}

@@ -194,8 +194,24 @@ export default function CarDetailPage() {
             {formatPrice(car.pricePerDay)}
             <span style={{ fontFamily: 'var(--mono)', fontSize: '14px', fontWeight: 400, marginLeft: '8px', color: 'var(--dong)' }}>đ/ngày</span>
           </div>
+          {car.priceWeekend > 0 && car.priceWeekend !== car.pricePerDay && (
+            <div style={{ fontFamily: 'var(--mono)', fontSize: '12px', color: 'var(--dong)', marginTop: '8px' }}>
+              T7/CN: {formatPrice(car.priceWeekend)}đ/ngày
+            </div>
+          )}
+          {(car.blockedDates || []).length > 0 && (
+            <div style={{ marginTop: '24px' }}>
+              <div style={{ fontFamily: 'var(--mono)', fontSize: '10px', letterSpacing: '3px', textTransform: 'uppercase', color: 'var(--dong)', marginBottom: '8px' }}>Lịch đã kín</div>
+              {car.blockedDates.map((b, i) => (
+                <div key={i} style={{ fontFamily: 'var(--mono)', fontSize: '12px', color: 'rgba(255,255,255,0.75)' }}>
+                  {b.start_date} → {b.end_date}
+                </div>
+              ))}
+            </div>
+          )}
           <div style={{ height: '1px', background: 'rgba(201,169,97,0.3)', margin: '32px 0' }}></div>
-          {car.status === 'AVAILABLE' ? (
+          {/* Xe đang cho thuê (RENTED) vẫn nhận đặt cho khoảng ngày khác — server kiểm tra trùng lịch */}
+          {car.status === 'AVAILABLE' || car.status === 'RENTED' ? (
             <button onClick={() => navigate(`/booking/${car.id}`)} className="btn-login" style={{ width: '100%', justifyContent: 'center', padding: '18px', background: 'var(--dong)', color: 'var(--muc)' }}>
               <span>Đặt cỗ xe này</span>
             </button>
@@ -212,7 +228,7 @@ export default function CarDetailPage() {
                 marginBottom: '16px',
                 textAlign: 'center'
               }}>
-                🔒 Cỗ xe hiện <strong>{car.status === 'RENTED' ? 'đã có người đặt / đang cho thuê' : 'tạm không khả dụng'}</strong>.
+                🔒 Cỗ xe hiện <strong>tạm không khả dụng</strong> (bảo dưỡng, hỏng hoặc đã khóa).
               </div>
               <button disabled style={{ width: '100%', padding: '18px', background: 'rgba(255,255,255,0.08)', color: 'rgba(255,255,255,0.4)', border: '1px solid rgba(255,255,255,0.15)', fontFamily: 'var(--mono)', fontSize: '11px', letterSpacing: '2px', textTransform: 'uppercase', cursor: 'not-allowed' }}>
                 Hết xe

@@ -1,5 +1,4 @@
 import { useState, useEffect } from "react";
-import { Link } from "react-router-dom";
 import api from "../services/api";
 import { useAuth } from "../hooks/useAuth";
 
@@ -48,20 +47,23 @@ export default function DisputesPage() {
   const [uploading, setUploading] = useState(false);
 
   // ===== FETCH =====
-  const fetchDisputes = async () => {
+  // Tải khiếu nại (state chỉ cập nhật trong callback bất đồng bộ)
+  const loadDisputes = () =>
+    Promise.all([
+      api.get("/disputes/my"),
+      api.get("/disputes/against-me"),
+    ])
+      .then(([myRes, againstRes]) => {
+        setDisputes(Array.isArray(myRes.data.data) ? myRes.data.data : (myRes.data.data?.disputes || []));
+        setAgainstMe(Array.isArray(againstRes.data.data) ? againstRes.data.data : (againstRes.data.data?.disputes || []));
+      })
+      .catch((err) => console.error(err))
+      .finally(() => setLoading(false));
+
+  // Tải lại có hiển thị loading (dùng sau các thao tác tạo / phản bác / bổ sung)
+  const fetchDisputes = () => {
     setLoading(true);
-    try {
-      const [myRes, againstRes] = await Promise.all([
-        api.get("/disputes/my"),
-        api.get("/disputes/against-me"),
-      ]);
-      setDisputes(Array.isArray(myRes.data.data) ? myRes.data.data : (myRes.data.data?.disputes || []));
-      setAgainstMe(Array.isArray(againstRes.data.data) ? againstRes.data.data : (againstRes.data.data?.disputes || []));
-    } catch (err) {
-      console.error(err);
-    } finally {
-      setLoading(false);
-    }
+    return loadDisputes();
   };
 
   const fetchBookings = async () => {
@@ -78,13 +80,21 @@ export default function DisputesPage() {
   };
 
   useEffect(() => {
-    fetchDisputes();
+    loadDisputes();
   }, []);
 
-  // Reset page khi filter/tab đổi
-  useEffect(() => {
+  // Đổi filter / tab → reset về trang 1
+  const changeFilter = (value) => {
+    if (value === filter) return;
+    setFilter(value);
     setCurrentPage(1);
-  }, [filter, tab]);
+  };
+
+  const changeTab = (value) => {
+    if (value === tab) return;
+    setTab(value);
+    setCurrentPage(1);
+  };
 
   // ===== UPLOAD FILE =====
   const handleUploadFile = async (file, setFiles, files) => {
@@ -317,7 +327,7 @@ export default function DisputesPage() {
     try {
       const parsed = JSON.parse(raw);
       return Array.isArray(parsed) ? parsed : [];
-    } catch (e) {
+    } catch {
       return [];
     }
   };
@@ -391,7 +401,7 @@ export default function DisputesPage() {
         }}
       >
         <button
-          onClick={() => setTab("my")}
+          onClick={() => changeTab("my")}
           style={{
             padding: "12px 24px",
             background: "transparent",
@@ -409,7 +419,7 @@ export default function DisputesPage() {
           Tôi tạo ({disputes.length})
         </button>
         <button
-          onClick={() => setTab("against-me")}
+          onClick={() => changeTab("against-me")}
           style={{
             padding: "12px 24px",
             background: "transparent",
@@ -465,7 +475,7 @@ export default function DisputesPage() {
         ].map((opt) => (
           <button
             key={opt.v}
-            onClick={() => setFilter(opt.v)}
+            onClick={() => changeFilter(opt.v)}
             style={{
               padding: "8px 16px",
               background: filter === opt.v ? "var(--muc)" : "transparent",
@@ -517,13 +527,13 @@ export default function DisputesPage() {
               let files = [];
               try {
                 files = d.evidence ? JSON.parse(d.evidence) : [];
-              } catch (e) {}
+              } catch { /* JSON không hợp lệ → giữ mảng rỗng */ }
               let counterFiles = [];
               try {
                 counterFiles = d.counterEvidence
                   ? JSON.parse(d.counterEvidence)
                   : [];
-              } catch (e) {}
+              } catch { /* JSON không hợp lệ → giữ mảng rỗng */ }
 
               const history = parseHistory(d.evidenceHistory);
 
@@ -1353,7 +1363,7 @@ export default function DisputesPage() {
               let existingFiles = [];
               try {
                 existingFiles = JSON.parse(existingRaw);
-              } catch (e) {}
+              } catch { /* JSON không hợp lệ → giữ mảng rỗng */ }
               if (existingFiles.length === 0) return null;
               return (
                 <div style={{ marginBottom: "16px" }}>

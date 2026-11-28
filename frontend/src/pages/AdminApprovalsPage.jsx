@@ -28,25 +28,29 @@ export default function AdminApprovalsPage() {
   const [rejectSubmitting, setRejectSubmitting] = useState(false)
   const [rejectError, setRejectError] = useState('')
 
-  const fetchCars = async () => {
+  // Tải danh sách xe (state chỉ được cập nhật trong callback bất đồng bộ)
+  const loadCars = () =>
+    api.get('/cars?status=ALL')
+      .then(res => setCars(res.data.data || []))
+      .catch(err => console.error(err))
+      .finally(() => setLoading(false))
+
+  // Tải lại có hiển thị trạng thái loading (dùng sau khi duyệt / từ chối)
+  const fetchCars = () => {
     setLoading(true)
-    try {
-      const res = await api.get('/cars?status=ALL')
-      setCars(res.data.data || [])
-    } catch (err) {
-      console.error(err)
-    } finally {
-      setLoading(false)
-    }
+    return loadCars()
   }
 
   useEffect(() => {
-    fetchCars()
+    loadCars()
   }, [])
 
-  useEffect(() => {
+  // Đổi bộ lọc → quay về trang 1
+  const changeFilter = (value) => {
+    if (value === filter) return
+    setFilter(value)
     setCurrentPage(1)
-  }, [filter])
+  }
 
   const openDetail = async (car) => {
     setSelectedCar(car)
@@ -180,7 +184,7 @@ export default function AdminApprovalsPage() {
 
       <div style={{ display: 'flex', gap: '12px', marginBottom: '40px', flexWrap: 'wrap' }}>
         {filterOptions.map(opt => (
-          <button key={opt.v} onClick={() => setFilter(opt.v)} style={{
+          <button key={opt.v} onClick={() => changeFilter(opt.v)} style={{
             padding: '8px 16px',
             background: filter === opt.v ? 'var(--muc)' : 'transparent',
             color: filter === opt.v ? 'var(--kem)' : 'var(--muc-mo)',
@@ -465,7 +469,7 @@ export default function AdminApprovalsPage() {
 // ============================================================
 // MODAL CHI TIẾT XE — ADMIN
 // ============================================================
-function CarDetailModal({ car, loading, onClose, onApprove, onReject }) {
+function CarDetailModal({ car, onClose, onApprove, onReject }) {
   const formatPrice = (p) => new Intl.NumberFormat("vi-VN").format(p || 0);
   const [activeImage, setActiveImage] = useState(0);
 
@@ -698,12 +702,6 @@ const FUEL_LABELS = {
   DIESEL: "Dầu",
   ELECTRIC: "Điện",
   HYBRID: "Hybrid",
-};
-
-const RENTAL_MODE_LABELS = {
-  SELF_DRIVE: "Tự lái",
-  WITH_DRIVER: "Có tài xế",
-  BOTH: "Cả hai",
 };
 
 const CAR_TYPE_LABELS = {

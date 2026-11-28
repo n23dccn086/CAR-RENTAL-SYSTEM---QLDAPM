@@ -1,8 +1,8 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { createPortal } from "react-dom";
 import { Link } from "react-router-dom";
 import api from "../services/api";
-import { useDialog } from "../context/DialogContext";
+import { useDialog } from "../context/dialogCore";
 
 const SEAT_OPTIONS = [4, 5, 7];
 
@@ -98,39 +98,58 @@ export default function OwnerCarsPage() {
     setTimeout(() => setMessage(""), 5000);
   };
 
-  const fetchCars = async () => {
+  // Khi bộ lọc / trang thay đổi: bộ lọc đổi → quay về trang 0; luôn hiển thị loading cho lần tải mới.
+  // (Điều chỉnh state ngay trong render dựa trên giá trị lần trước, thay vì setState trong effect.)
+  const [prevQuery, setPrevQuery] = useState({ carType, status, seats, debouncedSearch, sort, page });
+  const filtersChanged =
+    prevQuery.carType !== carType ||
+    prevQuery.status !== status ||
+    prevQuery.seats !== seats ||
+    prevQuery.debouncedSearch !== debouncedSearch ||
+    prevQuery.sort !== sort;
+  if (filtersChanged || prevQuery.page !== page) {
+    const nextPage = filtersChanged ? 0 : page;
+    setPrevQuery({ carType, status, seats, debouncedSearch, sort, page: nextPage });
+    if (nextPage !== page) setPage(nextPage);
     setLoading(true);
-    try {
-      const params = new URLSearchParams();
-      if (carType) params.append("carType", carType);
-      if (status) params.append("status", status);
-      seats.forEach((s) => params.append("seats", s));
-      if (debouncedSearch.trim())
-        params.append("search", debouncedSearch.trim());
-      params.append("sort", sort);
-      params.append("page", page);
-      params.append("size", SIZE);
+  }
 
-      const res = await api.get(`/owner/cars?${params.toString()}`);
-      const pageData = res.data.data || {};
-      setCars(pageData.content || []);
-      setTotalPages(pageData.totalPages || 0);
-      setTotalElements(pageData.totalElements || 0);
-    } catch (err) {
-      console.error("Failed to load cars:", err);
-      setCars([]);
-    } finally {
-      setLoading(false);
-    }
+  // Tải danh sách xe (state chỉ cập nhật trong callback bất đồng bộ)
+  const loadCars = useCallback(() => {
+    const params = new URLSearchParams();
+    if (carType) params.append("carType", carType);
+    if (status) params.append("status", status);
+    seats.forEach((s) => params.append("seats", s));
+    if (debouncedSearch.trim())
+      params.append("search", debouncedSearch.trim());
+    params.append("sort", sort);
+    params.append("page", page);
+    params.append("size", SIZE);
+
+    return api
+      .get(`/owner/cars?${params.toString()}`)
+      .then((res) => {
+        const pageData = res.data.data || {};
+        setCars(pageData.content || []);
+        setTotalPages(pageData.totalPages || 0);
+        setTotalElements(pageData.totalElements || 0);
+      })
+      .catch((err) => {
+        console.error("Failed to load cars:", err);
+        setCars([]);
+      })
+      .finally(() => setLoading(false));
+  }, [carType, status, seats, debouncedSearch, sort, page]);
+
+  // Tải lại có hiển thị loading (dùng sau import / đổi trạng thái / xóa)
+  const fetchCars = () => {
+    setLoading(true);
+    return loadCars();
   };
 
   useEffect(() => {
-    fetchCars();
-  }, [carType, status, seats, debouncedSearch, sort, page]);
-
-  useEffect(() => {
-    setPage(0);
-  }, [carType, status, seats, debouncedSearch, sort]);
+    loadCars();
+  }, [loadCars]);
 
   const toggleSeat = (s) => {
     setSeats((prev) =>

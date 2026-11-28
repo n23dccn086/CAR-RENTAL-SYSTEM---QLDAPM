@@ -45,6 +45,9 @@ public class BookingServiceTest {
     @Mock
     private BookingDelayedQueueService delayedQueueService;
 
+    @Mock
+    private com.carrental.car.repository.CarBlockedDateRepository carBlockedDateRepository;
+
     @InjectMocks
     private BookingServiceImpl bookingService;
 
@@ -147,5 +150,36 @@ public class BookingServiceTest {
         assertThrows(BadRequestException.class, () -> {
             bookingService.createBooking(customerId, request);
         }, "Ngày trả trước ngày nhận phải bị chặn");
+    }
+
+    // ===== TEST 6: Chặn đặt xe trùng lịch chủ xe đã chặn =====
+    @Test
+    @DisplayName("TC - Test chặn đặt xe khi trùng khoảng ngày chủ xe đã chặn lịch")
+    public void testCreateBookingOnBlockedDates() {
+        Long customerId = 3L;
+        BookingRequest request = new BookingRequest();
+        request.setRentalMode(RentalMode.SELF_DRIVE);
+        request.setCarId(1L);
+        request.setStartDate(LocalDateTime.of(2026, 12, 1, 9, 0));
+        request.setEndDate(LocalDateTime.of(2026, 12, 3, 9, 0));
+
+        User mockCustomer = new User();
+        mockCustomer.setId(customerId);
+        mockCustomer.setVerificationStatus(VerificationStatus.VERIFIED);
+
+        Car mockCar = new Car();
+        mockCar.setId(1L);
+        mockCar.setStatus(CarStatus.AVAILABLE);
+        mockCar.setOwnerId(2L);
+
+        when(userRepository.findById(customerId)).thenReturn(Optional.of(mockCustomer));
+        when(carRepository.findById(1L)).thenReturn(Optional.of(mockCar));
+        when(bookingRepository.existsActiveBooking(1L, request.getStartDate(), request.getEndDate())).thenReturn(false);
+        when(carBlockedDateRepository.existsByCarIdAndStartDateLessThanEqualAndEndDateGreaterThanEqual(
+                1L, java.time.LocalDate.of(2026, 12, 3), java.time.LocalDate.of(2026, 12, 1))).thenReturn(true);
+
+        assertThrows(BadRequestException.class, () -> {
+            bookingService.createBooking(customerId, request);
+        }, "Không được đặt xe vào ngày chủ xe đã chặn lịch");
     }
 }

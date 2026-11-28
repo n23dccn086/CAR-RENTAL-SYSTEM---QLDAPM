@@ -31,7 +31,7 @@
 
 **Car Rental System** là nền tảng kết nối trực tuyến giữa **Khách thuê xe**, **Chủ xe đối tác**, **Đội ngũ Tài xế** và **Ban Quản trị sàn (Admin)**:
 * Hỗ trợ 2 hình thức: **Thuê xe tự lái** và **Thuê xe có tài xế**.
-* Quy trình đặt cọc, thanh toán online (VNPay), xét duyệt đơn hàng, xác minh danh tính giấy tờ GPLX/CCCD.
+* Quy trình đặt cọc, thanh toán cọc qua cổng MoMo (môi trường sandbox / giả lập), xét duyệt đơn hàng, xác minh danh tính giấy tờ GPLX/CCCD.
 * Quy trình giao - nhận xe chặt chẽ với **Biên bản bàn giao điện tử (Handover Record)**, chụp ảnh hiện trạng xe và ký chữ ký số trên màn hình cảm ứng / chuột.
 * Cơ chế tự động tính **Phí trả muộn (Late Fee)** và **Phí vượt giới hạn quãng đường (Km Overage Fee)** đa bậc theo ngày/dòng xe.
 * Cơ chế khiếu nại, giải trình và **xét duyệt hoàn tiền cọc linh hoạt** cho khách hàng khi hủy chuyến.
@@ -48,7 +48,7 @@ Hệ thống được chia thành **3 dịch vụ / thư mục độc lập**:
                        │   Frontend (React 19)   │
                        │   Port: 5173 (Vite)     │
                        └───────────┬─────────────┘
-                                   │ HTTP / REST / WebSocket
+                                   │ HTTP / REST (thông báo: polling 30s)
           ┌────────────────────────┴────────────────────────┐
           ▼                                                 ▼
 ┌─────────────────────────┐                       ┌─────────────────────────┐
@@ -59,16 +59,17 @@ Hệ thống được chia thành **3 dịch vụ / thư mục độc lập**:
     ┌───────┴───────┐                                 ┌───────┴───────┐
     ▼               ▼                                 ▼               ▼
 PostgreSQL 15    Redis 7                           ChromaDB      Google Gemini
- (Database)   (Cache/Auth)                        (Vector RAG)    (LLM API)
+ (Database) (Queue/Blacklist)                     (Vector RAG)    (LLM API)
 ```
 
-### 1. ⚙️ `backend/` — Core Business API (Spring Boot 3 / Java 21)
+### 1. ⚙️ `backend/` — Core Business API (Spring Boot 4 / Java 21)
 * **Framework:** Spring Boot 4.0.8, Java 21.
-* **Bảo mật:** Spring Security 6, JWT (JJWT 0.12.6) với cơ chế Refresh Token & Redis Blacklist.
+* **Bảo mật:** Spring Security 6, JWT (JJWT) với Access Token + Refresh Token; đăng xuất thu hồi cả hai token bằng danh sách đen trên Redis (lưu SHA-256 của token, TTL = thời gian sống còn lại).
 * **Cơ sở dữ liệu:** PostgreSQL 15, Spring Data JPA, Flyway Database Migration.
-* **Lưu trữ ảnh & chữ ký:** Cloudinary SDK.
-* **Giao tiếp thời gian thực:** Spring WebSocket STOMP (thông báo realtime).
-* **Tiện ích:** Apache POI (Import/Export xe dạng file Excel), Apache PDFBox (Xuất biên bản bàn giao, hợp đồng).
+* **Lưu trữ ảnh & chữ ký:** Lưu file trên ổ đĩa server (thư mục `backend/uploads`, phục vụ qua `/api/v1/files/**`).
+* **Thông báo:** Lưu DB, frontend polling `/notifications/unread-count` mỗi 30 giây (chưa dùng WebSocket).
+* **Hàng đợi hủy đơn tự động:** Redis ZSET (đơn đã cọc quá 4h chủ xe chưa duyệt → hủy + hoàn 100% cọc), có fallback quét DB. Tính trống lịch của xe theo khoảng ngày (một xe nhận nhiều đơn ở các khoảng khác nhau).
+* **Tiện ích:** Apache POI (Import xe & tài xế từ file Excel 11 cột), Apache PDFBox (xuất biên bản phán xử tranh chấp).
 
 ### 2. 🎨 `frontend/` — Giao diện người dùng (React 19 + Vite 8)
 * **Framework:** React 19, Vite 8, React Router v7, Zustand Store.
@@ -81,7 +82,7 @@ PostgreSQL 15    Redis 7                           ChromaDB      Google Gemini
 
 ### 3. 🤖 `ai-service/` — Trợ lý ảo AI Concierge (Python FastAPI)
 * **Framework:** FastAPI, Uvicorn, Python 3.11+.
-* **Mô hình ngôn ngữ:** Google Gemini API (`gemini-1.5-flash`).
+* **Mô hình ngôn ngữ:** Google Gemini API (`gemini-2.5-flash`, cấu hình qua `GEMINI_MODEL`).
 * **Vector Database & RAG:** ChromaDB kết hợp mô hình embedding `sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2`.
 * **Phân quyền ngữ cảnh:** Tự động giải mã JWT Role của người dùng (`GUEST`, `CUSTOMER`, `OWNER`, `ADMIN`) để trả lời đúng thẩm quyền và gọi API sang Backend lấy số liệu thực.
 
@@ -94,7 +95,7 @@ PostgreSQL 15    Redis 7                           ChromaDB      Google Gemini
 | **GUEST (Khách vãng lai)** | Xem danh sách xe, xem đánh giá/CSAT xe, đăng ký, đăng nhập, chat với AI tư vấn thuê xe. |
 | **CUSTOMER (Khách thuê)** | Nộp hồ sơ xác minh CCCD/GPLX, đặt xe, thanh toán tiền cọc, xem chi tiết chuyến đi, ký biên bản nhận xe / trả xe điện tử, thanh toán quyết toán cuối, đánh giá xe & chủ xe, hủy chuyến và yêu cầu hoàn cọc (khiếu nại giải trình khi bị từ chối). |
 | **OWNER (Chủ xe đối tác)** | Quản lý danh sách xe, đăng xe thủ công hoặc import hàng loạt bằng file Excel, duyệt / từ chối đơn thuê, lập biên bản giao nhận xe kèm ảnh chụp và chỉ số ODO/xăng, quản lý tài xế, theo dõi doanh thu và tạo lệnh rút tiền về ngân hàng. |
-| **DRIVER (Tài xế)** | Tiếp nhận yêu cầu cuốc xe có tài xế, xác nhận / từ chối nhận chuyến, theo dõi lộ trình và thông tin khách hàng. |
+| **DRIVER (Tài xế)** | Không có tài khoản web. Nhận Magic Link (SMS giả lập — in ra console backend), mở link để xem thông tin chuyến và xác nhận / từ chối trong 3 giờ; quá hạn hệ thống tự gán tài xế khác (tối đa 5 lần). |
 | **ADMIN (Quản trị viên sàn)** | Xem thống kê doanh thu, CSAT toàn sàn; duyệt / từ chối hồ sơ xe mới, hồ sơ chủ xe, tài xế; duyệt / từ chối yêu cầu hoàn cọc; duyệt lệnh rút tiền; điều chỉnh cấu hình biểu phí nền tảng (phí quá giờ, giới hạn km, phí nền tảng); kiểm duyệt đánh giá. |
 
 ---
@@ -103,29 +104,29 @@ PostgreSQL 15    Redis 7                           ChromaDB      Google Gemini
 
 ```
 CAR-RENTAL-SYSTEM---QLDAPM/
-├── backend/                       # 1. Mã nguồn Backend API (Spring Boot 3)
+├── backend/                       # 1. Mã nguồn Backend API (Spring Boot 4)
 │   ├── src/main/java/com/carrental/
 │   │   ├── admin/                 # Phân hệ quản trị (Duyệt xe, User, Config, Doanh thu)
 │   │   ├── auth/                  # Xác thực, đăng ký, JWT
 │   │   ├── booking/               # Nghiệp vụ đặt xe, hủy đơn, hoàn cọc
-│   │   ├── car/                   # Quản lý xe, lịch bận, Excel import/export
+│   │   ├── car/                   # Quản lý xe, lịch bận, Excel import
 │   │   ├── common/                # Exception handling, Security filter, Base DTO
 │   │   ├── driver/                # Phân công & quản lý tài xế
 │   │   ├── handover/              # Biên bản bàn giao, chữ ký, phí vượt giờ/km
-│   │   ├── notification/          # Hệ thống thông báo & WebSocket
+│   │   ├── notification/          # Hệ thống thông báo (REST)
 │   │   ├── payment/               # Tích hợp thanh toán cọc & quyết toán, hoàn tiền
 │   │   ├── review/                # Hệ thống đánh giá xe, CSAT, phản hồi
 │   │   └── user/                  # Quản lý tài khoản, hồ sơ GPLX/CCCD
 │   ├── src/main/resources/
-│   │   ├── db/migration/          # 23+ Flyway SQL Migration scripts
-│   │   └── application.yml        # Cấu hình Database, Redis, Cloudinary, Mail
+│   │   ├── db/migration/          # 38 Flyway SQL Migration scripts (24 bảng)
+│   │   └── application.yml        # Cấu hình Database, Redis, JWT, MoMo, upload
 │   ├── pom.xml                    # Maven dependencies
 │   └── mvnw / mvnw.cmd            # Maven wrapper
 │
 ├── frontend/                      # 2. Mã nguồn Giao diện (React 19 + Vite)
 │   ├── src/
 │   │   ├── components/            # Header, Footer, HandoverFormModal, SignatureCanvas, WheelNav...
-│   │   ├── context/               # AuthContext, DialogContext (Custom Alert/Prompt/Confirm)
+│   │   ├── context/               # DialogContext (Custom Alert/Prompt/Confirm); auth dùng Zustand (stores/authStore.js)
 │   │   ├── pages/                 # HomePage, CarDetailPage, MyBookingsPage, HandoverPage,
 │   │   │                          # OwnerBookingsPage, AdminDashboard, AdminRefundsPage, AdminReviewsPage...
 │   │   ├── services/              # Axios API clients (api, bookingService, handoverService...)
@@ -138,8 +139,8 @@ CAR-RENTAL-SYSTEM---QLDAPM/
 │   ├── app/
 │   │   ├── api/                   # Router Chatbot API & RAG ingestion
 │   │   ├── core/                  # Đọc cấu hình biến môi trường
-│   │   ├── rag/                   # ChromaDB vector store, Chunking & Embedding pipeline
-│   │   └── services/              # Gemini Client, Backend Integration Service
+│   │   ├── models/                # Pydantic schemas
+│   │   └── services/              # rag_service (ChromaDB), llm_service (Gemini), backend_client
 │   ├── data/documents/            # 13 Bộ quy chuẩn tri thức nghiệp vụ (.md)
 │   ├── main.py                    # Điểm khởi chạy ứng dụng FastAPI
 │   └── requirements.txt           # Thư viện Python (FastAPI, Chromadb, Google-GenerativeAI)
@@ -147,7 +148,10 @@ CAR-RENTAL-SYSTEM---QLDAPM/
 ├── docker-compose.yml             # Docker compose khởi chạy PostgreSQL 15 & Redis 7
 ├── openapi.yaml                   # Đặc tả kỹ thuật OpenAPI 3.0 cho toàn bộ Backend
 ├── api contract.pdf               # Tài liệu đặc tả API hợp đồng
-├── CAR RENTAL SYSTEM-QLDAPM.pdf   # Tài liệu báo cáo dự án QLDAPM
+├── Bao_Cao_Do_An_Car_Rental_System_QLDAPM.docx/.pdf  # Báo cáo đồ án (bản đã đính chính theo mã nguồn)
+├── CAR RENTAL SYSTEM-QLDAPM.pdf   # Tài liệu dự án QLDAPM (bản đầu kỳ)
+├── docs/                          # SRS, charter, test plan, user manual, ERD, use case, danh mục API, review
+├── scripts/gen-api-endpoints.js   # Sinh docs/api-endpoints.md từ các Controller
 └── README.md                      # Tài liệu hướng dẫn này
 ```
 
@@ -189,15 +193,15 @@ docker ps
 
 2. Tạo hoặc cấu hình file `.env` (hoặc cấu hình trong `src/main/resources/application.yml`):
    ```properties
-   DB_URL=jdbc:postgresql://localhost:5432/car_rental
-   DB_USERNAME=postgres
-   DB_PASSWORD=yourpassword
-   REDIS_HOST=localhost
-   REDIS_PORT=6379
-   JWT_SECRET=your_super_secret_key_at_least_256_bits_long_here
-   CLOUDINARY_CLOUD_NAME=your_cloud_name
-   CLOUDINARY_API_KEY=your_api_key
-   CLOUDINARY_API_SECRET=your_api_secret
+   # Copy từ backend/.env.example. Mật khẩu phải khớp POSTGRES_PASSWORD trong docker-compose.yml
+   HOST_POSTGRES=localhost
+   PORT_POSTGRES=5432
+   DB_POSTGRES=car_rental
+   USER_POSTGRES=postgres
+   PASSWORD_POSTGRES=123456
+   HOST_REDIS=localhost
+   PORT_REDIS=6379
+   JWT_SECRET=<base64, tối thiểu 256-bit>
    ```
 
 3. Biên dịch và khởi chạy Spring Boot:
@@ -264,7 +268,7 @@ docker ps
    Điền khóa `GEMINI_API_KEY` của bạn:
    ```properties
    GEMINI_API_KEY=AIzaSy...
-   BACKEND_URL=http://localhost:8080
+   BACKEND_URL=http://localhost:8080/api/v1
    PORT=8000
    ```
 

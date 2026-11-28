@@ -22,48 +22,55 @@ export default function ReviewPage() {
     isAnonymous: false,
   })
 
-  useEffect(() => {
-    loadData()
-  }, [bookingIdParam, reviewId])
-
-  const loadData = async () => {
+  // Đổi tham số URL → reset trạng thái trước khi tải lại
+  // (điều chỉnh state trong render thay vì setState đồng bộ trong effect)
+  const [loadedParams, setLoadedParams] = useState({ bookingIdParam, reviewId })
+  if (loadedParams.bookingIdParam !== bookingIdParam || loadedParams.reviewId !== reviewId) {
+    setLoadedParams({ bookingIdParam, reviewId })
     setLoading(true)
     setError('')
     setExistingReview(null)
-    try {
-      // Danh sách đánh giá của tôi (để biết đã review chưa / tìm theo reviewId)
-      let reviews = []
-      try {
-        const reviewsRes = await api.get(`/reviews/my`)
-        reviews = reviewsRes.data.data || []
-      } catch (e) {
-        if (reviewId) throw e
-      }
-
-      let found = null
-      let resolvedBookingId = bookingIdParam
-      if (reviewId) {
-        found = reviews.find(r => r.id === parseInt(reviewId))
-        if (!found) {
-          setError('Không tìm thấy đánh giá')
-          return
-        }
-        resolvedBookingId = found.bookingId
-      } else {
-        found = reviews.find(r => r.bookingId === parseInt(bookingIdParam))
-      }
-      setBookingId(resolvedBookingId)
-
-      // Load booking info
-      const bookingRes = await api.get(`/bookings/${resolvedBookingId}`)
-      setBooking(bookingRes.data.data)
-      if (found) setExistingReview(found)
-    } catch (err) {
-      setError(err.response?.data?.message || 'Không tải được thông tin đơn')
-    } finally {
-      setLoading(false)
-    }
   }
+
+  useEffect(() => {
+    // Mọi setState bên dưới đều diễn ra sau await (bất đồng bộ)
+    const loadData = async () => {
+      try {
+        // Danh sách đánh giá của tôi (để biết đã review chưa / tìm theo reviewId)
+        let reviews = []
+        try {
+          const reviewsRes = await api.get(`/reviews/my`)
+          reviews = reviewsRes.data.data || []
+        } catch (e) {
+          if (reviewId) throw e
+        }
+
+        let found = null
+        let resolvedBookingId = bookingIdParam
+        if (reviewId) {
+          found = reviews.find(r => r.id === parseInt(reviewId))
+          if (!found) {
+            setError('Không tìm thấy đánh giá')
+            return
+          }
+          resolvedBookingId = found.bookingId
+        } else {
+          found = reviews.find(r => r.bookingId === parseInt(bookingIdParam))
+        }
+        setBookingId(resolvedBookingId)
+
+        // Load booking info
+        const bookingRes = await api.get(`/bookings/${resolvedBookingId}`)
+        setBooking(bookingRes.data.data)
+        if (found) setExistingReview(found)
+      } catch (err) {
+        setError(err.response?.data?.message || 'Không tải được thông tin đơn')
+      } finally {
+        setLoading(false)
+      }
+    }
+    loadData()
+  }, [bookingIdParam, reviewId])
 
   const handleSubmit = async (e) => {
     e.preventDefault()
@@ -90,7 +97,6 @@ export default function ReviewPage() {
     }
   }
 
-  const formatPrice = (p) => new Intl.NumberFormat('vi-VN').format(p || 0)
   const formatDate = (d) => d ? new Date(d).toLocaleDateString('vi-VN') : '—'
 
   // ===== LOADING =====

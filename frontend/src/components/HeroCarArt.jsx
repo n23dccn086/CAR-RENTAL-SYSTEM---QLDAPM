@@ -1,12 +1,11 @@
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 
 export default function HeroCarArt() {
   const [hover, setHover] = useState(false)
-  const [particles, setParticles] = useState([])
 
-  // Tạo particles bay lơ lửng
-  useEffect(() => {
-    const arr = Array.from({ length: 20 }, (_, i) => ({
+  // Tạo particles bay lơ lửng (chỉ tạo một lần khi mount)
+  const [particles] = useState(() =>
+    Array.from({ length: 20 }, (_, i) => ({
       id: i,
       x: Math.random() * 100,
       y: Math.random() * 100,
@@ -14,8 +13,7 @@ export default function HeroCarArt() {
       duration: Math.random() * 8 + 6,
       delay: Math.random() * 5,
     }))
-    setParticles(arr)
-  }, [])
+  )
 
   return (
     <div

@@ -14,26 +14,33 @@ export default function OwnerReviewsPage() {
   const [currentPage, setCurrentPage] = useState(1)
   const ITEMS_PER_PAGE = 10
 
+  // User đổi → hiển thị loading cho lần tải mới (điều chỉnh state trong render thay vì trong effect)
+  const [prevUser, setPrevUser] = useState(user)
+  if (user !== prevUser) {
+    setPrevUser(user)
+    if (user?.id) setLoading(true)
+  }
+
+  // Tải đánh giá của chủ xe (state chỉ cập nhật trong callback bất đồng bộ)
   useEffect(() => {
-    fetchReviews()
+    if (!user?.id) return
+    api.get(`/reviews/owner/${user.id}`)
+      .then(res => setReviews(res.data.data || []))
+      .catch(err => console.error(err))
+      .finally(() => setLoading(false))
   }, [user])
 
-  // Reset page khi filter đổi
-  useEffect(() => {
+  // Đổi bộ lọc → quay về trang 1
+  const changeCarFilter = (value) => {
+    if (value === carFilter) return
+    setCarFilter(value)
     setCurrentPage(1)
-  }, [carFilter, starFilter])
+  }
 
-  const fetchReviews = async () => {
-    if (!user?.id) return
-    setLoading(true)
-    try {
-      const res = await api.get(`/reviews/owner/${user.id}`)
-      setReviews(res.data.data || [])
-    } catch (err) {
-      console.error(err)
-    } finally {
-      setLoading(false)
-    }
+  const changeStarFilter = (value) => {
+    if (value === starFilter) return
+    setStarFilter(value)
+    setCurrentPage(1)
   }
 
   const formatDate = (d) => {
@@ -94,7 +101,7 @@ export default function OwnerReviewsPage() {
 
       {totalReviews > 0 && (
         <div style={{ display: 'flex', gap: '12px', marginBottom: '40px', flexWrap: 'wrap', alignItems: 'center', paddingBottom: '24px', borderBottom: '1px solid rgba(15,14,12,0.15)' }}>
-          <select value={carFilter} onChange={e => setCarFilter(e.target.value)} style={{ padding: '8px 16px', background: 'var(--kem-dam)', border: '1px solid rgba(15,14,12,0.2)', fontFamily: 'var(--mono)', fontSize: '11px', letterSpacing: '1px', cursor: 'pointer', outline: 'none' }}>
+          <select value={carFilter} onChange={e => changeCarFilter(e.target.value)} style={{ padding: '8px 16px', background: 'var(--kem-dam)', border: '1px solid rgba(15,14,12,0.2)', fontFamily: 'var(--mono)', fontSize: '11px', letterSpacing: '1px', cursor: 'pointer', outline: 'none' }}>
             <option value="">Tất cả xe ({uniqueCars.length})</option>
             {uniqueCars.map((c, i) => <option key={i} value={c}>{c}</option>)}
           </select>
@@ -104,7 +111,7 @@ export default function OwnerReviewsPage() {
               { v: '', l: 'Tất cả' }, { v: '5', l: '5★' }, { v: '4', l: '4★' },
               { v: '3', l: '3★' }, { v: '2', l: '2★' }, { v: '1', l: '1★' },
             ].map(opt => (
-              <button key={opt.v} onClick={() => setStarFilter(opt.v)} style={{
+              <button key={opt.v} onClick={() => changeStarFilter(opt.v)} style={{
                 padding: '6px 12px',
                 background: starFilter === opt.v ? 'var(--muc)' : 'transparent',
                 color: starFilter === opt.v ? 'var(--kem)' : 'var(--muc-mo)',

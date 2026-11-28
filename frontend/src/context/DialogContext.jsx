@@ -1,25 +1,6 @@
-import { createContext, useContext, useState, useRef, useEffect, useCallback } from 'react'
+import { useState, useRef, useEffect, useCallback } from 'react'
 import { createPortal } from 'react-dom'
-
-const DialogContext = createContext(null)
-
-let globalDialog = null
-
-export const dialog = {
-  confirm: (options) => {
-    if (globalDialog?.confirm) return globalDialog.confirm(options)
-    return Promise.resolve(window.confirm(typeof options === 'string' ? options : (options?.message || options?.title || 'Xác nhận?')))
-  },
-  prompt: (options) => {
-    if (globalDialog?.prompt) return globalDialog.prompt(options)
-    return Promise.resolve(window.prompt(typeof options === 'string' ? options : (options?.message || options?.inputLabel || 'Nhập nội dung:'), options?.defaultValue || ''))
-  },
-  alert: (options) => {
-    if (globalDialog?.alert) return globalDialog.alert(options)
-    window.alert(typeof options === 'string' ? options : (options?.message || options?.title || ''))
-    return Promise.resolve()
-  }
-}
+import { DialogContext, setGlobalDialog } from './dialogCore'
 
 export function DialogProvider({ children }) {
   const [dialogState, setDialogState] = useState(null)
@@ -91,13 +72,13 @@ export function DialogProvider({ children }) {
 
   // Gán singleton cho các utility hoặc component gọi trực tiếp
   useEffect(() => {
-    globalDialog = {
+    setGlobalDialog({
       confirm: (opts) => openDialog('confirm', typeof opts === 'string' ? { message: opts } : opts),
       prompt: (opts) => openDialog('prompt', typeof opts === 'string' ? { message: opts } : opts),
       alert: (opts) => openDialog('alert', typeof opts === 'string' ? { message: opts } : opts)
-    }
+    })
     return () => {
-      globalDialog = null
+      setGlobalDialog(null)
     }
   }, [openDialog])
 
@@ -493,12 +474,4 @@ export function DialogProvider({ children }) {
         )}
     </DialogContext.Provider>
   )
-}
-
-export function useDialog() {
-  const context = useContext(DialogContext)
-  if (!context) {
-    return dialog
-  }
-  return context
 }

@@ -1,7 +1,7 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import api from '../services/api'
 import { useAuth } from '../hooks/useAuth'
-import { useDialog } from '../context/DialogContext'
+import { useDialog } from '../context/dialogCore'
 
 export default function AdminUsersPage() {
   const { confirm, alert: dialogAlert } = useDialog()
@@ -29,32 +29,38 @@ export default function AdminUsersPage() {
   const [rejectSubmitting, setRejectSubmitting] = useState(false)
   const [rejectError, setRejectError] = useState('')
 
-  const fetchData = async () => {
-    setLoading(true)
-    try {
-      const params = {}
-      if (filter.role) params.role = filter.role
-      if (filter.status) params.status = filter.status
+  // Tải danh sách user + thống kê theo filter (state chỉ cập nhật trong callback bất đồng bộ)
+  const loadData = useCallback(() => {
+    const params = {}
+    if (filter.role) params.role = filter.role
+    if (filter.status) params.status = filter.status
 
-      const [usersRes, statsRes] = await Promise.all([
-        api.get('/admin/users', { params }),
-        api.get('/admin/users/stats'),
-      ])
-      setUsers(usersRes.data.data || [])
-      setStats(statsRes.data.data)
-    } catch (err) {
-      console.error(err)
-    } finally {
-      setLoading(false)
-    }
+    return Promise.all([
+      api.get('/admin/users', { params }),
+      api.get('/admin/users/stats'),
+    ])
+      .then(([usersRes, statsRes]) => {
+        setUsers(usersRes.data.data || [])
+        setStats(statsRes.data.data)
+      })
+      .catch(err => console.error(err))
+      .finally(() => setLoading(false))
+  }, [filter])
+
+  // Tải lại có hiển thị loading (dùng sau các thao tác khóa / duyệt...)
+  const fetchData = () => {
+    setLoading(true)
+    return loadData()
   }
 
-  useEffect(() => { fetchData() }, [filter])
+  useEffect(() => { loadData() }, [loadData])
 
-  // Reset page khi filter đổi
-  useEffect(() => {
+  // Đổi filter → hiển thị loading, tải lại và reset về trang 1
+  const changeFilter = (nextFilter) => {
+    setLoading(true)
+    setFilter(nextFilter)
     setCurrentPage(1)
-  }, [filter])
+  }
 
   const handleAction = async (id, action) => {
     const actionLabel = action === 'lock' ? 'khóa' : action === 'unlock' ? 'mở khóa' : 'xóa vĩnh viễn'
@@ -91,7 +97,7 @@ export default function AdminUsersPage() {
       const res = await api.get(`/admin/users/${user.id}/verification`)
       const docs = res.data.data?.documents || []
       setProfileDocs(docs)
-    } catch (err) {
+    } catch {
       setProfileDocs([])
     } finally {
       setProfileLoading(false)
@@ -233,7 +239,7 @@ export default function AdminUsersPage() {
       {/* FILTER */}
       <div style={{ display: 'flex', gap: '12px', marginBottom: '32px', flexWrap: 'wrap' }}>
         {['', 'CUSTOMER', 'OWNER', 'DRIVER', 'ADMIN'].map(r => (
-          <button key={r} onClick={() => setFilter({ ...filter, role: r, status: '', locked: false })} style={{
+          <button key={r} onClick={() => changeFilter({ ...filter, role: r, status: '', locked: false })} style={{
             padding: '8px 16px',
             background: filter.role === r && !filter.locked ? 'var(--muc)' : 'transparent',
             color: filter.role === r && !filter.locked ? 'var(--kem)' : 'var(--muc)',
@@ -245,7 +251,7 @@ export default function AdminUsersPage() {
           </button>
         ))}
         {['PENDING', 'VERIFIED', 'REJECTED'].map(s => (
-          <button key={s} onClick={() => setFilter({ ...filter, status: s, role: '', locked: false })} style={{
+          <button key={s} onClick={() => changeFilter({ ...filter, status: s, role: '', locked: false })} style={{
             padding: '8px 16px',
             background: filter.status === s && !filter.locked ? 'var(--do)' : 'transparent',
             color: filter.status === s && !filter.locked ? 'var(--kem)' : 'var(--do)',
@@ -256,7 +262,7 @@ export default function AdminUsersPage() {
             {statusLabels[s] || s}
           </button>
         ))}
-        <button onClick={() => setFilter({ role: '', status: '', locked: !filter.locked })} style={{
+        <button onClick={() => changeFilter({ role: '', status: '', locked: !filter.locked })} style={{
           padding: '8px 16px',
           background: filter.locked ? 'var(--do)' : 'transparent',
           color: filter.locked ? 'var(--kem)' : 'var(--do)',

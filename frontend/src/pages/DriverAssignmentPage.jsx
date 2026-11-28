@@ -8,30 +8,22 @@ export default function DriverAssignmentPage() {
   const token = searchParams.get('token')
 
   const [assignment, setAssignment] = useState(null)
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState('')
+  const [fetchLoading, setFetchLoading] = useState(true)
+  const [fetchError, setFetchError] = useState('')
   const [actionLoading, setActionLoading] = useState(false)
   const [result, setResult] = useState(null)
 
-  useEffect(() => {
-    if (!token) {
-      setError('Token không hợp lệ. Vui lòng kiểm tra lại link.')
-      setLoading(false)
-      return
-    }
-    loadAssignment()
-  }, [id, token])
+  // Thiếu token → báo lỗi ngay, không gọi API (suy ra trong render thay vì setState trong effect)
+  const loading = token ? fetchLoading : false
+  const error = token ? fetchError : 'Token không hợp lệ. Vui lòng kiểm tra lại link.'
 
-  const loadAssignment = async () => {
-    try {
-      const res = await api.get(`/driver/assignments/${id}?token=${token}`)
-      setAssignment(res.data.data)
-    } catch (err) {
-      setError(err.response?.data?.message || 'Không tải được thông tin chuyến')
-    } finally {
-      setLoading(false)
-    }
-  }
+  useEffect(() => {
+    if (!token) return
+    api.get(`/driver/assignments/${id}?token=${token}`)
+      .then(res => setAssignment(res.data.data))
+      .catch(err => setFetchError(err.response?.data?.message || 'Không tải được thông tin chuyến'))
+      .finally(() => setFetchLoading(false))
+  }, [id, token])
 
   const handleAccept = async () => {
     setActionLoading(true)
